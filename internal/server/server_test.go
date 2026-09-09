@@ -418,6 +418,11 @@ func TestEndToEnd(t *testing.T) {
 		}
 	}
 	pub.expect("GET", "/api/public/"+strings.Repeat("x", 43), nil, 404)
+	// bob can copy the link again: the listing carries the token
+	o = bob.expect("GET", "/api/shares", nil, 200)
+	if list := o["shares"].([]any); len(list) != 1 || list[0].(map[string]any)["token"] != token {
+		t.Fatalf("share token in listing: %v", o)
+	}
 	// admin sees bob's share and can revoke it
 	o = admin.expect("GET", "/api/shares", nil, 200)
 	if len(o["shares"].([]any)) != 1 {
@@ -543,7 +548,7 @@ func TestInfoAndDisk(t *testing.T) {
 	if int(tot["files"].(float64)) != 2 || int(tot["bytes"].(float64)) != 15 || tot["partial"] != false {
 		t.Fatalf("totals: %v", tot)
 	}
-	if len(o["shares"].([]any)) != 1 || o["favorite"] != true {
+	if sl := o["shares"].([]any); len(sl) != 1 || o["favorite"] != true || sl[0].(map[string]any)["token"] == "" {
 		t.Fatalf("info shares/fav: %v", o)
 	}
 	o = admin.expect("GET", "/api/files/info?path=teamA", nil, 200)

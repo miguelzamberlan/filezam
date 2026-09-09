@@ -40,6 +40,11 @@ export function useConfig() {
   return q.data ?? null
 }
 
+// useConfigValue lê a configuração já em cache, sem os efeitos colaterais de useConfig.
+export function useConfigValue() {
+  return useQuery({ queryKey: ['config'], queryFn: () => Api.config(), staleTime: Infinity }).data ?? null
+}
+
 export const listKey = (path: string) => ['list', path] as const
 
 export function useListing(path: string, enabled = true) {

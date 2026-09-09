@@ -7,6 +7,7 @@
 | Normalização de caminhos | `internal/vfs/pathutil_test.go` | ~30 entradas maliciosas/válidas, `ValidName`, helpers | `go test ./internal/vfs/` |
 | Sandbox | `internal/vfs/root_test.go` | symlinks para `/etc`, `../outside`, loop e irmão interno; canário fora do root; escopo aninhado; rename/move/copy/remove; cancelamento; partes e `Finalize` | idem |
 | Integração HTTP | `internal/server/server_test.go` | fluxo completo: admin inicial → troca forçada → CSRF → usuário com escopo → traversal → mkdir/PUT/lote/chunked (fora de ordem, idempotente, incompleto) → rename/copy/move/delete jobs → zip → favoritos → shares públicos e revogação → mudança de escopo derruba sessão → desativar/excluir usuário → auditoria; expiração de share com relógio falso; rate limit de login; cabeçalhos da SPA | `go test ./internal/server/` |
+| Migrações | `internal/store/migrations_test.go` | banco só com `001` + linhas antigas → `Open` aplica `002` sem perder dados | `go test ./internal/store/` |
 | Frontend puro | `web/src/**/*.test.ts` | `scheduler` (classify, pickBatch, backoff, chunkRange), `paths`, `naturalSort` | `cd web && npx vitest run` |
 | Tipos | — | `tsc --noEmit` | `cd web && npm run typecheck` |
 

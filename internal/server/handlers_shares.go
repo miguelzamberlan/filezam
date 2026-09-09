@@ -12,6 +12,7 @@ import (
 
 type shareView struct {
 	ID           int64  `json:"id"`
+	Token        string `json:"token"` // vazio em links criados antes da migração 002
 	Path         string `json:"path"`
 	Name         string `json:"name"`
 	CreatedBy    string `json:"createdBy"`
@@ -28,7 +29,7 @@ func (s *Server) viewShare(sh *store.Share, u *store.User) shareView {
 	if rel, ok := scopeRel(u.Scope, sh.Path); ok {
 		p = rel
 	}
-	return shareView{ID: sh.ID, Path: p, Name: sh.Name, CreatedBy: sh.CreatedByName, Mine: sh.CreatedBy == u.ID, CreatedAt: sh.CreatedAt,
+	return shareView{ID: sh.ID, Token: sh.Token, Path: p, Name: sh.Name, CreatedBy: sh.CreatedByName, Mine: sh.CreatedBy == u.ID, CreatedAt: sh.CreatedAt,
 		ExpiresAt: sh.ExpiresAt, Expired: sh.ExpiresAt <= time.Now().Unix() || sh.RevokedAt != nil, AccessCount: sh.AccessCount, LastAccessAt: sh.LastAccessAt}
 }
 
@@ -111,7 +112,7 @@ func (s *Server) handleShareCreate(w http.ResponseWriter, r *http.Request) error
 		return err
 	}
 	now := time.Now().Unix()
-	sh, err := s.db.CreateShare(r.Context(), &store.Share{TokenHash: auth.HashToken(tok), Path: vfs.Join(u.Scope, p), Name: name, CreatedBy: u.ID, CreatedAt: now, ExpiresAt: now + in.ExpiresIn})
+	sh, err := s.db.CreateShare(r.Context(), &store.Share{TokenHash: auth.HashToken(tok), Token: tok, Path: vfs.Join(u.Scope, p), Name: name, CreatedBy: u.ID, CreatedAt: now, ExpiresAt: now + in.ExpiresIn})
 	if err != nil {
 		return err
 	}

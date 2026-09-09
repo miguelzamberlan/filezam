@@ -1,14 +1,18 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router'
 import { Api } from '../api/client'
+import { useConfigValue } from '../hooks'
+import { copyText } from '../lib/clipboard'
 import { formatDate, formatRelative } from '../lib/format'
 import { encodePath } from '../lib/paths'
+import { shareLink } from '../lib/share'
 import { S } from '../strings'
 import { dialogs, toast } from '../components/dialogs'
-import { ITrash, ISpinner } from '../components/Icons'
+import { ICopy, ITrash, ISpinner } from '../components/Icons'
 
 export default function Shares() {
   const qc = useQueryClient()
+  const publicUrl = useConfigValue()?.publicUrl
   const q = useQuery({ queryKey: ['shares'], queryFn: () => Api.shares(), refetchInterval: 60_000 })
   const revoke = async (id: number, name: string) => {
     if (!(await dialogs.confirm({ title: S.shareRevoke + ': ' + name, message: S.shareRevokeConfirm, danger: true, okLabel: S.shareRevoke }))) return
@@ -46,7 +50,16 @@ export default function Shares() {
                   <td className="px-3 py-2">{s.expired ? <span className="text-red-600">{S.shareExpired}</span> : <span title={formatDate(s.expiresAt, true)}>{formatRelative(s.expiresAt)}</span>}</td>
                   <td className="px-3 py-2">{s.accessCount}{s.lastAccessAt ? <span className="text-xs text-neutral-500"> · {formatRelative(s.lastAccessAt)}</span> : ''}</td>
                   <td className="px-3 py-2">{s.createdBy}</td>
-                  <td className="px-3 py-2 text-right"><button className="btn-ghost text-red-600" onClick={() => revoke(s.id, s.name)}><ITrash size={16} /> {S.shareRevoke}</button></td>
+                  <td className="px-3 py-2">
+                    <div className="flex justify-end gap-1 whitespace-nowrap">
+                      {s.token ? (
+                        <button className="btn-ghost" title={shareLink(s.token, publicUrl)} onClick={() => copyText(shareLink(s.token, publicUrl))} disabled={s.expired}><ICopy size={16} /> {S.copyLink}</button>
+                      ) : (
+                        <span className="px-2 py-1 text-xs text-neutral-400" title={S.shareLinkGone}>—</span>
+                      )}
+                      <button className="btn-ghost text-red-600" onClick={() => revoke(s.id, s.name)}><ITrash size={16} /> {S.shareRevoke}</button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>

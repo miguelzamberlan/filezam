@@ -13,7 +13,8 @@ web/src/
   index.css           Tailwind + utilitários próprios (@utility btn, input, card, menu…)
   api/client.ts       fetch tipado (X-Filezam, 401 → /login), ApiError, objeto Api
   api/types.ts        Tipos espelhando docs/04
-  lib/                paths (join/dirname/encode/uniqueName), naturalSort, format
+  lib/                paths (join/dirname/encode/uniqueName), naturalSort, format,
+                      clipboard (copyText com fallback), share (shareLink)
   store/ui.ts         zustand: seleção, âncora, foco, clipboard, ordenação, visão, filtro
   store/jobs.ts       zustand: jobs acompanhados pelos toasts
   upload/manager.ts   UploadManager (sem React) — fila, modos, slots, retries, conflitos, retomada
@@ -67,6 +68,7 @@ API imperativa baseada em Promises: `dialogs.prompt({title, initial, selectExt})
 
 ## Propriedades e disco
 
+- Links públicos: `shareLink(token, publicUrl)` monta a URL a partir de `FILEZAM_PUBLIC_URL` (quando o operador definiu) ou de `window.location.origin` — nunca do host visto pelo servidor, que pode ser interno. `copyText` copia com fallback para `document.execCommand('copy')` em origens não seguras (http://) e avisa por toast quando não consegue. `ShareDialog` já copia o link ao criar; `Shares` e `InfoDialog` copiam de novo pelo `token` que a API devolve.
 - `InfoDialog` (`GET /api/files/info`): caminho com botão copiar, tipo, tamanho, modificação; para pastas, conteúdo calculado (bytes, arquivos, pastas, aviso de contagem parcial), se está nos favoritos e os links públicos ativos daquela pasta com validade, número de acessos e último acesso. Abre pelo botão ⓘ da toolbar ou "Propriedades" no menu de contexto. O menu de contexto mostra o caminho completo do item como primeira linha (desabilitada).
 - `DiskBar` (`GET /api/files/disk`, refetch a cada 60 s e após qualquer operação via `useInvalidateDirs`): barra de uso com cor por faixa (azul, âmbar > 75 %, vermelho > 90 %) e "X livres de Y" no rodapé da lateral.
 

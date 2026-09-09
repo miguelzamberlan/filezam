@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { Api, ApiError } from '../api/client'
+import { useConfigValue } from '../hooks'
+import { copyText } from '../lib/clipboard'
+import { shareLink } from '../lib/share'
 import { S, errorMessage } from '../strings'
-import { Modal, toast } from './dialogs'
+import { Modal } from './dialogs'
 
 const OPTIONS: { label: string; seconds: number }[] = [
   { label: `1 ${S.hour}`, seconds: 3600 },
@@ -13,6 +16,7 @@ const OPTIONS: { label: string; seconds: number }[] = [
 ]
 
 export default function ShareDialog({ path, name, maxTtl, onClose, onCreated }: { path: string; name: string; maxTtl: number; onClose: () => void; onCreated?: () => void }) {
+  const publicUrl = useConfigValue()?.publicUrl
   const opts = OPTIONS.filter((o) => o.seconds <= maxTtl)
   const [seconds, setSeconds] = useState(opts[Math.min(2, opts.length - 1)]?.seconds ?? maxTtl)
   const [url, setUrl] = useState<string | null>(null)
@@ -25,8 +29,10 @@ export default function ShareDialog({ path, name, maxTtl, onClose, onCreated }: 
     setErr(null)
     try {
       const r = await Api.createShare(path, seconds, name)
-      setUrl(r.url)
+      const link = shareLink(r.token, publicUrl)
+      setUrl(link)
       onCreated?.()
+      setCopied(await copyText(link, S.shareCreatedCopied)) // o link já vai para a área de transferência
     } catch (e) {
       setErr(e instanceof ApiError ? errorMessage(e.code, e.message) : String(e))
     } finally {
@@ -35,13 +41,7 @@ export default function ShareDialog({ path, name, maxTtl, onClose, onCreated }: 
   }
   const copy = async () => {
     if (!url) return
-    try {
-      await navigator.clipboard.writeText(url)
-      setCopied(true)
-      toast(S.copied, 'success')
-    } catch {
-      /* clipboard unavailable: user can select the text */
-    }
+    setCopied(await copyText(url))
   }
   return (
     <Modal onClose={onClose}>

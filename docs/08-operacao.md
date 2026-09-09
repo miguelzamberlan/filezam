@@ -55,6 +55,8 @@ Parar o serviço, copiar `filezam.db`, `filezam.db-wal`, `filezam.db-shm` de `/c
 | Upload falha sempre em N MB ou N segundos | limite/buffer/timeout do proxy | Aplicar receita do proxy; reduzir `FILEZAM_MAX_UPLOAD_CHUNK` |
 | 403 `csrf` em scripts | falta `X-Filezam: 1` | Adicionar o header |
 | 429 `busy` em uploads | mais de 8 requisições simultâneas por usuário | Normal; o cliente reenvia com backoff |
+| Link copiado com endereço errado (host/porta interna) | proxy que não repassa `Host`/`X-Forwarded-Host` de um IP em `FILEZAM_TRUSTED_PROXIES` | A interface já usa a origem do navegador; para links gerados pela API defina `FILEZAM_PUBLIC_URL=https://arquivos.exemplo.com` |
+| Botão "Copiar link" mostra "—" em Compartilhados | link criado antes da migração 002 (token não guardado) | Criar um link novo |
 | Link público sempre 404 | expirado, revogado, pasta movida/renomeada | Criar novo link |
 | `scope_unavailable` | pasta de escopo apagada/renomeada | Admin redefine o escopo do usuário |
 | Admin sem senha | — | `docker compose run --rm filezam reset-admin 'Senha123'` |

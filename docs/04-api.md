@@ -19,7 +19,7 @@ Job      { id, type: "copy"|"move"|"delete", state: "running"|"done"|"failed"|"c
            done, total, bytesDone, bytesTotal, current?, error?, warnings?: [], startedAt, finishedAt?, dirs?: [] }
 Upload   { id, dir, name, size, mtime, chunkSize, chunks, received: [int], overwrite, createdAt, updatedAt }
 Favorite { id, path, name, createdAt }
-Share    { id, path, name, createdBy, mine, createdAt, expiresAt, expired, accessCount, lastAccessAt }
+Share    { id, token, path, name, createdBy, mine, createdAt, expiresAt, expired, accessCount, lastAccessAt }
 AdminUser{ id, username, role, scope, mustChangePassword, disabled, lockedUntil, createdAt, updatedAt }
 Audit    { id, ts, userId, username, ip, action, detail /*JSON string*/ }
 ```
@@ -31,7 +31,7 @@ Timestamps: `mtime` em milissegundos; os demais em segundos Unix.
 | Método | Rota | Auth | Descrição |
 |---|---|---|---|
 | GET | `/api/health` | - | `{ok:true, version}`; 503 `db`/`root` se banco ou raiz indisponíveis |
-| GET | `/api/config` | S | `{chunkSize, batchMaxFiles, batchMaxBytes, batchFileMax, maxParallel, shareMaxTtl, previewMaxText, version}` |
+| GET | `/api/config` | S | `{chunkSize, batchMaxFiles, batchMaxBytes, batchFileMax, maxParallel, shareMaxTtl, publicUrl, previewMaxText, version}` (`publicUrl` = `FILEZAM_PUBLIC_URL`, `""` quando não definido) |
 
 ## Autenticação
 
@@ -95,8 +95,8 @@ Sync-or-job: o servidor aguarda até 300 ms; se o job terminou, `job.state` já 
 
 | Método | Rota | Auth | Descrição |
 |---|---|---|---|
-| GET | `/api/shares` | U | `{shares, now}`; admin vê todos, usuário só os seus |
-| POST | `/api/shares` | U | `{path, expiresIn /*s*/, name?}` → 201 `{share, token, url}`. O token só aparece aqui. 400 `bad_expiry`, 409 `not_dir` |
+| GET | `/api/shares` | U | `{shares, now}`; admin vê todos, usuário só os seus. `share.token` permite recopiar o link (`""` em links criados antes da migração 002) |
+| POST | `/api/shares` | U | `{path, expiresIn /*s*/, name?}` → 201 `{share, token, url}`. `url` usa `FILEZAM_PUBLIC_URL` ou o host da requisição; a interface web monta o link a partir de `token` + origem do navegador. 400 `bad_expiry`, 409 `not_dir` |
 | DELETE | `/api/shares/{id}` | U | Dono ou admin → `{ok}` |
 
 ## Público (sem sessão)

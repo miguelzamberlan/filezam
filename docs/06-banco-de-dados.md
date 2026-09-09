@@ -12,7 +12,7 @@ SQLite em `FILEZAM_DATA_DIR/filezam.db` (mais `-wal` e `-shm`). Driver `modernc.
 
 Arquivos em `internal/store/migrations/NNN_nome.sql`, embutidos com `embed`, aplicados em ordem numérica dentro de uma transação cada, registrados em `schema_migrations(version, applied_at)`. Para evoluir o esquema: crie `002_algo.sql` (nunca edite um arquivo já aplicado em produção). SQLite tem `ALTER TABLE` limitado; para mudanças estruturais use o padrão criar-nova → copiar → renomear.
 
-## Esquema (`001_init.sql`)
+## Esquema (`001_init.sql` + migrações)
 
 ```sql
 users(id, username UNIQUE NOCASE, password_hash /*PHC argon2id*/, role CHECK IN ('admin','user'),
@@ -24,7 +24,8 @@ sessions(id /*hex sha256 do token*/, user_id → users ON DELETE CASCADE, create
 
 favorites(id, user_id → users CASCADE, path /*base-relativo*/, name, created_at, UNIQUE(user_id,path))
 
-shares(id, token_hash UNIQUE, path /*base-relativo*/, name, created_by → users CASCADE,
+shares(id, token_hash UNIQUE, token /*em claro, 002; '' nos links anteriores*/,
+       path /*base-relativo*/, name, created_by → users CASCADE,
        created_at, expires_at, revoked_at, access_count, last_access_at)   -- índice: expires_at
 
 uploads(id /*hex 16 bytes*/, user_id → users CASCADE, dir /*base-relativo*/, name, size, mtime,
@@ -36,12 +37,18 @@ audit_log(id, ts, user_id, username, ip, action, detail /*JSON*/)   -- índice: 
 schema_migrations(version, applied_at)
 ```
 
+Migrações aplicadas depois de `001_init.sql`:
+
+| Versão | Arquivo | O que faz |
+|---|---|---|
+| 002 | `002_share_token.sql` | `shares.token` (texto, default `''`): guarda o token do link público para poder copiá-lo de novo |
+
 Todos os timestamps são segundos Unix, exceto `uploads.mtime` (ms, vindo do cliente).
 
 ## Convenções
 
 - Caminhos gravados são **base-relativos** (`vfs.Join(user.Scope, p)`), para sobreviverem a mudanças de escopo do usuário. A leitura converte para escopo-relativo e descarta o que ficou fora.
-- Nunca grave tokens ou senhas em claro; `auth.HashToken` para sessões e shares.
+- Nunca grave senhas ou tokens de sessão em claro (`auth.HashToken`). A única exceção é `shares.token`, gravado em claro de propósito para permitir recopiar o link ([03](03-seguranca.md#links-públicos)); a consulta pública continua sendo por `token_hash`.
 - `RecordLoginFailure` aplica o bloqueio progressivo; `RecordLoginSuccess` zera.
 - `ListStaleUploads`, `PurgeExpiredSessions` e `PruneAudit` são chamados pela tarefa de fundo.
 

@@ -41,6 +41,7 @@ export interface AppConfig {
   batchFileMax: number
   maxParallel: number
   shareMaxTtl: number
+  publicUrl: string
   previewMaxText: number
   version: string
 }
@@ -70,6 +71,7 @@ export interface Favorite {
 
 export interface Share {
   id: number
+  token: string
   path: string
   name: string
   createdBy: string

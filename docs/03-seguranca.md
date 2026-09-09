@@ -9,7 +9,7 @@
 | Admin comprometido | Ler o host além de `/data` | Raiz fixa por env, nunca alterável pela UI; container sem root, rootfs somente leitura, `cap_drop ALL` |
 | Quem envia arquivos | Executar script no navegador de quem visualiza | Nunca servir `text/html`; CSP `sandbox` em previews; `nosniff` |
 | Site malicioso aberto no mesmo navegador | CSRF | Cookie `SameSite=Strict` + header customizado + `Sec-Fetch-Site` |
-| Quem obtém o banco | Reutilizar sessões e tokens | Só hashes SHA-256 de sessões/tokens; senhas em Argon2id |
+| Quem obtém o banco | Reutilizar sessões e tokens | Sessões só como hash SHA-256; senhas em Argon2id; tokens de link público ficam em claro (ver "Links públicos") |
 
 Fora do escopo: proteção contra um administrador do host, ataques ao proxy reverso, e sigilo de arquivos frente a quem tem acesso legítimo ao escopo.
 
@@ -58,12 +58,12 @@ Na SPA: `Content-Security-Policy: default-src 'self'; script-src 'self'; style-s
 
 ## Links públicos
 
-- Token: 32 bytes `base64url`; só o SHA-256 é gravado. Consulta por hash (sem vazamento de tempo por comparação de token).
+- Token: 32 bytes `base64url`. A consulta pública continua sendo por SHA-256 (`token_hash`, sem vazamento de tempo por comparação de token), mas o token também é gravado em claro (`shares.token`, migração 002) para que a tela **Compartilhados** possa copiar o link de novo. Consequência aceita: quem obtiver o arquivo do banco consegue usar os links ainda ativos — os links são somente leitura, expiram e podem ser revogados. Links criados antes da migração 002 ficam sem token e não podem ser recopiados.
 - Expiração no relógio do servidor; validade máxima `FILEZAM_SHARE_MAX_TTL`. Revogação apaga a linha.
 - Público só pode: `info`, `list`, `content`, `zip`, sempre dentro de `base.Sub(share.Path)`. Não há escrita.
 - Rate limit por IP e no máximo 2 downloads/zips simultâneos por IP.
 - Mesma resposta 404 para inexistente, expirado, revogado ou pasta removida.
-- O link é construído com `FILEZAM_PUBLIC_URL` ou, na ausência, com esquema/host da requisição (`X-Forwarded-Proto`/`X-Forwarded-Host` só de proxies confiáveis).
+- A API devolve `url` construída com `FILEZAM_PUBLIC_URL` ou, na ausência, com esquema/host da requisição (`X-Forwarded-Proto`/`X-Forwarded-Host` só de proxies confiáveis). A interface web ignora essa `url` quando `FILEZAM_PUBLIC_URL` não está definido e monta o link com a origem do próprio navegador (`window.location.origin`), que é sempre o endereço que o usuário está usando.
 
 ## IP real e proxies
 

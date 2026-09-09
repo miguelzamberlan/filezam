@@ -236,6 +236,7 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) error {
 		"batchFileMax":   1 << 20,
 		"maxParallel":    s.cfg.MaxParallel,
 		"shareMaxTtl":    int64(s.cfg.ShareMaxTTL.Seconds()),
+		"publicUrl":      s.cfg.PublicURL,
 		"previewMaxText": 1 << 20,
 		"version":        s.version,
 	})
