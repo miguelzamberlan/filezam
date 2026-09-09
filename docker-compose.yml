@@ -1,5 +1,24 @@
 services:
+  # One-shot helper: Docker creates missing bind-mount folders as root, which
+  # would make /config unwritable for the non-root app user. This fixes /config
+  # (owned by Filezam) and only touches /data when it is empty (freshly created).
+  init:
+    image: alpine:3.20
+    user: "0:0"
+    command: >
+      sh -c '
+        mkdir -p /config /data &&
+        chown -R ${PUID:-1000}:${PGID:-1000} /config &&
+        { [ -n "$$(ls -A /data 2>/dev/null)" ] || chown ${PUID:-1000}:${PGID:-1000} /data 2>/dev/null || true; }'
+    volumes:
+      - ${FILEZAM_HOST_ROOT:-./data}:/data
+      - ${FILEZAM_HOST_CONFIG:-./config}:/config
+    restart: "no"
+
   filezam:
+    depends_on:
+      init:
+        condition: service_completed_successfully
     build:
       context: .
       args:

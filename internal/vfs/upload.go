@@ -73,7 +73,7 @@ func (r *Root) Finalize(dir, id, name string, overwrite bool) error {
 		return MapError(r.r.Remove(part))
 	case errors.Is(err, fs.ErrExist):
 		return fmt.Errorf("%w: %s", ErrExists, name)
-	case errors.Is(err, syscall.EPERM), errors.Is(err, syscall.ENOTSUP), errors.Is(err, syscall.EOPNOTSUPP), errors.Is(err, syscall.EMLINK):
+	case errors.Is(err, syscall.EPERM), errors.Is(err, syscall.EACCES), errors.Is(err, syscall.ENOTSUP), errors.Is(err, syscall.EOPNOTSUPP), errors.Is(err, syscall.ENOSYS), errors.Is(err, syscall.EMLINK), errors.Is(err, syscall.EXDEV):
 		// filesystem without hardlinks: best-effort check then rename
 		if ok, err := r.Exists(final); err != nil {
 			return err

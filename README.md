@@ -27,7 +27,9 @@ Acesse `http://127.0.0.1:8080` (ou pelo seu proxy reverso). Login inicial: `admi
 | `${FILEZAM_HOST_ROOT}` → `/data` | Pasta raiz exibida pelo gestor. Para expor várias pastas do host, monte-as como subpastas: `- /mnt/midia:/data/midia`. |
 | `${FILEZAM_HOST_CONFIG}` → `/config` | Banco SQLite (usuários, sessões, links, uploads em andamento, auditoria). Nunca é servido. |
 
-O container roda como `PUID:PGID`. As duas pastas precisam ser graváveis por esse usuário; se não forem, o app encerra na inicialização com a mensagem `chown` sugerida. Use *bind mounts* (como no compose) e não volumes nomeados, que nascem pertencendo ao root.
+O container roda como `PUID:PGID`, e as duas pastas precisam ser graváveis por esse usuário. Como o Docker cria pastas de *bind mount* inexistentes como `root`, o compose traz um serviço `init` (Alpine, executa uma vez) que faz `chown` em `/config` e, só se `/data` estiver vazia (recém-criada), também nela. Ele nunca altera o dono de uma pasta de dados que já tenha conteúdo. Se preferir gerenciar as permissões você mesmo, remova o serviço `init` e o bloco `depends_on`; se a pasta não for gravável, o app encerra na inicialização com a mensagem `chown` sugerida.
+
+Discos NTFS/exFAT montados com `uid=`/`gid=` funcionam normalmente: basta que o `uid` do mount seja o mesmo `PUID`.
 
 O app nunca consegue sair de `/data`: todo acesso ao disco passa por `os.Root` do Go, que valida cada componente do caminho no kernel, inclusive links simbólicos. Um symlink dentro de `/data` apontando para fora é listado, mas não pode ser aberto.
 
