@@ -112,6 +112,8 @@ export const S = {
   scope: 'Pasta de acesso',
   scopeRoot: 'Raiz (tudo)',
   scopePick: 'Escolher pasta',
+  scopeUse: 'Usar esta pasta',
+  scopeHint: 'Navegue até a pasta desejada: a pasta em que você estiver será a pasta de acesso do usuário.',
   disabled: 'Desativado',
   forcePasswordChange: 'Exigir troca de senha no próximo login',
   resetPassword: 'Definir nova senha',

@@ -7,31 +7,34 @@ import { S, errorMessage } from '../strings'
 import { Modal, dialogs, toast } from '../components/dialogs'
 import { IChevronRight, IFolder, ISpinner, ITrash, IEdit, IUsers } from '../components/Icons'
 
-function ScopePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const [cur, setCur] = useState(value)
-  const q = useQuery({ queryKey: ['admin-dirs', cur], queryFn: () => Api.adminDirs(cur) })
-  const segs = cur ? cur.split('/') : []
+function ScopePicker({ value, onChange, onClose }: { value: string; onChange: (v: string) => void; onClose: () => void }) {
+  const q = useQuery({ queryKey: ['admin-dirs', value], queryFn: () => Api.adminDirs(value) })
+  const segs = value ? value.split('/') : []
   return (
-    <div className="card mt-1 max-h-56 overflow-auto p-2 text-sm">
+    <div className="card mt-1 p-2 text-sm">
+      <p className="mb-2 text-xs text-neutral-500">{S.scopeHint}</p>
       <div className="mb-1 flex flex-wrap items-center gap-0.5 text-xs">
-        <button type="button" className="rounded px-1 hover:bg-neutral-200 dark:hover:bg-neutral-800" onClick={() => setCur('')}>/</button>
+        <button type="button" className="rounded px-1 hover:bg-neutral-200 dark:hover:bg-neutral-800" onClick={() => onChange('')}>{S.scopeRoot}</button>
         {segs.map((s, i) => (
           <span key={i} className="flex items-center gap-0.5">
             <IChevronRight size={12} />
-            <button type="button" className="rounded px-1 hover:bg-neutral-200 dark:hover:bg-neutral-800" onClick={() => setCur(segs.slice(0, i + 1).join('/'))}>{s}</button>
+            <button type="button" className="rounded px-1 hover:bg-neutral-200 dark:hover:bg-neutral-800" onClick={() => onChange(segs.slice(0, i + 1).join('/'))}>{s}</button>
           </span>
         ))}
-        <button type="button" className={'ml-auto rounded px-2 py-0.5 ' + (value === cur ? 'bg-blue-600 text-white' : 'bg-neutral-200 dark:bg-neutral-800')} onClick={() => onChange(cur)}>
-          {cur === '' ? S.scopeRoot : '/' + cur} ✓
-        </button>
       </div>
-      {q.isLoading && <ISpinner size={14} />}
-      {q.data?.dirs.map((d) => (
-        <button type="button" key={d} className="flex w-full items-center gap-2 rounded px-2 py-1 text-left hover:bg-neutral-100 dark:hover:bg-neutral-800" onClick={() => setCur(cur ? cur + '/' + d : d)}>
-          <IFolder size={14} className="text-amber-500" /> {d}
-        </button>
-      ))}
-      {q.data && q.data.dirs.length === 0 && <div className="px-2 text-xs text-neutral-400">—</div>}
+      <div className="max-h-48 overflow-auto">
+        {q.isLoading && <ISpinner size={14} />}
+        {q.data?.dirs.map((d) => (
+          <button type="button" key={d} className="flex w-full items-center gap-2 rounded px-2 py-1 text-left hover:bg-neutral-100 dark:hover:bg-neutral-800" onClick={() => onChange(value ? value + '/' + d : d)}>
+            <IFolder size={14} className="text-amber-500" /> {d}
+          </button>
+        ))}
+        {q.data && q.data.dirs.length === 0 && <div className="px-2 text-xs text-neutral-400">—</div>}
+      </div>
+      <div className="mt-2 flex items-center justify-between gap-2 border-t border-neutral-200 pt-2 dark:border-neutral-800">
+        <span className="truncate font-medium">{value === '' ? S.scopeRoot : '/' + value}</span>
+        <button type="button" className="btn-primary !py-1" onClick={onClose}>{S.scopeUse}</button>
+      </div>
     </div>
   )
 }
@@ -84,10 +87,10 @@ function UserForm({ user, onClose }: { user: AdminUser | null; onClose: () => vo
         </select>
         <label className="mt-3 block text-sm">{S.scope}</label>
         <div className="mt-1 flex items-center gap-2">
-          <span className="input flex-1 truncate">{scope === '' ? S.scopeRoot : '/' + scope}</span>
+          <span className={'input flex-1 truncate ' + (scope ? 'text-blue-700 dark:text-blue-300' : '')}>{scope === '' ? S.scopeRoot : '/' + scope}</span>
           <button type="button" className="btn-ghost" onClick={() => setPick((p) => !p)}>{S.scopePick}</button>
         </div>
-        {pick && <ScopePicker value={scope} onChange={(v) => (setScope(v), setPick(false))} />}
+        {pick && <ScopePicker value={scope} onChange={setScope} onClose={() => setPick(false)} />}
         <label className="mt-3 flex items-center gap-2 text-sm"><input type="checkbox" checked={mustChange} onChange={(e) => setMustChange(e.target.checked)} /> {S.forcePasswordChange}</label>
         {user && <label className="mt-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={disabled} onChange={(e) => setDisabled(e.target.checked)} /> {S.disabled}</label>}
         {err && <p className="mt-3 text-sm text-red-600">{err}</p>}
