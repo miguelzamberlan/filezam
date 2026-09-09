@@ -5,6 +5,7 @@ import Login from './pages/Login'
 import ChangePassword from './pages/ChangePassword'
 import Browser from './pages/Browser'
 import Shares from './pages/Shares'
+import Search from './pages/Search'
 import AdminUsers from './pages/AdminUsers'
 import AdminAudit from './pages/AdminAudit'
 import PublicShare from './pages/PublicShare'
@@ -57,6 +58,7 @@ export default function App() {
         >
           <Route index element={<Navigate to="/b" replace />} />
           <Route path="b/*" element={<Browser />} />
+          <Route path="search" element={<Search />} />
           <Route path="shares" element={<Shares />} />
           <Route path="admin/users" element={<AdminUsers />} />
           <Route path="admin/audit" element={<AdminAudit />} />

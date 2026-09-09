@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -178,13 +179,22 @@ func (r *Root) Mkdir(p string) error {
 	if p == "" {
 		return ErrRootOp
 	}
+	if err := ValidName(Base(p)); err != nil {
+		return err
+	}
 	return MapError(r.r.Mkdir(p, 0o755))
 }
 
-// MkdirAll creates a directory and parents.
+// MkdirAll creates a directory and parents. Every segment must be a valid new
+// name: pastas existentes com nomes estranhos continuam legíveis, mas a UI não cria outras.
 func (r *Root) MkdirAll(p string) error {
 	if p == "" {
 		return nil
+	}
+	for _, seg := range strings.Split(p, "/") {
+		if err := ValidName(seg); err != nil {
+			return err
+		}
 	}
 	return MapError(r.r.MkdirAll(p, 0o755))
 }

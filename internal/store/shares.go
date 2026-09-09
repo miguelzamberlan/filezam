@@ -3,6 +3,8 @@ package store
 import (
 	"context"
 	"database/sql"
+
+	"github.com/zamberlan/filezam/internal/vfs"
 )
 
 // Share is a public read-only link to a folder.
@@ -56,7 +58,28 @@ func (db *DB) GetShare(ctx context.Context, id int64) (*Share, error) {
 
 // GetActiveShareByToken fetches a live (not expired, not revoked) share by token hash.
 func (db *DB) GetActiveShareByToken(ctx context.Context, hash string) (*Share, error) {
-	return scanShare(db.r.QueryRowContext(ctx, `SELECT `+shareCols+` FROM shares s LEFT JOIN users u ON u.id=s.created_by WHERE s.token_hash=? AND s.revoked_at IS NULL AND s.expires_at>?`, hash, db.now()))
+	// Um usuário desativado leva os links dele junto (voltam se ele for reativado).
+	return scanShare(db.r.QueryRowContext(ctx, `SELECT `+shareCols+` FROM shares s LEFT JOIN users u ON u.id=s.created_by WHERE s.token_hash=? AND s.revoked_at IS NULL AND s.expires_at>? AND COALESCE(u.disabled,1)=0`, hash, db.now()))
+}
+
+// DeleteSharesOutside removes the user's shares whose path is not within scope.
+// scope "" keeps everything. Returns how many rows were deleted.
+func (db *DB) DeleteSharesOutside(ctx context.Context, userID int64, scope string) (int, error) {
+	shares, err := db.ListShares(ctx, userID)
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, sh := range shares {
+		if scope == "" || sh.Path == scope || vfs.IsWithin(scope, sh.Path) {
+			continue
+		}
+		if err := db.DeleteShare(ctx, sh.ID); err != nil {
+			return n, err
+		}
+		n++
+	}
+	return n, nil
 }
 
 // ListShares lists shares; userID<=0 lists all.

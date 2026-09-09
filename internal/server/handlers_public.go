@@ -119,7 +119,7 @@ func (s *Server) handlePublicZip(w http.ResponseWriter, r *http.Request) error {
 	defer release()
 	var paths []string
 	for _, raw := range r.URL.Query()["path"] {
-		p, err := vfs.Normalize(raw)
+		p, err := vfs.NormalizeWritable(raw) // recusa .filezam-* também na leitura
 		if err != nil {
 			return err
 		}

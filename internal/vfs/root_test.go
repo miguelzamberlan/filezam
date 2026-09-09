@@ -284,3 +284,51 @@ func TestUploadPartFinalize(t *testing.T) {
 		t.Error("RemovePart missing should be nil")
 	}
 }
+
+// Find nunca segue symlinks nem sai do root: o canário fora do root e o /etc
+// apontados por links dentro do root não aparecem, e os limites param a busca.
+func TestFindStaysInsideRoot(t *testing.T) {
+	r, root, outside := fixture(t)
+	if err := os.WriteFile(filepath.Join(root, "a", "sub", ".filezam-upload-x.part"), []byte("p"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	lim := SearchLimits{MaxScan: 1000, MaxResults: 100}
+	hits, partial, err := r.Find(ctx, "", "canary", lim)
+	if err != nil || partial || len(hits) != 0 {
+		t.Fatalf("canary reachable: %v %v %+v", err, partial, hits)
+	}
+	hits, _, err = r.Find(ctx, "", "passwd", lim)
+	if err != nil || len(hits) != 0 {
+		t.Fatalf("/etc reachable through link: %v %+v", err, hits)
+	}
+	hits, partial, err = r.Find(ctx, "", "TXT", lim)
+	if err != nil || partial {
+		t.Fatal(err, partial)
+	}
+	got := map[string]string{}
+	for _, h := range hits {
+		got[Join(h.Dir, h.Entry.Name)] = h.Entry.Type
+	}
+	if len(got) != 2 || got["a/file.txt"] != "file" || got["a/sub/deep.txt"] != "file" {
+		t.Fatalf("hits: %v", got)
+	}
+	hits, _, _ = r.Find(ctx, "", "filezam", lim)
+	if len(hits) != 0 {
+		t.Fatalf("reserved part listed: %+v", hits)
+	}
+	hits, partial, err = r.Find(ctx, "a", "sub", lim)
+	if err != nil || partial || len(hits) != 1 || hits[0].Dir != "a" || hits[0].Entry.Type != "dir" {
+		t.Fatalf("dir hit under a: %v %v %+v", err, partial, hits)
+	}
+	if _, partial, err := r.Find(ctx, "", ".", SearchLimits{MaxScan: 2, MaxResults: 100}); err != nil || !partial {
+		t.Fatalf("scan limit: %v %v", err, partial)
+	}
+	if hits, partial, err := r.Find(ctx, "", "txt", SearchLimits{MaxScan: 1000, MaxResults: 1}); err != nil || !partial || len(hits) != 1 {
+		t.Fatalf("result limit: %v %v %d", err, partial, len(hits))
+	}
+	if _, _, err := r.Find(ctx, "", "  ", lim); err == nil {
+		t.Fatal("empty query accepted")
+	}
+	checkCanary(t, outside)
+}

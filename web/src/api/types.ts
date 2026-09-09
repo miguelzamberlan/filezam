@@ -115,6 +115,18 @@ export interface DiskUsage {
   used: number
 }
 
+export interface SearchHit {
+  dir: string // pasta que contém o item, relativa ao escopo ("" = raiz)
+  entry: Entry
+}
+
+export interface SearchResult {
+  path: string
+  q: string
+  results: SearchHit[]
+  partial: boolean
+}
+
 export interface EntryInfo {
   path: string
   entry: Entry

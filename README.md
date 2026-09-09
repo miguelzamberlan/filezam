@@ -3,7 +3,7 @@
 Gestor de arquivos web, rápido e seguro, para expor uma pasta do seu servidor pelo navegador.
 
 - Login com usuário e senha; vários usuários, cada um com acesso à raiz inteira ou a uma subpasta.
-- Navegar, criar pastas, renomear, copiar, recortar/colar (mover), excluir, baixar (arquivo ou ZIP), favoritos.
+- Navegar, criar pastas, renomear, copiar, recortar/colar (mover), excluir, baixar (arquivo ou ZIP), favoritos, **pesquisa por nome em todas as subpastas** e zoom da listagem.
 - Compartilhar uma pasta por link público **somente leitura** com prazo de validade, com contagem de acessos e último acesso.
 - Propriedades de pasta/arquivo (caminho, tamanho calculado, quantidade de itens, links ativos), espaço livre do disco e preferências (arquivos ocultos, dicas, confirmação de exclusão).
 - Upload de arquivos grandes em blocos paralelos com retomada, upload de pastas inteiras (arraste e solte) e de milhares de arquivos pequenos em lote.
@@ -89,7 +89,7 @@ Contas são bloqueadas por 15 minutos (dobrando a cada repetição) após 10 fal
 
 ## Links públicos
 
-Selecione uma pasta e clique em **Compartilhar**, escolha a validade e copie o link (`/s/<token>`). Quem tiver o link pode listar, visualizar e baixar (arquivo ou ZIP), nada mais. O token tem 256 bits e só o hash é guardado; revogar ou expirar torna o link inválido na hora. Mover ou renomear a pasta compartilhada invalida o link.
+Selecione uma pasta e clique em **Compartilhar** e escolha a validade: o link (`/s/<token>`) é copiado na hora e pode ser copiado de novo em **Compartilhados** ou nas propriedades da pasta. Quem tiver o link pode listar, visualizar e baixar (arquivo ou ZIP), nada mais. O token tem 256 bits; a consulta pública é pelo hash, mas o token fica guardado no banco para permitir recopiar (quem tiver o arquivo do banco usa os links ativos). Revogar ou expirar torna o link inválido na hora; desativar o usuário ou tirar a pasta do escopo dele também. Mover ou renomear a pasta compartilhada invalida o link (uma pasta nova no mesmo caminho o reativa, então revogue antes de recriar).
 
 ## Uploads
 
@@ -101,9 +101,27 @@ Selecione uma pasta e clique em **Compartilhar**, escolha a validade e copie o l
 
 Arquivos são gravados em `.filezam-upload-*.part` no diretório de destino e renomeados atomicamente ao final, então nunca aparece arquivo pela metade. Sessões abandonadas são apagadas após 24 h. Se o navegador for fechado no meio de um upload grande, ao voltar aparece um aviso: solte o mesmo arquivo na mesma pasta e só os blocos que faltam são enviados.
 
+## Interface
+
+- **Arquivos** (menu lateral): a navegação em si. O filtro no alto da lista só peneira a pasta atual; **Pesquisar** procura pelo nome em todas as subpastas (a lupa ao lado do filtro já parte da pasta aberta). O resultado leva à pasta com o item selecionado.
+- **Uploads** (menu lateral) não é uma tela: o envio acontece arrastando arquivos/pastas para a listagem ou pelos botões **Enviar arquivos**/**Enviar pasta**, e o progresso aparece num painel flutuante no canto inferior direito, com pausa, cancelamento e repetição de falhas. O item do menu mostra quantos envios estão em andamento e expande esse painel.
+- **Zoom**: botões −/+ ao lado do filtro (ou em Configurações) ampliam a listagem sem mexer no zoom do navegador; fica salvo no navegador.
+
 ## Atalhos de teclado
 
 `↑ ↓ Home End PgUp PgDn` navegar · `Shift`/`Ctrl` seleção múltipla · `Ctrl+A` tudo · `Enter` abrir · `Backspace`/`Alt+↑` subir · `F2` renomear · `Del` excluir · `Ctrl+C` `Ctrl+X` `Ctrl+V` copiar/recortar/colar · `Ctrl+Shift+N` nova pasta · `Esc` limpar · digitar letras pula para o nome.
+
+## Segurança
+
+Resumo do que o projeto garante (detalhes e modelo de ameaças em [`docs/03-seguranca.md`](docs/03-seguranca.md)):
+
+- **Sandbox de caminhos**: todo acesso ao disco passa por `os.Root`; `..`, symlinks para fora e nomes internos (`.filezam-*`) são recusados na entrada, inclusive em leitura. Nomes novos não aceitam caracteres de controle.
+- **Conteúdo enviado por usuários nunca vira página**: HTML/JS/SVG-como-texto saem como `text/plain`, o resto vai como download; previews inline levam CSP `sandbox` e `nosniff`.
+- **Sessões**: cookie `HttpOnly` + `SameSite=Strict`, só o hash no banco, validade deslizante com teto de 30 dias; senhas em Argon2id; bloqueio progressivo e rate limit no login **e na troca de senha**.
+- **CSRF**: header `X-Filezam: 1` obrigatório em toda requisição mutante, mais `Sec-Fetch-Site`/`Origin`.
+- **Cabeçalhos**: CSP estrita na SPA, `X-Frame-Options`, `Referrer-Policy: same-origin`, HSTS atrás de proxy HTTPS confiável; tokens de link nunca vão para os logs.
+- **Container**: distroless sem shell, sem root, rootfs somente leitura, `cap_drop ALL`, `no-new-privileges`. Versão do Go fixada em `go.mod`/`Dockerfile`; rode `govulncheck` antes de publicar (checklist abaixo).
+- **Limitações aceitas**: sem cota de disco nem limite de zips/jobs por usuário autenticado; admin com escopo vê os links de todos; links são por caminho. Lista completa em [`docs/10-roadmap.md`](docs/10-roadmap.md).
 
 ## Documentação
 
@@ -111,7 +129,7 @@ Especificações completas em [`docs/`](docs/README.md): arquitetura, segurança
 
 ## Desenvolvimento
 
-Requisitos: Go 1.26+, Node 22+.
+Requisitos: Go 1.26.8+ (a versão em `go.mod` é baixada automaticamente pelo `go`), Node 22+.
 
 ```bash
 make run     # API em :8080 servindo ./data (cookies sem Secure)
@@ -135,6 +153,8 @@ Subcomandos do binário: `serve` (padrão), `healthcheck` (usado pelo Docker), `
 8. Enviar `evil.svg` com `<script>` e `evil.html`: preview do SVG sem alerta, HTML só como texto/download.
 9. Usuário com escopo não vê a pasta pai; admin muda o escopo → sessão dele cai.
 10. Atrás do proxy real: cookie com `Secure`, IP verdadeiro na auditoria, upload de 200 MB completa.
+11. Preview de PDF abre dentro da interface.
+12. `go run golang.org/x/vuln/cmd/govulncheck@latest ./...` e `cd web && npm audit --omit=dev` limpos; depois de qualquer commit, `docker compose build` (só `up -d` não atualiza a imagem).
 
 ## Licença
 

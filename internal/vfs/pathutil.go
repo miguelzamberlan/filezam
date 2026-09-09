@@ -83,6 +83,11 @@ func ValidName(name string) error {
 	if strings.HasPrefix(name, ReservedPrefix) {
 		return fmt.Errorf("%w: reserved prefix", ErrInvalidName)
 	}
+	for _, r := range name {
+		if r < 0x20 || r == 0x7f {
+			return fmt.Errorf("%w: control character", ErrInvalidName)
+		}
+	}
 	return nil
 }
 

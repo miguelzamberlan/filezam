@@ -29,8 +29,10 @@ func (s *Server) userRoot(r *http.Request) (*vfs.Root, *store.User, error) {
 	return root, u, nil
 }
 
+// queryPath normaliza ?path= para leitura. Nomes reservados (.filezam-*) são
+// recusados também aqui: partes de upload em andamento nunca são endereçáveis.
 func queryPath(r *http.Request, key string) (string, error) {
-	return vfs.Normalize(r.URL.Query().Get(key))
+	return vfs.NormalizeWritable(r.URL.Query().Get(key))
 }
 
 func queryBool(r *http.Request, key string) bool {
@@ -212,7 +214,10 @@ func serveFile(w http.ResponseWriter, r *http.Request, root *vfs.Root, p string,
 	if inline && inlineOK {
 		h.Set("Content-Type", ctype)
 		h.Set("Content-Disposition", mime.FormatMediaType("inline", map[string]string{"filename": name}))
-		h.Set("Content-Security-Policy", "sandbox; default-src 'none'; style-src 'unsafe-inline'")
+		// frame-ancestors 'self' + SAMEORIGIN: o preview de PDF é um iframe da própria SPA;
+		// o DENY global do middleware bloquearia até o mesmo origin.
+		h.Set("Content-Security-Policy", "sandbox; default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'self'")
+		h.Set("X-Frame-Options", "SAMEORIGIN")
 	} else {
 		if inlineOK {
 			h.Set("Content-Type", ctype)
@@ -804,4 +809,52 @@ func (s *Server) moveOne(ctx context.Context, root *vfs.Root, src, dst string, p
 		return err
 	}
 	return root.RemoveTree(ctx, src, nil)
+}
+
+// Limites da pesquisa recursiva: entradas visitadas, resultados e tempo por requisição.
+const (
+	searchScanLimit  = 200_000
+	searchMaxResults = 500
+	searchTimeout    = 10 * time.Second
+)
+
+// handleSearch finds entries by name under ?path= within the user's scope.
+func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) error {
+	root, u, err := s.userRoot(r)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	p, err := queryPath(r, "path")
+	if err != nil {
+		return err
+	}
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if q == "" || len(q) > 255 {
+		return errorf(http.StatusBadRequest, "bad_query", "q is required (1-255 bytes)")
+	}
+	limit := searchMaxResults
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n < limit {
+			limit = n
+		}
+	}
+	key := strconv.FormatInt(u.ID, 10)
+	if !s.searchSem.TryAcquire(key) {
+		return errorf(http.StatusTooManyRequests, "busy", "too many concurrent searches")
+	}
+	defer s.searchSem.Release(key)
+	if e, err := root.Stat(p); err != nil {
+		return err
+	} else if e.Type != "dir" {
+		return vfs.ErrNotDir
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), searchTimeout)
+	defer cancel()
+	hits, partial, err := root.Find(ctx, p, q, vfs.SearchLimits{MaxScan: searchScanLimit, MaxResults: limit})
+	if err != nil {
+		return err
+	}
+	writeJSON(w, r, 200, map[string]any{"path": p, "q": q, "results": hits, "partial": partial})
+	return nil
 }

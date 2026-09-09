@@ -89,7 +89,8 @@ export default function Preview({ entries, index, urlFor, maxText, onClose, onIn
         {kind === 'image' && <img src={src} alt={e.name} className="max-h-full max-w-full object-contain" onClick={(ev) => ev.stopPropagation()} />}
         {kind === 'video' && <video src={src} controls autoPlay preload="metadata" className="max-h-full max-w-full" onClick={(ev) => ev.stopPropagation()} />}
         {kind === 'audio' && <audio src={src} controls autoPlay className="w-full max-w-lg" onClick={(ev) => ev.stopPropagation()} />}
-        {kind === 'pdf' && <iframe src={src} title={e.name} sandbox="" className="h-full w-full max-w-5xl rounded bg-white" onClick={(ev) => ev.stopPropagation()} />}
+        {/* Sem atributo sandbox: o Chrome recusa o visualizador de PDF em frames com sandbox (mesmo com allow-scripts); a resposta já vem com CSP `sandbox` do servidor, que isola o documento. */}
+        {kind === 'pdf' && <iframe src={src} title={e.name} className="h-full w-full max-w-5xl rounded bg-white" onClick={(ev) => ev.stopPropagation()} />}
         {kind === 'text' && (
           <div className="h-full w-full max-w-5xl overflow-auto rounded bg-neutral-900 p-4" onClick={(ev) => ev.stopPropagation()}>
             {loading ? <ISpinner /> : <pre className="whitespace-pre-wrap break-words font-mono text-xs text-neutral-100">{text}</pre>}

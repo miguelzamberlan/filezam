@@ -1,6 +1,6 @@
 import { Link } from 'react-router'
 import { encodePath, segments } from '../lib/paths'
-import { IChevronRight, IHome } from './Icons'
+import { IChevronRight, IFolder } from './Icons'
 
 export default function Breadcrumb({ path, base, rootLabel, onNavigate }: { path: string; base: string; rootLabel: string; onNavigate?: (p: string) => void }) {
   const segs = segments(path)
@@ -15,7 +15,7 @@ export default function Breadcrumb({ path, base, rootLabel, onNavigate }: { path
     )
   return (
     <div className="flex min-w-0 items-center gap-0.5 text-sm">
-      {item('', <span className="flex items-center gap-1"><IHome size={15} /> {rootLabel}</span>, segs.length === 0)}
+      {item('', <span className="flex items-center gap-1"><IFolder size={15} className="text-amber-500" /> {rootLabel}</span>, segs.length === 0)}
       {crumbs.map((c, i) => (
         <span key={c.path} className="flex min-w-0 items-center gap-0.5">
           <IChevronRight size={14} className="shrink-0 text-neutral-400" />

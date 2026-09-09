@@ -561,3 +561,131 @@ func TestInfoAndDisk(t *testing.T) {
 	}
 	admin.expect("GET", "/api/files/info?path=../x", nil, 400)
 }
+
+// Endurecimentos da revisão de segurança: preview inline emoldurável só pelo próprio
+// origin, nomes de controle recusados, partes de upload nunca endereçáveis, links
+// públicos seguem o estado do usuário e a troca de senha tem rate limit.
+func TestSecurityHardening(t *testing.T) {
+	admin, _, root := newEnv(t)
+	admin.login("admin", "admin")
+	admin.expect("POST", "/api/auth/password", map[string]string{"current": "admin", "new": "correct horse battery"}, 200)
+	os.WriteFile(filepath.Join(root, "teamA", "pub", "a.pdf"), []byte("%PDF-1.4 x"), 0o644)
+	os.WriteFile(filepath.Join(root, "teamA", "pub", ".filezam-upload-deadbeef.part"), []byte("partial"), 0o644)
+
+	// inline: mesmo origin pode emoldurar (preview de PDF), o resto continua bloqueado
+	resp, _ := admin.do("GET", "/api/files/content?path=teamA/pub/a.pdf&inline=1", nil, nil)
+	io.ReadAll(resp.Body)
+	if resp.Header.Get("X-Frame-Options") != "SAMEORIGIN" || !strings.Contains(resp.Header.Get("Content-Security-Policy"), "frame-ancestors 'self'") || !strings.HasPrefix(resp.Header.Get("Content-Security-Policy"), "sandbox;") {
+		t.Fatalf("inline headers: %v", resp.Header)
+	}
+	resp, _ = admin.do("GET", "/api/files/content?path=teamA/pub/a.pdf", nil, nil)
+	io.ReadAll(resp.Body)
+	if resp.Header.Get("X-Frame-Options") != "DENY" {
+		t.Fatalf("download headers: %v", resp.Header)
+	}
+
+	// nomes novos com caracteres de controle são recusados; leitura de partes internas também
+	admin.expect("POST", "/api/files/mkdir", map[string]string{"path": "teamA/x\r\ny"}, 400)
+	admin.expect("POST", "/api/files/rename", map[string]string{"path": "teamA/pub/a.pdf", "newName": "a\tb.pdf"}, 400)
+	admin.expect("GET", "/api/files/content?path=teamA/pub/.filezam-upload-deadbeef.part", nil, 400)
+	admin.expect("GET", "/api/files/stat?path=teamA/pub/.filezam-upload-deadbeef.part", nil, 400)
+
+	// links públicos: desativar o dono apaga o acesso; estreitar o escopo remove links de fora dele
+	admin.expect("POST", "/api/admin/users", map[string]any{"username": "carol", "password": "carolpassword1", "scope": ""}, 201)
+	carolJar, _ := cookiejar.New(nil)
+	carol := &client{t: t, srv: admin.srv, c: &http.Client{Jar: carolJar}}
+	carol.login("carol", "carolpassword1")
+	o := carol.expect("POST", "/api/shares", map[string]any{"path": "teamB", "expiresIn": 600}, 201)
+	tokB := o["token"].(string)
+	o = carol.expect("POST", "/api/shares", map[string]any{"path": "teamA/pub", "expiresIn": 600}, 201)
+	tokA := o["token"].(string)
+	o = admin.expect("GET", "/api/admin/users", nil, 200)
+	var carolID int64
+	for _, u := range o["users"].([]any) {
+		if m := u.(map[string]any); m["username"] == "carol" {
+			carolID = int64(m["id"].(float64))
+		}
+	}
+	pubJar, _ := cookiejar.New(nil)
+	pub := &client{t: t, srv: admin.srv, c: &http.Client{Jar: pubJar}}
+	pub.expect("GET", "/api/public/"+tokB, nil, 200)
+	pub.expect("GET", "/api/public/"+tokA, nil, 200)
+	pub.expect("GET", "/api/public/"+tokA+"/list?path=.filezam-upload-deadbeef.part", nil, 400)
+	admin.expect("PATCH", fmt.Sprintf("/api/admin/users/%d", carolID), map[string]any{"scope": "teamA"}, 200)
+	pub.expect("GET", "/api/public/"+tokB, nil, 404) // teamB saiu do escopo
+	pub.expect("GET", "/api/public/"+tokA, nil, 200) // teamA/pub continua dentro
+	admin.expect("PATCH", fmt.Sprintf("/api/admin/users/%d", carolID), map[string]any{"disabled": true}, 200)
+	pub.expect("GET", "/api/public/"+tokA, nil, 404)
+	admin.expect("PATCH", fmt.Sprintf("/api/admin/users/%d", carolID), map[string]any{"disabled": false}, 200)
+	pub.expect("GET", "/api/public/"+tokA, nil, 200)
+
+	// troca de senha: senha atual errada é limitada como o login (5/min por usuário)
+	carol.login("carol", "carolpassword1")
+	var got429 bool
+	for i := 0; i < 8 && !got429; i++ {
+		resp, _ := carol.do("POST", "/api/auth/password", map[string]string{"current": "wrong", "new": "another password 1"}, nil)
+		io.ReadAll(resp.Body)
+		got429 = resp.StatusCode == 429
+	}
+	if !got429 {
+		t.Fatal("expected password change rate limit")
+	}
+}
+
+func TestLogPath(t *testing.T) {
+	for in, want := range map[string]string{
+		"/api/public/abc":      "/api/public/<token>",
+		"/api/public/abc/list": "/api/public/<token>/list",
+		"/api/public/abc/zip":  "/api/public/<token>/zip",
+		"/s/abc":               "/s/<token>",
+		"/api/files/content":   "/api/files/content",
+		"/api/public/":         "/api/public/",
+	} {
+		if got := logPath(in); got != want {
+			t.Errorf("logPath(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestSearch(t *testing.T) {
+	admin, _, root := newEnv(t)
+	admin.login("admin", "admin")
+	admin.expect("POST", "/api/auth/password", map[string]string{"current": "admin", "new": "correct horse battery"}, 200)
+	os.MkdirAll(filepath.Join(root, "teamA", "Relatórios 2026"), 0o755)
+	os.WriteFile(filepath.Join(root, "teamA", "Relatórios 2026", "Balanço.XLSX"), []byte("x"), 0o644)
+	os.Symlink("/etc", filepath.Join(root, "teamA", "etc"))
+	admin.expect("POST", "/api/admin/users", map[string]any{"username": "bob", "password": "bobpassword1", "scope": "teamA"}, 201)
+	bobJar, _ := cookiejar.New(nil)
+	bob := &client{t: t, srv: admin.srv, c: &http.Client{Jar: bobJar}}
+	bob.login("bob", "bobpassword1")
+
+	o := bob.expect("GET", "/api/files/search?path=&q=balan", nil, 200)
+	res := o["results"].([]any)
+	if len(res) != 1 || o["partial"] != false {
+		t.Fatalf("search: %v", o)
+	}
+	hit := res[0].(map[string]any)
+	if hit["dir"] != "Relatórios 2026" || hit["entry"].(map[string]any)["name"] != "Balanço.XLSX" {
+		t.Fatalf("hit: %v", hit)
+	}
+	o = bob.expect("GET", "/api/files/search?path=&q=secret", nil, 200) // teamB/secret.txt fica fora do escopo
+	if len(o["results"].([]any)) != 0 {
+		t.Fatalf("scope leak: %v", o)
+	}
+	o = bob.expect("GET", "/api/files/search?path=&q=passwd", nil, 200) // symlink para /etc não é seguido
+	if len(o["results"].([]any)) != 0 {
+		t.Fatalf("symlink followed: %v", o)
+	}
+	o = bob.expect("GET", "/api/files/search?path=&q=t&limit=1", nil, 200)
+	if len(o["results"].([]any)) != 1 || o["partial"] != true {
+		t.Fatalf("limit: %v", o)
+	}
+	bob.expect("GET", "/api/files/search?path=&q=", nil, 400)
+	bob.expect("GET", "/api/files/search?path=..&q=x", nil, 400)
+	bob.expect("GET", "/api/files/search?path=pub/doc.txt&q=x", nil, 409)
+	bob.expect("GET", "/api/files/search?path=nope&q=x", nil, 404)
+	o = admin.expect("GET", "/api/files/search?path=teamB&q=secret", nil, 200)
+	if len(o["results"].([]any)) != 1 {
+		t.Fatalf("admin search: %v", o)
+	}
+}

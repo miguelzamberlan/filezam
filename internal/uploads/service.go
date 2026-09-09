@@ -76,6 +76,9 @@ func (s *Service) unlock(id string) {
 	s.mu.Unlock()
 }
 
+// MaxUploadSize bounds a single upload (1 PiB) so chunk arithmetic can never overflow.
+const MaxUploadSize = int64(1) << 50
+
 func nchunks(size, chunk int64) int {
 	if size == 0 {
 		return 0
@@ -141,8 +144,8 @@ func (s *Service) Create(ctx context.Context, root *vfs.Root, scope string, user
 	if err := vfs.ValidName(name); err != nil {
 		return nil, err
 	}
-	if size < 0 {
-		return nil, fmt.Errorf("%w: negative size", vfs.ErrInvalidPath)
+	if size < 0 || size > MaxUploadSize {
+		return nil, fmt.Errorf("%w: size out of range", vfs.ErrInvalidPath)
 	}
 	if err := root.MkdirAll(dir); err != nil {
 		return nil, err

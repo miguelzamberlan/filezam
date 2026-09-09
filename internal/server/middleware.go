@@ -43,7 +43,7 @@ func (s *Server) recoverer(next http.Handler) http.Handler {
 				if rec == http.ErrAbortHandler {
 					panic(rec)
 				}
-				s.log.Error("panic", "err", rec, "path", r.URL.Path, "stack", string(debug.Stack()))
+				s.log.Error("panic", "err", rec, "path", logPath(r.URL.Path), "stack", string(debug.Stack()))
 				writeError(w, r, errorf(http.StatusInternalServerError, "internal", "internal error"))
 			}
 		}()
@@ -118,13 +118,27 @@ func (s *Server) securityHeaders(next http.Handler) http.Handler {
 	})
 }
 
+// logPath hides share tokens carried in URL paths so they never land in stdout/log shipping.
+func logPath(p string) string {
+	for _, prefix := range []string{"/api/public/", "/s/"} {
+		if rest, ok := strings.CutPrefix(p, prefix); ok && rest != "" {
+			_, tail, found := strings.Cut(rest, "/")
+			if found {
+				tail = "/" + tail
+			}
+			return prefix + "<token>" + tail
+		}
+	}
+	return p
+}
+
 func (s *Server) logging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		sw := &statusWriter{ResponseWriter: w, status: 200}
 		next.ServeHTTP(sw, r)
 		if s.log.Enabled(r.Context(), slog.LevelDebug) || sw.status >= 400 {
-			s.log.Log(r.Context(), slog.LevelDebug, "http", "method", r.Method, "path", r.URL.Path, "status", sw.status, "ms", time.Since(start).Milliseconds(), "ip", ipFrom(r))
+			s.log.Log(r.Context(), slog.LevelDebug, "http", "method", r.Method, "path", logPath(r.URL.Path), "status", sw.status, "ms", time.Since(start).Milliseconds(), "ip", ipFrom(r))
 		}
 	})
 }

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/zamberlan/filezam/internal/auth"
@@ -35,6 +36,8 @@ type Server struct {
 	publicIP  *auth.Limiter
 	publicDL  *auth.KeyedSemaphore
 	uploadSem *auth.KeyedSemaphore
+	searchSem *auth.KeyedSemaphore
+	adminMu   sync.Mutex // serializa alterações de usuários: a checagem de "último admin" não é atômica no banco
 
 	bg     context.Context
 	cancel context.CancelFunc
@@ -53,6 +56,7 @@ func New(cfg *config.Config, db *store.DB, base *vfs.Root, log *slog.Logger, ver
 		publicIP:  auth.NewLimiter(120, 120),
 		publicDL:  auth.NewKeyedSemaphore(2),
 		uploadSem: auth.NewKeyedSemaphore(8),
+		searchSem: auth.NewKeyedSemaphore(2),
 		bg:        bg, cancel: cancel,
 	}
 	if err := s.ensureAdmin(bg); err != nil {
@@ -168,6 +172,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.Handle("GET /api/files/stat", user(s.handleStat))
 	mux.Handle("GET /api/files/info", user(s.handleInfo))
 	mux.Handle("GET /api/files/disk", user(s.handleDisk))
+	mux.Handle("GET /api/files/search", user(s.handleSearch))
 	mux.Handle("GET /api/files/content", user(s.handleContent))
 	mux.Handle("PUT /api/files/content", user(s.handlePutContent))
 	mux.Handle("POST /api/files/batch", user(s.handleBatch))

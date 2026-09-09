@@ -42,6 +42,8 @@ cd /caminho/do/compose && docker compose up -d --build filezam
 
 Migrações do banco rodam automaticamente no início. Jobs em andamento são perdidos (só o progresso exibido); uploads chunked em andamento retomam pelo cliente.
 
+A versão do Go está fixada em `go.mod` e no `Dockerfile`; ao subir de versão (correções de segurança da biblioteca padrão), reconstrua a imagem. Uma imagem construída antes de um commit não recebe nada dele: `docker compose up -d` sem `--build` só reinicia o container antigo.
+
 ## Backup
 
 Parar o serviço, copiar `filezam.db`, `filezam.db-wal`, `filezam.db-shm` de `/config`. Os arquivos em `/data` são seus e devem ter backup próprio.
@@ -57,11 +59,13 @@ Parar o serviço, copiar `filezam.db`, `filezam.db-wal`, `filezam.db-shm` de `/c
 | 429 `busy` em uploads | mais de 8 requisições simultâneas por usuário | Normal; o cliente reenvia com backoff |
 | Link copiado com endereço errado (host/porta interna) | proxy que não repassa `Host`/`X-Forwarded-Host` de um IP em `FILEZAM_TRUSTED_PROXIES` | A interface já usa a origem do navegador; para links gerados pela API defina `FILEZAM_PUBLIC_URL=https://arquivos.exemplo.com` |
 | Botão "Copiar link" mostra "—" em Compartilhados | link criado antes da migração 002 (token não guardado) | Criar um link novo |
-| Link público sempre 404 | expirado, revogado, pasta movida/renomeada | Criar novo link |
+| Link público sempre 404 | expirado, revogado, pasta movida/renomeada, dono desativado ou escopo do dono estreitado | Criar novo link / reativar o usuário |
+| Preview de PDF em branco ou com ícone de bloqueio | build antigo (cabeçalho `X-Frame-Options: DENY` no conteúdo inline) | Reconstruir a imagem |
+| 429 `rate_limited` ao trocar a senha | mais de 5 tentativas/min com a senha atual errada | Aguardar um minuto |
 | `scope_unavailable` | pasta de escopo apagada/renomeada | Admin redefine o escopo do usuário |
 | Admin sem senha | — | `docker compose run --rm filezam reset-admin 'Senha123'` |
 
-Logs em JSON no stdout (`docker compose logs -f filezam`); `FILEZAM_LOG_LEVEL=debug` registra cada requisição com método, path, status, ms e IP.
+Logs em JSON no stdout (`docker compose logs -f filezam`); `FILEZAM_LOG_LEVEL=debug` registra cada requisição com método, path, status, ms e IP. Tokens de links públicos aparecem mascarados (`/api/public/<token>/…`).
 
 ## Desenvolvimento local
 

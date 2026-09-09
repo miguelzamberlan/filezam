@@ -49,13 +49,43 @@ export const ISettings = (p: P) => base(p, <><circle cx="12" cy="12" r="3" /><pa
 export const IInfo = (p: P) => base(p, <><circle cx="12" cy="12" r="9" /><path d="M12 16v-4m0-4h.01" /></>)
 export const ILog = (p: P) => base(p, <><path d="M4 4h16v16H4z" /><path d="M8 9h8M8 13h8M8 17h5" /></>)
 
+export const ISearch = (p: P) => base(p, <><circle cx="11" cy="11" r="7" /><path d="m20 20-4.3-4.3" /></>)
+export const IZoomIn = (p: P) => base(p, <><circle cx="11" cy="11" r="7" /><path d="m20 20-4.3-4.3M11 8v6M8 11h6" /></>)
+export const IZoomOut = (p: P) => base(p, <><circle cx="11" cy="11" r="7" /><path d="m20 20-4.3-4.3M8 11h6" /></>)
+
+// Documento com rótulo (PDF, DOC, XLS…): contorno de arquivo preenchido de leve e a sigla em negrito.
+const IDoc = (label: string) => (p: P) =>
+  base(p, (
+    <>
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" fill="currentColor" fillOpacity={0.14} />
+      <path d="M14 3v5h5" />
+      <text x="12" y="17.6" textAnchor="middle" fontSize="6.4" fontWeight="700" fontFamily="ui-sans-serif, system-ui, sans-serif" fill="currentColor" stroke="none">{label}</text>
+    </>
+  ))
+export const IPdf = IDoc('PDF')
+export const IWord = IDoc('DOC')
+export const ISheet = IDoc('XLS')
+export const ISlides = IDoc('PPT')
+export const IText = (p: P) => base(p, <><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5M8.5 12h7M8.5 15h7M8.5 18h4" /></>)
+export const ICode = (p: P) => base(p, <><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5" /><path d="m10 13-2 2 2 2M14 13l2 2-2 2" /></>)
+
+const EXT_ICONS: [string[], (size: number) => React.ReactNode][] = [
+  [['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'bmp', 'svg', 'ico', 'heic', 'tif', 'tiff'], (s) => <IImage size={s} className="text-purple-500" />],
+  [['mp4', 'webm', 'mkv', 'mov', 'avi', 'm4v', 'wmv'], (s) => <IVideo size={s} className="text-rose-500" />],
+  [['mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac', 'opus', 'wma'], (s) => <IAudio size={s} className="text-emerald-500" />],
+  [['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz', 'zst', 'iso'], (s) => <IArchive size={s} className="text-orange-500" />],
+  [['pdf'], (s) => <IPdf size={s} className="text-red-600" />],
+  [['doc', 'docx', 'odt', 'rtf', 'dot', 'dotx'], (s) => <IWord size={s} className="text-blue-600" />],
+  [['xls', 'xlsx', 'xlsm', 'ods', 'csv'], (s) => <ISheet size={s} className="text-green-600" />],
+  [['ppt', 'pptx', 'pps', 'ppsx', 'odp'], (s) => <ISlides size={s} className="text-orange-600" />],
+  [['txt', 'md', 'log', 'ini', 'conf', 'cfg', 'srt', 'vtt'], (s) => <IText size={s} className="text-neutral-500" />],
+  [['js', 'ts', 'tsx', 'jsx', 'json', 'xml', 'html', 'htm', 'css', 'py', 'go', 'java', 'c', 'h', 'cpp', 'rs', 'rb', 'php', 'sh', 'bat', 'ps1', 'sql', 'yml', 'yaml', 'toml'], (s) => <ICode size={s} className="text-cyan-600" />],
+]
+
 export function iconFor(name: string, type: string, size = 18) {
   if (type === 'dir') return <IFolder size={size} className="text-amber-500" />
   if (type === 'other') return <ILink size={size} className="text-neutral-400" />
   const ext = name.slice(name.lastIndexOf('.') + 1).toLowerCase()
-  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'bmp', 'svg', 'ico', 'heic'].includes(ext)) return <IImage size={size} className="text-purple-500" />
-  if (['mp4', 'webm', 'mkv', 'mov', 'avi', 'm4v'].includes(ext)) return <IVideo size={size} className="text-rose-500" />
-  if (['mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac', 'opus'].includes(ext)) return <IAudio size={size} className="text-emerald-500" />
-  if (['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz', 'zst'].includes(ext)) return <IArchive size={size} className="text-orange-500" />
+  for (const [exts, icon] of EXT_ICONS) if (exts.includes(ext)) return icon(size)
   return <IFile size={size} className="text-neutral-500" />
 }

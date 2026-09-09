@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent } from 'react'
-import { useNavigate, useParams } from 'react-router'
+import { useNavigate, useParams, useSearchParams } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Api, ApiError } from '../api/client'
 import type { Conflict, Entry } from '../api/types'
 import { useAuth, useFavorites, useInvalidateDirs, useListing } from '../hooks'
 import { basename, decodePath, dirname, encodePath, join } from '../lib/paths'
 import { sortEntries } from '../lib/naturalSort'
-import { useUI } from '../store/ui'
+import { useUI, ZOOM_STEPS } from '../store/ui'
 import { useJobs } from '../store/jobs'
 import { S, errorMessage } from '../strings'
 import { uploadManager } from '../upload/manager'
@@ -20,7 +20,7 @@ import InfoDialog from '../components/InfoDialog'
 import { dialogs, toast } from '../components/dialogs'
 import { useUploads } from '../components/UploadPanel'
 import {
-  IArrowUp, ICopy, IDownload, IEdit, IFolderPlus, IGrid, IList, IPaste, IRefresh, IScissors, IShare, IStar, ITrash, IUpload, ISpinner, IEye, IInfo,
+  IArrowUp, ICopy, IDownload, IEdit, IFolderPlus, IGrid, IList, IPaste, IRefresh, IScissors, IShare, IStar, ITrash, IUpload, ISpinner, IEye, IInfo, ISearch, IZoomIn, IZoomOut,
 } from '../components/Icons'
 
 function triggerDownload(url: string) {
@@ -37,6 +37,7 @@ export default function Browser() {
   const params = useParams()
   const path = decodePath(params['*'] ?? '')
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const qc = useQueryClient()
   const { user } = useAuth()
   const listing = useListing(path)
@@ -79,6 +80,21 @@ export default function Browser() {
     listRef.current?.focus()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path])
+
+  // ?sel=nome (vindo da pesquisa): seleciona o item assim que a listagem chega e limpa o parâmetro
+  useEffect(() => {
+    const sel = searchParams.get('sel')
+    if (!sel || !listing.data) return
+    if (listing.data.entries.some((e) => e.name === sel)) ui.setSelection(new Set([sel]), sel, sel)
+    setSearchParams({}, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listing.data, searchParams])
+
+  const zoomStep = (dir: 1 | -1) => {
+    const i = ZOOM_STEPS.indexOf(ui.prefs.zoom)
+    const next = ZOOM_STEPS[Math.max(0, Math.min(ZOOM_STEPS.length - 1, (i < 0 ? 1 : i) + dir))]
+    ui.setPrefs({ zoom: next })
+  }
 
   const go = useCallback((p: string) => navigate('/b' + (p ? '/' + encodePath(p) : '')), [navigate])
   const refresh = () => qc.invalidateQueries({ queryKey: ['list', path] })
@@ -252,7 +268,7 @@ export default function Browser() {
       if (extend) select(e, { shiftKey: true, ctrlKey: false, metaKey: false })
       else ui.setSelection(new Set([e.name]), e.name, e.name)
     }
-    const pageSize = Math.max(1, Math.floor((listRef.current?.clientHeight ?? 400) / 34) - 1)
+    const pageSize = Math.max(1, Math.floor((listRef.current?.clientHeight ?? 400) / (34 * ui.prefs.zoom)) - 1)
     switch (ev.key) {
       case 'ArrowDown':
         focusAt(idx + 1, ev.shiftKey)
@@ -388,6 +404,11 @@ export default function Browser() {
         <Breadcrumb path={path} base="/b" rootLabel={S.home} />
         <div className="ml-auto flex items-center gap-1">
           <input className="input !w-40 !py-1 text-sm" placeholder={S.search} value={ui.filter} onChange={(e) => ui.setFilter(e.target.value)} onKeyDown={(e) => e.key === 'Escape' && (ui.setFilter(''), listRef.current?.focus())} />
+          <button className="btn-ghost !px-1.5" onClick={() => navigate('/search?path=' + encodeURIComponent(path))} title={S.searchHere}><ISearch size={16} /></button>
+          <span className="mx-1 h-5 border-l border-neutral-300 dark:border-neutral-700" />
+          <button className="btn-ghost !px-1.5" onClick={() => zoomStep(-1)} disabled={ui.prefs.zoom <= ZOOM_STEPS[0]} title={S.zoomOut}><IZoomOut size={16} /></button>
+          <button className="btn-ghost !px-1 text-xs tabular-nums" onClick={() => ui.setPrefs({ zoom: 1 })} title={S.zoomReset}>{Math.round(ui.prefs.zoom * 100)}%</button>
+          <button className="btn-ghost !px-1.5" onClick={() => zoomStep(1)} disabled={ui.prefs.zoom >= ZOOM_STEPS[ZOOM_STEPS.length - 1]} title={S.zoomIn}><IZoomIn size={16} /></button>
           <button className="btn-ghost !px-1.5" onClick={() => ui.setView(ui.view === 'list' ? 'grid' : 'list')} title={S.view}>{ui.view === 'list' ? <IGrid size={16} /> : <IList size={16} />}</button>
           <button className="btn-ghost !px-1.5" onClick={refresh} title={S.refresh}>{listing.isFetching ? <ISpinner size={16} /> : <IRefresh size={16} />}</button>
         </div>
@@ -449,6 +470,7 @@ export default function Browser() {
             dragOverName={dragOverName}
             onDragOverEntry={setDragOverName}
             emptyMessage={ui.filter ? S.notFound : S.emptyFolder}
+            zoom={ui.prefs.zoom}
           />
         )}
       </div>

@@ -9,7 +9,8 @@ import { uploadManager } from '../upload/manager'
 import { dialogs, toast } from './dialogs'
 import JobToasts from './JobToasts'
 import UploadPanel, { useUploads } from './UploadPanel'
-import { IHome, IStar, IShare, IUsers, ILog, ILogout, IKey, IMenu, IClose, IUpload, ISettings } from './Icons'
+import { IFolder, IStar, IShare, IUsers, ILog, ILogout, IKey, IMenu, IClose, IUpload, ISettings, ISearch } from './Icons'
+import { useUI } from '../store/ui'
 import DiskBar from './DiskBar'
 import SettingsDialog from './SettingsDialog'
 
@@ -22,6 +23,7 @@ export default function Shell() {
   const uploads = useUploads()
   const [menuOpen, setMenuOpen] = useState(false)
   const [settings, setSettings] = useState(false)
+  const setUploadPanelOpen = useUI((s) => s.setUploadPanelOpen)
 
   useEffect(() => {
     uploadManager.onConflict = (item) => dialogs.conflict(item.relPath)
@@ -39,6 +41,13 @@ export default function Shell() {
     'flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm ' + (isActive ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-100' : 'hover:bg-neutral-200 dark:hover:bg-neutral-800')
 
   const activeUploads = uploads.items.filter((i) => i.state === 'queued' || i.state === 'uploading').length
+  // O item "Uploads" do menu é um atalho para o painel flutuante (canto inferior direito):
+  // expande a lista se há envios; senão explica como enviar.
+  const showUploads = () => {
+    setMenuOpen(false)
+    if (uploads.items.length === 0) return toast(S.uploadsEmpty, 'info')
+    setUploadPanelOpen(true)
+  }
 
   const sidebar = (
     <nav className="flex h-full w-60 shrink-0 flex-col border-r border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900">
@@ -47,7 +56,8 @@ export default function Shell() {
         <span className="text-lg font-semibold">{S.appName}</span>
         <button className="btn-ghost ml-auto !p-1 lg:hidden" onClick={() => setMenuOpen(false)}><IClose /></button>
       </div>
-      <NavLink to="/b" end className={linkCls} onClick={() => setMenuOpen(false)}><IHome size={16} /> {S.home}</NavLink>
+      <NavLink to="/b" className={linkCls} onClick={() => setMenuOpen(false)}><IFolder size={16} className="text-amber-500" /> {S.home}</NavLink>
+      <NavLink to="/search" className={linkCls} onClick={() => setMenuOpen(false)}><ISearch size={16} /> {S.searchTitle}</NavLink>
       <div className="mt-3 px-2.5 text-xs font-medium uppercase tracking-wide text-neutral-500">{S.favorites}</div>
       <div className="mt-1 max-h-64 overflow-auto">
         {favs.data?.favorites.map((f) => (
@@ -66,10 +76,14 @@ export default function Shell() {
       </div>
       <div className="mt-3 flex flex-col gap-0.5">
         <NavLink to="/shares" className={linkCls} onClick={() => setMenuOpen(false)}><IShare size={16} /> {S.shares}</NavLink>
-        <div className={linkCls({ isActive: false }) + ' cursor-default'}>
+        <button className={linkCls({ isActive: false }) + ' text-left'} onClick={showUploads} title={S.uploadsShow}>
           <IUpload size={16} /> {S.uploads}
-          {activeUploads > 0 && <span className="ml-auto rounded-full bg-blue-600 px-1.5 text-xs text-white">{activeUploads}</span>}
-        </div>
+          {activeUploads > 0 ? (
+            <span className="ml-auto rounded-full bg-blue-600 px-1.5 text-xs text-white">{activeUploads}</span>
+          ) : uploads.items.length > 0 ? (
+            <span className="ml-auto text-xs text-neutral-500">{S.uploadsStatus(uploads.filesDone, uploads.filesTotal)}</span>
+          ) : null}
+        </button>
       </div>
       {user?.role === 'admin' && (
         <>

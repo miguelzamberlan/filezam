@@ -18,7 +18,7 @@ Um único processo: servidor HTTP, workers de jobs e tarefas de manutenção. Se
 | `cmd/filezam` | Subcomandos `serve`, `healthcheck`, `reset-admin`, `version`; sinal de parada, shutdown gracioso | config, server, store, vfs |
 | `internal/config` | Parse e validação das variáveis de ambiente (`Config`) | — |
 | `internal/server` | Roteamento, middlewares, handlers, sessões, SPA, auditoria | todos abaixo |
-| `internal/vfs` | **Núcleo de segurança**: normalização de caminhos, `Root`, listagem, cópia, movimento, remoção, zip, arquivos `.part` | `os.Root`, `x/sys/unix` |
+| `internal/vfs` | **Núcleo de segurança**: normalização de caminhos, `Root`, listagem, pesquisa (`Find`), cópia, movimento, remoção, zip, arquivos `.part` | `os.Root`, `x/sys/unix` |
 | `internal/uploads` | Sessões chunked: bitset, escrita por offset, finalização, limpeza | store, vfs |
 | `internal/jobs` | Registro em memória de jobs com progresso e cancelamento | — |
 | `internal/auth` | Argon2id, tokens, hash de tokens, rate limiters e semáforos | `x/crypto` |
@@ -80,6 +80,7 @@ Dockerfile docker-compose.yml .env.example Makefile README.md CLAUDE.md
 | Logins simultâneos (Argon2 usa 64 MiB cada) | 4 | `loginSem` |
 | Tentativas de login por IP | 10/min, burst 10 | `loginIP` |
 | Tentativas de login por usuário | 5/min, burst 5 | `loginUser` |
+| Troca de senha (senha atual errada) | mesmos limites e semáforo do login | `handleChangePassword` |
 | Uploads simultâneos por usuário (PUT, lote ou chunk) | 8 | `uploadSem` → 429 |
 | Requisições públicas por IP | 120/min | `publicIP` |
 | Downloads/zips públicos simultâneos por IP | 2 | `publicDL` |
@@ -88,3 +89,7 @@ Dockerfile docker-compose.yml .env.example Makefile README.md CLAUDE.md
 | Corpo de lote | `BatchMaxBytes` + 1 MiB | idem |
 | Escrita no SQLite | 1 conexão | `store.DB.w` |
 | Contagem em `/api/files/info` | 200 000 entradas ou 15 s | `infoScanLimit` |
+| Tamanho de um upload chunked | 1 PiB (`uploads.MaxUploadSize`) e o espaço livre | `Service.Create` |
+| Pesquisa recursiva | 2 simultâneas por usuário; 200 000 entradas, 500 resultados ou 10 s por requisição | `searchSem`, `handleSearch` |
+
+Sem limite (aceito, ver [10](10-roadmap.md)): zips/downloads autenticados simultâneos, jobs por usuário, cota de disco.

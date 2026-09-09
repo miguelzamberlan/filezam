@@ -1,6 +1,7 @@
-import { useState, useSyncExternalStore, useRef } from 'react'
+import { useSyncExternalStore, useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { uploadManager, type UploadItem } from '../upload/manager'
+import { useUI } from '../store/ui'
 import { formatBytes, formatDuration, formatSpeed } from '../lib/format'
 import { S, errorMessage } from '../strings'
 import { IClose, IPause, IPlay, IChevronRight, IUpload, ICheck, IAlert } from './Icons'
@@ -28,7 +29,9 @@ function stateLabel(it: UploadItem) {
 
 export default function UploadPanel() {
   const snap = useUploads()
-  const [open, setOpen] = useState(true)
+  // aberto/recolhido vive no store para o item "Uploads" do menu poder expandir o painel
+  const open = useUI((s) => s.uploadPanelOpen)
+  const setOpen = useUI((s) => s.setUploadPanelOpen)
   const parentRef = useRef<HTMLDivElement>(null)
   const items = snap.items
   const rowVirtualizer = useVirtualizer({ count: items.length, getScrollElement: () => parentRef.current, estimateSize: () => 30, overscan: 10 })
@@ -51,7 +54,7 @@ export default function UploadPanel() {
           {busy && <button className="btn-ghost !px-1.5 !py-0.5 text-xs" onClick={() => uploadManager.cancelAll()}>{S.cancelAll}</button>}
           {!busy && snap.failed > 0 && <button className="btn-ghost !px-1.5 !py-0.5 text-xs" onClick={() => uploadManager.retryFailed()}>{S.retryFailed}</button>}
           {!busy && <button className="btn-ghost !p-1" onClick={() => uploadManager.clearDone()} title={S.clearDone}><IClose size={14} /></button>}
-          <button className="btn-ghost !p-1" onClick={() => setOpen((o) => !o)}>
+          <button className="btn-ghost !p-1" onClick={() => setOpen(!open)}>
             <IChevronRight size={14} className={'transition ' + (open ? 'rotate-90' : '-rotate-90')} />
           </button>
         </span>

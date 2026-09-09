@@ -127,6 +127,8 @@ func pathID(r *http.Request) (int64, error) {
 }
 
 func (s *Server) handleAdminUserUpdate(w http.ResponseWriter, r *http.Request) error {
+	s.adminMu.Lock()
+	defer s.adminMu.Unlock()
 	id, err := pathID(r)
 	if err != nil {
 		return err
@@ -201,6 +203,12 @@ func (s *Server) handleAdminUserUpdate(w http.ResponseWriter, r *http.Request) e
 	if err := s.db.UpdateUser(ctx, u); err != nil {
 		return err
 	}
+	if _, ok := changes["scope"]; ok {
+		// links públicos de pastas que saíram do escopo morrem junto com o acesso
+		if n, err := s.db.DeleteSharesOutside(ctx, u.ID, u.Scope); err == nil && n > 0 {
+			changes["sharesRevoked"] = n
+		}
+	}
 	if revoke {
 		keep := ""
 		if me := userFrom(r); me.ID == u.ID {
@@ -216,6 +224,8 @@ func (s *Server) handleAdminUserUpdate(w http.ResponseWriter, r *http.Request) e
 }
 
 func (s *Server) handleAdminUserDelete(w http.ResponseWriter, r *http.Request) error {
+	s.adminMu.Lock()
+	defer s.adminMu.Unlock()
 	id, err := pathID(r)
 	if err != nil {
 		return err

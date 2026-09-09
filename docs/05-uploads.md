@@ -17,7 +17,7 @@ Os limites vêm de `GET /api/config`. O cliente mantém um pool global de `maxPa
 - O caminho de destino passa por `NormalizeWritable`; pais são criados com `MkdirAll`.
 - O conteúdo vai para `.filezam-upload-<id>.part` **no diretório de destino** (mesmo sistema de arquivos → rename atômico). O prefixo é oculto na listagem e proibido em escrita.
 - Com `FILEZAM_FSYNC=true`, `fsync` antes de finalizar.
-- `mtime` do cliente (ms) é aplicado à parte, limitado ao intervalo `[1970, agora + 24 h]`.
+- `mtime` do cliente (ms) é aplicado à parte: valores `<= 0` viram "agora"; o teto é `agora + 24 h`.
 - **Finalize**: `overwrite=true` → `Rename` (substitui atomicamente; erro `is_dir` se o destino for pasta). `overwrite=false` → `Link(part, final)` + `Remove(part)`; `EEXIST` → 409 `exists`. Sem suporte a hardlink → `Lstat` + `Rename`.
 - Leitura do corpo com prazo renovado a cada 1 MiB; 60 s sem bytes aborta a requisição.
 
@@ -40,7 +40,7 @@ Empacotamento no cliente (`pickBatch`): arquivos consecutivos com o mesmo `destD
 
 ### Criar sessão
 
-`POST /api/uploads {dir, name, size, mtime, overwrite}`:
+`POST /api/uploads {dir, name, size, mtime, overwrite}` (`size` entre 0 e 1 PiB, e não maior que o espaço livre; senão 400 `invalid_path` / 507):
 
 - Verifica destino (409 `exists` se existe e `overwrite=false`).
 - Verifica espaço livre (`statfs`) → 507 `no_space`.

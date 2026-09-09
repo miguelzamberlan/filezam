@@ -23,12 +23,15 @@ export interface FileListProps {
   onDragOverEntry?: (name: string | null) => void
   emptyMessage?: string
   readOnly?: boolean
+  zoom?: number // CSS zoom da listagem (1 = padrão); o virtualizador trabalha nas coordenadas já ampliadas
 }
 
 const ROW = 34
 
 export default function FileList(props: FileListProps) {
   const { entries, selection, focused, cutNames, view, sort, onSort } = props
+  const zoom = props.zoom ?? 1
+  const zoomStyle = zoom !== 1 ? { zoom } : undefined
   const parentRef = useRef<HTMLDivElement>(null)
   const [cols, setCols] = useState(4)
 
@@ -96,7 +99,7 @@ export default function FileList(props: FileListProps) {
 
   if (entries.length === 0) {
     return (
-      <div ref={parentRef} className="flex flex-1 items-center justify-center text-sm text-neutral-400" onContextMenu={(ev) => props.onContextMenu(null, ev)} onClick={props.onBackgroundClick}>
+      <div ref={parentRef} style={zoomStyle} className="flex flex-1 items-center justify-center text-sm text-neutral-400" onContextMenu={(ev) => props.onContextMenu(null, ev)} onClick={props.onBackgroundClick}>
         {props.emptyMessage ?? S.emptyFolder}
       </div>
     )
@@ -104,7 +107,7 @@ export default function FileList(props: FileListProps) {
 
   if (view === 'grid') {
     return (
-      <div ref={parentRef} className="flex-1 overflow-auto p-2" onClick={(ev) => ev.target === ev.currentTarget && props.onBackgroundClick()} onContextMenu={(ev) => ev.target === ev.currentTarget && props.onContextMenu(null, ev)}>
+      <div ref={parentRef} style={zoomStyle} className="flex-1 overflow-auto p-2" onClick={(ev) => ev.target === ev.currentTarget && props.onBackgroundClick()} onContextMenu={(ev) => ev.target === ev.currentTarget && props.onContextMenu(null, ev)}>
         <div style={{ height: virt.getTotalSize(), position: 'relative' }}>
           {virt.getVirtualItems().map((v) => (
             <div key={v.key} className="absolute left-0 grid w-full gap-2" style={{ top: v.start, height: v.size, gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
@@ -131,7 +134,7 @@ export default function FileList(props: FileListProps) {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col" style={zoomStyle}>
       <div className="flex border-b border-neutral-200 pr-2 dark:border-neutral-800">
         <div className="w-8" />
         {header('name', S.name, 'flex-1')}

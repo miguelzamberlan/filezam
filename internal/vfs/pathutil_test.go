@@ -61,7 +61,7 @@ func TestNormalize(t *testing.T) {
 }
 
 func TestValidName(t *testing.T) {
-	for _, bad := range []string{"", ".", "..", "a/b", "a\x00", ".filezam-x", "\xff"} {
+	for _, bad := range []string{"", ".", "..", "a/b", "a\x00", ".filezam-x", "\xff", "a\nb", "a\rb", "tab\there", "del\x7f"} {
 		if ValidName(bad) == nil {
 			t.Errorf("ValidName(%q) accepted", bad)
 		}

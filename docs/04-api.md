@@ -40,7 +40,7 @@ Timestamps: `mtime` em milissegundos; os demais em segundos Unix.
 | POST | `/api/auth/login` | - | `{username, password}` → `{user}`; 401 `bad_credentials`, 423 `locked`, 429 `rate_limited`/`busy` |
 | POST | `/api/auth/logout` | S | → `{ok}`; limpa o cookie |
 | GET | `/api/auth/me` | S | → `{user}` |
-| POST | `/api/auth/password` | S | `{current, new}` → `{user}`; 401 `bad_credentials`, 400 `weak_password`. Revoga as outras sessões |
+| POST | `/api/auth/password` | S | `{current, new}` → `{user}`; 401 `bad_credentials`, 400 `weak_password`, 429 `rate_limited`/`busy` (mesmos limites do login). Revoga as outras sessões |
 
 ## Arquivos
 
@@ -49,12 +49,13 @@ Timestamps: `mtime` em milissegundos; os demais em segundos Unix.
 | GET | `/api/files?path=` | U | `{path, entries: Entry[]}`. Partes de upload órfãs são removidas de passagem |
 | GET | `/api/files/stat?path=` | U | `{path, entry}` |
 | GET | `/api/files/info?path=` | U | Propriedades: `{path, entry, totals?: {files, dirs, bytes, partial}, shares?: Share[], favorite?: bool}`. `totals`/`shares`/`favorite` só para pastas; a contagem para em 200 000 entradas ou 15 s (`partial: true`). Shares: os do usuário, ou todos se admin |
+| GET | `/api/files/search?path=&q=&limit=` | U | Pesquisa recursiva por nome (substring, sem diferenciar maiúsculas) a partir de `path` (pasta; 409 `not_dir`), dentro do escopo: `{path, q, results: [{dir, entry}], partial}`. `dir` é a pasta do item relativa ao escopo. Para em 500 resultados (`limit` ≤ 500), 200 000 entradas visitadas ou 10 s → `partial: true`. Symlinks não são seguidos; nomes `.filezam-*` nunca aparecem. 400 `bad_query` sem `q` (máx. 255 bytes); 429 `busy` acima de 2 pesquisas simultâneas por usuário |
 | GET | `/api/files/disk` | U | `{total, free, used}` em bytes do sistema de arquivos da raiz do escopo (`statfs`; zeros se desconhecido) |
 | GET | `/api/files/content?path=&inline=0\|1` | U | Conteúdo com suporte a `Range`; `inline=1` só para tipos permitidos ([03](03-seguranca.md)) |
 | PUT | `/api/files/content?path=&mtime=&overwrite=0\|1` | U | Upload pequeno (corpo bruto ≤ `chunkSize`) → 201 `{path, entry}`; 409 `exists`, 413 `too_large`, 507 `no_space` |
 | POST | `/api/files/batch?dir=&overwrite=` | U | Multipart (ver [05](05-uploads.md#lote)) → `{dir, results:[{path, ok, code?, error?, entry?}]}` |
 | GET | `/api/files/zip?path=a&path=b&name=` | U | ZIP streaming (método Store) das entradas; `name` opcional para o arquivo |
-| POST | `/api/files/mkdir` | U | `{path}` → 201 `{path, entry}`; cria pais; 409 `exists` |
+| POST | `/api/files/mkdir` | U | `{path}` → 201 `{path, entry}`; cria pais; 409 `exists`, 400 `invalid_name` (caracteres de controle) |
 | POST | `/api/files/rename` | U | `{path, newName}` → `{path, entry}`; 409 `exists`, 400 `invalid_name` |
 | POST | `/api/files/delete` | U | `{paths: []}` → `{job}` (sync-or-job) |
 | POST | `/api/files/copy` | U | `{sources: [], destDir, onConflict: "rename"\|"overwrite"\|"skip"}` → `{job}` |
@@ -99,11 +100,13 @@ Sync-or-job: o servidor aguarda até 300 ms; se o job terminou, `job.state` já 
 | POST | `/api/shares` | U | `{path, expiresIn /*s*/, name?}` → 201 `{share, token, url}`. `url` usa `FILEZAM_PUBLIC_URL` ou o host da requisição; a interface web monta o link a partir de `token` + origem do navegador. 400 `bad_expiry`, 409 `not_dir` |
 | DELETE | `/api/shares/{id}` | U | Dono ou admin → `{ok}` |
 
+Links de um usuário desativado respondem 404 enquanto ele estiver desativado. Em `?path=` (autenticado ou público) nomes `.filezam-*` são 400 `invalid_path` também na leitura.
+
 ## Público (sem sessão)
 
 | Método | Rota | Auth | Descrição |
 |---|---|---|---|
-| GET | `/api/public/{token}` | P | `{name, expiresAt, now}`; conta um acesso |
+| GET | `/api/public/{token}` | P | `{name, expiresAt, now}`; conta um acesso. 404 se inexistente, expirado, revogado, pasta sumiu ou dono desativado |
 | GET | `/api/public/{token}/list?path=` | P | `{path, entries}` |
 | GET | `/api/public/{token}/content?path=&inline=` | P | Conteúdo (mesmas regras de inline) |
 | GET | `/api/public/{token}/zip?path=...` | P | ZIP; sem `path` compacta a pasta inteira |
@@ -116,7 +119,7 @@ Tudo responde 404 `not_found` para token inválido/expirado/revogado; 429 por ra
 |---|---|---|---|
 | GET | `/api/admin/users` | A | `{users: AdminUser[]}` |
 | POST | `/api/admin/users` | A | `{username, password, role?, scope?, mustChangePassword?}` → 201 `{user}`; 400 `invalid_username`/`invalid_role`/`invalid_scope`/`weak_password`, 409 `exists` |
-| PATCH | `/api/admin/users/{id}` | A | Qualquer de `{role, scope, disabled, password, mustChangePassword}` → `{user}`; 409 `last_admin`. Mudanças de role/scope/senha/disabled revogam sessões |
+| PATCH | `/api/admin/users/{id}` | A | Qualquer de `{role, scope, disabled, password, mustChangePassword}` → `{user}`; 409 `last_admin`. Mudanças de role/scope/senha/disabled revogam sessões; estreitar `scope` apaga os links públicos do usuário que ficaram fora dele (`sharesRevoked` no evento de auditoria) |
 | DELETE | `/api/admin/users/{id}` | A | → `{ok}`; 409 `self`/`last_admin`; remove partes de upload pendentes |
 | GET | `/api/admin/dirs?path=` | A | `{path, dirs: [string]}` só diretórios reais da **raiz base**, para o seletor de escopo |
 | GET | `/api/admin/audit?before=&limit=` | A | `{entries}` mais recentes primeiro; `before` = id para paginar; `limit` ≤ 500 |
@@ -135,7 +138,7 @@ Regras de `username`: 2–64 caracteres de `A-Z a-z 0-9 . _ - @`, único sem dis
 
 | HTTP | code | Quando |
 |---|---|---|
-| 400 | `bad_json`, `invalid_path`, `invalid_name`, `nested`, `root_op`, `bad_index`, `bad_length`, `bad_conflict`, `bad_expiry`, `bad_id`, `bad_meta`, `bad_multipart`, `no_paths`, `too_many`, `too_many_files`, `weak_password`, `invalid_username`, `invalid_role`, `invalid_scope`, `unsupported` | Entrada inválida |
+| 400 | `bad_json`, `invalid_path` (inclui tamanho de upload fora de `[0, 1 PiB]` e nomes `.filezam-*`), `invalid_name` (inclui caracteres de controle em nomes novos), `bad_query`, `nested`, `root_op`, `bad_index`, `bad_length`, `bad_conflict`, `bad_expiry`, `bad_id`, `bad_meta`, `bad_multipart`, `no_paths`, `too_many`, `too_many_files`, `weak_password`, `invalid_username`, `invalid_role`, `invalid_scope`, `unsupported` | Entrada inválida |
 | 401 | `unauthorized`, `bad_credentials` | Sem sessão / credenciais erradas |
 | 403 | `forbidden`, `csrf`, `password_change_required`, `scope_unavailable`, `fs_permission` | Sem permissão |
 | 404 | `not_found` | Caminho, job, share, usuário |

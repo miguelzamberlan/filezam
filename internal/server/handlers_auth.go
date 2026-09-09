@@ -116,6 +116,16 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) er
 		return err
 	}
 	u := userFrom(r)
+	// Mesmas barreiras do login: quem roubou um cookie não pode testar senhas à vontade,
+	// e cada verificação custa 64 MiB de Argon2.
+	if !s.loginIP.Allow("ip:"+ipFrom(r)) || !s.loginUser.Allow("user:"+strings.ToLower(u.Username)) {
+		s.audit(r, u, "password.ratelimited", nil)
+		return errorf(http.StatusTooManyRequests, "rate_limited", "too many attempts; try again later")
+	}
+	if !s.loginSem.TryAcquire() {
+		return errorf(http.StatusTooManyRequests, "busy", "server busy; try again")
+	}
+	defer s.loginSem.Release()
 	if !auth.VerifyPassword(u.PasswordHash, in.Current) {
 		s.audit(r, u, "password.fail", nil)
 		return errorf(http.StatusUnauthorized, "bad_credentials", "current password is incorrect")

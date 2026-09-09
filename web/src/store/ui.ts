@@ -11,9 +11,12 @@ export interface Prefs {
   showHidden: boolean
   showHints: boolean
   confirmDelete: boolean
+  zoom: number // fator aplicado à listagem (CSS zoom); 1 = padrão
 }
 
-const defaultPrefs: Prefs = { showHidden: false, showHints: true, confirmDelete: true }
+export const ZOOM_STEPS = [0.85, 1, 1.15, 1.3, 1.5, 1.75, 2]
+
+const defaultPrefs: Prefs = { showHidden: false, showHints: true, confirmDelete: true, zoom: 1 }
 
 interface UIState {
   prefs: Prefs
@@ -25,6 +28,8 @@ interface UIState {
   sort: Sort
   view: 'list' | 'grid'
   filter: string
+  uploadPanelOpen: boolean // lista do painel de envios expandida
+  setUploadPanelOpen: (v: boolean) => void
   setSelection: (s: Set<string>, anchor?: string | null, focused?: string | null) => void
   clearSelection: () => void
   setFocused: (name: string | null) => void
@@ -66,6 +71,8 @@ export const useUI = create<UIState>((set) => ({
   sort: load<Sort>('filezam.sort', { key: 'name', dir: 'asc' }),
   view: load<'list' | 'grid'>('filezam.view', 'list'),
   filter: '',
+  uploadPanelOpen: true,
+  setUploadPanelOpen: (uploadPanelOpen) => set({ uploadPanelOpen }),
   setSelection: (selection, anchor, focused) =>
     set((st) => ({ selection, anchor: anchor === undefined ? st.anchor : anchor, focused: focused === undefined ? st.focused : focused })),
   clearSelection: () => set({ selection: new Set(), anchor: null }),

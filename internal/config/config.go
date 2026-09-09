@@ -43,6 +43,14 @@ type Config struct {
 	UploadStaleAge time.Duration
 }
 
+// resolve follows symlinks when the path exists; otherwise the absolute path is used as is.
+func resolve(p string) string {
+	if r, err := filepath.EvalSymlinks(p); err == nil {
+		return r
+	}
+	return p
+}
+
 // Load reads configuration from the environment and validates it.
 func Load() (*Config, error) {
 	c := &Config{
@@ -113,8 +121,13 @@ func Load() (*Config, error) {
 	if c.Root == string(filepath.Separator) {
 		return nil, errors.New("FILEZAM_ROOT must not be the filesystem root")
 	}
-	if c.DataDir == c.Root || strings.HasPrefix(c.DataDir, c.Root+string(filepath.Separator)) {
+	// Compara os caminhos reais: um symlink /srv/config -> /srv/data/config colocaria o banco dentro da raiz.
+	realRoot, realData := resolve(c.Root), resolve(c.DataDir)
+	if realData == realRoot || strings.HasPrefix(realData, realRoot+string(filepath.Separator)) {
 		return nil, errors.New("FILEZAM_DATA_DIR must not be inside FILEZAM_ROOT (the database would be exposed)")
+	}
+	if c.SessionTTL > c.SessionMaxTTL {
+		c.SessionTTL = c.SessionMaxTTL
 	}
 	if c.AdminUser == "" || c.AdminPassword == "" {
 		return nil, errors.New("FILEZAM_ADMIN_USER and FILEZAM_ADMIN_PASSWORD must not be empty")

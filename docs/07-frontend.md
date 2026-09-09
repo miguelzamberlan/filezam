@@ -34,6 +34,7 @@ web/src/
 | `/login` | Login | — |
 | `/change-password` | ChangePassword | sessão |
 | `/b/*` | Browser (`*` = caminho escopo-relativo, cada segmento `encodeURIComponent`) | sessão + senha em dia |
+| `/search?path=&q=` | Search (pesquisa recursiva por nome a partir de `path`; resultados levam a `/b/<pasta>?sel=<nome>`, que seleciona o item) | sessão + senha em dia |
 | `/shares`, `/admin/users`, `/admin/audit` | idem | idem (admin para `/admin/*`; a API também valida) |
 | `/s/:token/*` | PublicShare | — |
 
@@ -43,7 +44,7 @@ web/src/
 
 - **Servidor** (TanStack Query): `['me']`, `['config']` (staleTime ∞), `['list', path]` (staleTime 10 s), `['favorites']`, `['shares']`, `['admin-users']`, `['admin-dirs', path]`, `['job', id]` (refetch 500 ms enquanto `running`), `['public', token, ...]`. Mutações invalidam as chaves afetadas; `useInvalidateDirs(dirs)` é o ponto único para listagens.
 - **UI** (zustand `useUI`): `selection: Set<string>` de nomes na pasta atual, `anchor`/`focused` para Shift/teclado, `clipboard {op: copy|cut, dir, names}`, `sort`, `view`, `filter` e `prefs` (persistidos em `localStorage`: `sort`, `view`, `prefs`).
-- **Preferências** (`prefs`, editadas em `SettingsDialog` pela engrenagem do rodapé): `showHidden` (arquivos iniciados por ponto; o servidor sempre os lista, o filtro é no cliente e o rodapé mostra "N ocultos"), `showHints` (dicas de atalhos), `confirmDelete`. Novas preferências: adicionar em `Prefs`/`defaultPrefs` em `store/ui.ts`, uma linha no `SettingsDialog` e o texto em `strings.ts`.
+- **Preferências** (`prefs`, editadas em `SettingsDialog` pela engrenagem do rodapé): `showHidden` (arquivos iniciados por ponto; o servidor sempre os lista, o filtro é no cliente e o rodapé mostra "N ocultos"), `showHints` (dicas de atalhos), `confirmDelete`, `zoom` (fator da listagem, passos em `ZOOM_STEPS`; botões −/%/+ na barra do Browser e seleção em Configurações). `uploadPanelOpen` (não persistido) controla se a lista do painel de envios está expandida; o item **Uploads** do menu lateral expande o painel ou, sem envios, explica como enviar. Novas preferências: adicionar em `Prefs`/`defaultPrefs` em `store/ui.ts`, uma linha no `SettingsDialog` e o texto em `strings.ts`.
 - **Uploads**: fora do React; `useUploads()` lê o snapshot via `useSyncExternalStore`.
 
 ## Página Browser (`pages/Browser.tsx`)
@@ -60,7 +61,15 @@ Atalhos: `↑ ↓ Home End PgUp PgDn` (com Shift estende), `→ ←` na grade, `
 
 ## FileList
 
-Virtualizada com `@tanstack/react-virtual` (34 px por linha; grade com colunas calculadas por `ResizeObserver`). Recebe entradas já ordenadas (`sortEntries`: pastas primeiro, `Intl.Collator` numérico) e filtradas. É a mesma para o browser autenticado e a página pública (`readOnly`). `focused` é rolado para a vista.
+Virtualizada com `@tanstack/react-virtual` (34 px por linha; grade com colunas calculadas por `ResizeObserver`). A prop `zoom` aplica CSS `zoom` ao contêiner de rolagem: o virtualizador trabalha nas coordenadas já ampliadas (`scrollTop`/`clientHeight` do próprio elemento), então os tamanhos estimados não mudam; validado no Chrome rolando até a última linha a 150 %. Recebe entradas já ordenadas (`sortEntries`: pastas primeiro, `Intl.Collator` numérico) e filtradas. É a mesma para o browser autenticado e a página pública (`readOnly`). `focused` é rolado para a vista.
+
+## Ícones (`components/Icons.tsx`)
+
+`iconFor(name, type)` escolhe por extensão em `EXT_ICONS`: imagem, vídeo, áudio, arquivo compactado, PDF/DOC/XLS/PPT (contorno de arquivo com a sigla e cor por família), texto e código; qualquer outra extensão cai no ícone genérico. Para acrescentar um tipo, adicione a extensão à lista certa ou crie um `IDoc('SIGLA')`.
+
+## Página Search (`pages/Search.tsx`)
+
+Estado na URL (`?path=&q=`), consulta `['search', path, q]` (staleTime 30 s). Filtra localmente itens ocultos (nome ou pasta iniciados por ponto) conforme `prefs.showHidden`. Aviso quando `partial`. O botão de lupa na barra do Browser abre a pesquisa já a partir da pasta atual.
 
 ## Diálogos e toasts (`components/dialogs.tsx`)
 
@@ -74,7 +83,7 @@ API imperativa baseada em Promises: `dialogs.prompt({title, initial, selectExt})
 
 ## Preview
 
-`previewKind(entry)` por extensão: imagem (`<img>`), vídeo/áudio (`<video>/<audio>` com `preload=metadata`, seeking via Range), PDF (`<iframe sandbox>`), texto (fetch com `Range: bytes=0-<previewMaxText>` em `<pre>`). Setas navegam entre os previewáveis da pasta.
+`previewKind(entry)` por extensão: imagem (`<img>`), vídeo/áudio (`<video>/<audio>` com `preload=metadata`, seeking via Range), PDF (`<iframe>` **sem** atributo `sandbox`: o Chrome bloqueia o visualizador de PDF em frames com sandbox; o isolamento vem da CSP `sandbox` que o servidor envia com o arquivo, ver [03](03-seguranca.md#cabeçalhos-http)), texto (fetch com `Range: bytes=0-<previewMaxText>` em `<pre>`). Setas navegam entre os previewáveis da pasta.
 
 ## UploadManager
 
