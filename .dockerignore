@@ -1,0 +1,10 @@
+.git
+.env
+data
+config
+web/node_modules
+web/dist
+internal/server/webdist/dist/*
+!internal/server/webdist/dist/.keep
+*.md
+!README.md

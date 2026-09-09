@@ -1,0 +1,286 @@
+package vfs
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+)
+
+// fixture creates: outside/canary.txt, root/{a/file.txt, a/sub/deep.txt, link-etc -> /etc,
+// link-out -> ../outside, link-in -> a, loop -> loop, ..x/}
+func fixture(t *testing.T) (*Root, string, string) {
+	t.Helper()
+	base := t.TempDir()
+	outside := filepath.Join(base, "outside")
+	root := filepath.Join(base, "root")
+	must := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	must(os.MkdirAll(filepath.Join(root, "a", "sub"), 0o755))
+	must(os.MkdirAll(filepath.Join(root, "..x"), 0o755))
+	must(os.MkdirAll(outside, 0o755))
+	must(os.WriteFile(filepath.Join(outside, "canary.txt"), []byte("canary"), 0o644))
+	must(os.WriteFile(filepath.Join(root, "a", "file.txt"), []byte("hello"), 0o644))
+	must(os.WriteFile(filepath.Join(root, "a", "sub", "deep.txt"), []byte("deep"), 0o644))
+	must(os.Symlink("/etc", filepath.Join(root, "link-etc")))
+	must(os.Symlink("../outside", filepath.Join(root, "link-out")))
+	must(os.Symlink("a", filepath.Join(root, "link-in")))
+	must(os.Symlink("loop", filepath.Join(root, "loop")))
+	r, err := Open(root)
+	must(err)
+	t.Cleanup(func() { r.Close() })
+	return r, root, outside
+}
+
+func checkCanary(t *testing.T, outside string) {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join(outside, "canary.txt"))
+	if err != nil || string(b) != "canary" {
+		t.Fatalf("canary modified or missing: %v %q", err, b)
+	}
+}
+
+func TestListClassifiesSymlinks(t *testing.T) {
+	r, _, _ := fixture(t)
+	l, err := r.List("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]Entry{}
+	for _, e := range l.Entries {
+		got[e.Name] = e
+	}
+	if got["a"].Type != "dir" || got["..x"].Type != "dir" {
+		t.Errorf("dirs: %+v", got)
+	}
+	if e := got["link-in"]; e.Type != "dir" || !e.Link {
+		t.Errorf("link-in should be dir link: %+v", e)
+	}
+	for _, n := range []string{"link-etc", "link-out", "loop"} {
+		if e := got[n]; e.Type != "other" || !e.Link {
+			t.Errorf("%s should be other: %+v", n, e)
+		}
+	}
+}
+
+func TestEscapeAttemptsAreRefused(t *testing.T) {
+	r, _, outside := fixture(t)
+	for _, p := range []string{"link-etc", "link-etc/passwd", "link-out", "link-out/canary.txt", "loop"} {
+		if _, err := r.List(p); err == nil {
+			t.Errorf("List(%q) succeeded", p)
+		}
+		if _, _, err := r.OpenFile(p); err == nil {
+			t.Errorf("OpenFile(%q) succeeded", p)
+		}
+	}
+	if _, err := r.Sub("link-out"); err == nil {
+		t.Error("Sub(link-out) succeeded")
+	}
+	if err := r.Mkdir("link-out/newdir"); err == nil {
+		t.Error("Mkdir through escaping link succeeded")
+	}
+	if err := r.CopyTree(context.Background(), "a", "link-out/copy", ConflictRename, nil); err == nil {
+		t.Error("CopyTree into escaping link succeeded")
+	}
+	if _, err := r.Move("a", "link-out", false); err == nil {
+		t.Error("Move into escaping link succeeded")
+	}
+	// Removing the link removes only the link.
+	if err := r.Remove("link-out"); err != nil {
+		t.Fatal(err)
+	}
+	checkCanary(t, outside)
+	if _, err := os.Lstat(filepath.Join(outside, "canary.txt")); err != nil {
+		t.Fatal("canary deleted")
+	}
+	// Zip must not include anything outside.
+	var buf bytes.Buffer
+	if err := r.WriteZip(context.Background(), &buf, []string{""}); err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(buf.Bytes(), []byte("canary")) {
+		t.Error("zip contains outside data")
+	}
+}
+
+func TestInsideSymlinkWorks(t *testing.T) {
+	r, _, _ := fixture(t)
+	l, err := r.List("link-in")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(l.Entries) != 2 {
+		t.Errorf("expected 2 entries via link-in, got %d", len(l.Entries))
+	}
+	f, fi, err := r.OpenFile("link-in/file.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	if fi.Size() != 5 {
+		t.Error("size")
+	}
+}
+
+func TestScopeRoot(t *testing.T) {
+	r, _, _ := fixture(t)
+	s, err := r.Sub("a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	l, err := s.List("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(l.Entries) != 2 {
+		t.Errorf("scope list: %d", len(l.Entries))
+	}
+	if _, err := s.List("../.."); err == nil {
+		t.Error("scope escape via .. succeeded")
+	}
+	if _, err := s.Stat("..x"); err == nil {
+		t.Error("sibling reachable from scope")
+	}
+	if ok, _ := s.Exists("sub/deep.txt"); !ok {
+		t.Error("nested file missing")
+	}
+}
+
+func TestRenameMoveCopyRemove(t *testing.T) {
+	r, root, _ := fixture(t)
+	ctx := context.Background()
+	if _, err := r.Rename("", "x"); !errors.Is(err, ErrRootOp) {
+		t.Error("rename root allowed")
+	}
+	if err := r.Remove(""); !errors.Is(err, ErrRootOp) {
+		t.Error("remove root allowed")
+	}
+	if _, err := r.Rename("a/file.txt", "sub"); !errors.Is(err, ErrExists) {
+		t.Errorf("rename over existing: %v", err)
+	}
+	if _, err := r.Rename("a/file.txt", "renamed.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Mkdir("b"); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Mkdir("b"); !errors.Is(err, ErrExists) {
+		t.Errorf("mkdir exists: %v", err)
+	}
+	if _, err := r.Move("a", "a/sub", false); !errors.Is(err, ErrNested) {
+		t.Errorf("nested move: %v", err)
+	}
+	if err := r.CopyTree(ctx, "a", "a/sub/copy", ConflictRename, nil); !errors.Is(err, ErrNested) {
+		t.Errorf("nested copy: %v", err)
+	}
+	var files int
+	var bs int64
+	prog := &Progress{Add: func(f int, b int64) { files += f; bs += b }}
+	if err := r.CopyTree(ctx, "a", "b/a", ConflictRename, prog); err != nil {
+		t.Fatal(err)
+	}
+	if files != 2 || bs != 9 {
+		t.Errorf("progress files=%d bytes=%d", files, bs)
+	}
+	if b, _ := os.ReadFile(filepath.Join(root, "b", "a", "sub", "deep.txt")); string(b) != "deep" {
+		t.Error("copied content")
+	}
+	// mtime preserved
+	src, _ := os.Stat(filepath.Join(root, "a", "renamed.txt"))
+	dst, _ := os.Stat(filepath.Join(root, "b", "a", "renamed.txt"))
+	if !src.ModTime().Equal(dst.ModTime()) {
+		t.Error("mtime not preserved")
+	}
+	// conflict: rename
+	dst2, ok, err := r.ResolveDest("a/renamed.txt", "b/a", ConflictRename)
+	if err != nil || !ok || dst2 != "b/a/renamed (1).txt" {
+		t.Errorf("ResolveDest rename: %q %v %v", dst2, ok, err)
+	}
+	if _, ok, _ := r.ResolveDest("a/renamed.txt", "b/a", ConflictSkip); ok {
+		t.Error("skip should not be ok")
+	}
+	// move
+	if _, err := r.Move("b/a/sub", "a", false); !errors.Is(err, ErrExists) {
+		t.Errorf("move onto existing: %v", err)
+	}
+	if _, err := r.Move("b/a/renamed.txt", "", false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "renamed.txt")); err != nil {
+		t.Error("moved file missing")
+	}
+	// remove tree
+	tot, err := r.Scan(ctx, "b")
+	if err != nil || tot.Files != 1 {
+		t.Errorf("scan: %+v %v", tot, err)
+	}
+	if err := r.RemoveTree(ctx, "b", nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "b")); !os.IsNotExist(err) {
+		t.Error("b not removed")
+	}
+	// cancellation
+	cctx, cancel := context.WithCancel(ctx)
+	cancel()
+	if err := r.CopyTree(cctx, "a", "c", ConflictRename, nil); !errors.Is(err, context.Canceled) {
+		t.Errorf("cancel: %v", err)
+	}
+}
+
+func TestUploadPartFinalize(t *testing.T) {
+	r, root, _ := fixture(t)
+	f, err := r.CreatePart("a", "id1", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteAt([]byte("0123456789"), 0); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	if _, err := r.CreatePart("a", "id1", 10); !errors.Is(err, ErrExists) {
+		t.Errorf("duplicate part: %v", err)
+	}
+	l, _ := r.List("a")
+	if len(l.Parts) != 1 || len(l.Entries) != 2 {
+		t.Errorf("part visible? parts=%v entries=%d", l.Parts, len(l.Entries))
+	}
+	if err := r.Finalize("a", "id1", "file.txt", false); !errors.Is(err, ErrExists) {
+		t.Errorf("finalize over existing without overwrite: %v", err)
+	}
+	if err := r.Finalize("a", "id1", "new.txt", false); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(root, "a", "new.txt")); string(b) != "0123456789" {
+		t.Error("finalized content")
+	}
+	if _, err := os.Lstat(filepath.Join(root, "a", PartName("id1"))); !os.IsNotExist(err) {
+		t.Error("part left behind")
+	}
+	f, _ = r.CreatePart("a", "id2", 3)
+	f.WriteAt([]byte("abc"), 0)
+	f.Close()
+	if err := r.Finalize("a", "id2", "sub", true); !errors.Is(err, ErrIsDir) {
+		t.Errorf("finalize onto dir: %v", err)
+	}
+	if err := r.Finalize("a", "id2", "file.txt", true); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(root, "a", "file.txt")); string(b) != "abc" {
+		t.Error("overwrite content")
+	}
+	if err := r.Chtimes("a/file.txt", time.Unix(1000, 0)); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.RemovePart("a", "missing"); err != nil {
+		t.Error("RemovePart missing should be nil")
+	}
+}

@@ -1,0 +1,47 @@
+services:
+  filezam:
+    build:
+      context: .
+      args:
+        VERSION: ${FILEZAM_VERSION:-dev}
+    image: filezam:latest
+    container_name: filezam
+    restart: unless-stopped
+    # Run as your host user so files created in the data folder belong to you.
+    user: "${PUID:-1000}:${PGID:-1000}"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      FILEZAM_ROOT: /data
+      FILEZAM_DATA_DIR: /config
+      FILEZAM_LISTEN: ":8080"
+    volumes:
+      # Root folder exposed by the file manager. Mount more host folders as
+      # subfolders of /data to expose several locations (e.g. /mnt/media:/data/media).
+      - ${FILEZAM_HOST_ROOT:-./data}:/data
+      # Database and settings (never served to users).
+      - ${FILEZAM_HOST_CONFIG:-./config}:/config
+    ports:
+      # Bound to localhost only: put your reverse proxy in front of it.
+      # Remove this block if the proxy reaches the container through a shared Docker network.
+      - "${FILEZAM_BIND:-127.0.0.1}:${FILEZAM_PORT:-8080}:8080"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    # --- Reverse proxy on a shared Docker network (e.g. Traefik) ---
+    # networks: [proxy]
+    # labels:
+    #   traefik.enable: "true"
+    #   traefik.http.routers.filezam.rule: "Host(`files.example.com`)"
+    #   traefik.http.routers.filezam.entrypoints: "websecure"
+    #   traefik.http.routers.filezam.tls.certresolver: "letsencrypt"
+    #   traefik.http.services.filezam.loadbalancer.server.port: "8080"
+
+# networks:
+#   proxy:
+#     external: true
