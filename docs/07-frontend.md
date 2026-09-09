@@ -82,6 +82,8 @@ Ver [05](05-uploads.md) para o protocolo. Estados de item: `queued → uploading
 
 `nextWork()` prioriza blocos de arquivos chunked já em andamento, depois o primeiro item da fila (lote agrupado, único ou nova sessão). O painel mostra progresso total, velocidade, ETA, contadores, pausa, cancelar tudo, repetir falhos.
 
+A velocidade é amostrada em janelas de 1s e suavizada por EMA (`0.75 * anterior + 0.25 * instantânea`); `formatSpeed` a imprime sempre com duas casas decimais, deixando só a unidade mudar (B/s, KB/s, MB/s…), e o painel usa `tabular-nums` para o número não mudar de largura a cada atualização.
+
 ## Estilo
 
 Tailwind 4 via `@tailwindcss/vite`. Classes compostas são declaradas com `@utility` em `index.css` (`btn`, `btn-primary`, `btn-ghost`, `btn-danger`, `input`, `card`, `menu`, `menu-item`, `row-selected`, `row-focused`); `@apply` de classe própria dentro de outra falha no build. Tema claro/escuro segue `prefers-color-scheme` (`color-scheme: light dark`).

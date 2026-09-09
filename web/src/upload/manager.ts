@@ -212,9 +212,11 @@ export class UploadManager {
     }
     const now = performance.now()
     const dt = (now - this.lastTick) / 1000
-    if (dt >= 0.5) {
+    if (dt >= 1) {
+      // Janela de 1s e EMA bem amortecida: o número exibido varia devagar o
+      // bastante para dar para ler.
       const inst = Math.max(0, (bytesDone - this.lastSent) / dt)
-      this.speed = this.speed === 0 ? inst : this.speed * 0.6 + inst * 0.4
+      this.speed = this.speed === 0 ? inst : this.speed * 0.75 + inst * 0.25
       this.lastTick = now
       this.lastSent = bytesDone
       if (this.active === 0) this.speed = 0

@@ -61,8 +61,8 @@ export default function UploadPanel() {
           <div className={'h-full transition-[width] ' + (snap.paused ? 'bg-amber-500' : 'bg-blue-600')} style={{ width: pct + '%' }} />
         </div>
         <div className="mt-1 flex justify-between text-xs text-neutral-500">
-          <span>{formatBytes(snap.bytesDone)} / {formatBytes(snap.bytesTotal)}</span>
-          {busy && !snap.paused && <span>{formatSpeed(snap.speed)} · {formatDuration(remaining)} {S.uploadRemaining}</span>}
+          <span className="tabular-nums">{formatBytes(snap.bytesDone)} / {formatBytes(snap.bytesTotal)}</span>
+          {busy && !snap.paused && <span className="tabular-nums">{formatSpeed(snap.speed)} · {formatDuration(remaining)} {S.uploadRemaining}</span>}
           {snap.paused && <span>{S.pause}</span>}
         </div>
       </div>

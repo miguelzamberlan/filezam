@@ -8,11 +8,20 @@ export function formatBytes(n: number, digits = 1): string {
     v /= 1024
     i++
   }
-  return (i === 0 ? v.toString() : v.toFixed(digits)) + ' ' + units[i]
+  return (i === 0 ? Math.round(v).toString() : v.toFixed(digits)) + ' ' + units[i]
 }
 
+// Velocidade sempre com duas casas decimais: só a unidade muda, para o número
+// não ficar pulando de largura enquanto o upload varia.
 export function formatSpeed(bytesPerSec: number): string {
-  return formatBytes(bytesPerSec, 1) + '/s'
+  if (!Number.isFinite(bytesPerSec) || bytesPerSec < 0) return '—'
+  let i = 0
+  let v = bytesPerSec
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024
+    i++
+  }
+  return v.toFixed(2) + ' ' + units[i] + '/s'
 }
 
 export function formatDuration(sec: number): string {
