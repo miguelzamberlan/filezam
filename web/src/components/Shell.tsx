@@ -9,7 +9,9 @@ import { uploadManager } from '../upload/manager'
 import { dialogs, toast } from './dialogs'
 import JobToasts from './JobToasts'
 import UploadPanel, { useUploads } from './UploadPanel'
-import { IHome, IStar, IShare, IUsers, ILog, ILogout, IKey, IMenu, IClose, IUpload } from './Icons'
+import { IHome, IStar, IShare, IUsers, ILog, ILogout, IKey, IMenu, IClose, IUpload, ISettings } from './Icons'
+import DiskBar from './DiskBar'
+import SettingsDialog from './SettingsDialog'
 
 export default function Shell() {
   const { user } = useAuth()
@@ -19,6 +21,7 @@ export default function Shell() {
   const invalidate = useInvalidateDirs()
   const uploads = useUploads()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [settings, setSettings] = useState(false)
 
   useEffect(() => {
     uploadManager.onConflict = (item) => dialogs.conflict(item.relPath)
@@ -75,12 +78,14 @@ export default function Shell() {
           <NavLink to="/admin/audit" className={linkCls} onClick={() => setMenuOpen(false)}><ILog size={16} /> {S.audit}</NavLink>
         </>
       )}
-      <div className="mt-auto border-t border-neutral-200 pt-3 dark:border-neutral-800">
+      <div className="mt-auto border-t border-neutral-200 pt-2 dark:border-neutral-800">
+        <DiskBar />
         <div className="truncate px-2.5 text-sm font-medium">{user?.username}</div>
         <div className="px-2.5 text-xs text-neutral-500">{user?.role === 'admin' ? S.roleAdmin : S.roleUser}{user?.restricted ? ' · ' + S.scope.toLowerCase() : ''}</div>
         <div className="mt-2 flex gap-1">
-          <NavLink to="/change-password" className="btn-ghost flex-1 text-xs"><IKey size={14} /> {S.changePassword}</NavLink>
-          <button className="btn-ghost text-xs" onClick={logout}><ILogout size={14} /> {S.logout}</button>
+          <NavLink to="/change-password" className="btn-ghost flex-1 text-xs" title={S.changePassword}><IKey size={14} /> {S.password}</NavLink>
+          <button className="btn-ghost text-xs" onClick={() => setSettings(true)} title={S.settings}><ISettings size={14} /></button>
+          <button className="btn-ghost text-xs" onClick={logout} title={S.logout}><ILogout size={14} /> {S.logout}</button>
         </div>
       </div>
     </nav>
@@ -101,6 +106,7 @@ export default function Shell() {
       </div>
       <UploadPanel />
       <JobToasts />
+      {settings && <SettingsDialog onClose={() => setSettings(false)} />}
     </div>
   )
 }

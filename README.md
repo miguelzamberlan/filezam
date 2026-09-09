@@ -4,7 +4,8 @@ Gestor de arquivos web, rápido e seguro, para expor uma pasta do seu servidor p
 
 - Login com usuário e senha; vários usuários, cada um com acesso à raiz inteira ou a uma subpasta.
 - Navegar, criar pastas, renomear, copiar, recortar/colar (mover), excluir, baixar (arquivo ou ZIP), favoritos.
-- Compartilhar uma pasta por link público **somente leitura** com prazo de validade.
+- Compartilhar uma pasta por link público **somente leitura** com prazo de validade, com contagem de acessos e último acesso.
+- Propriedades de pasta/arquivo (caminho, tamanho calculado, quantidade de itens, links ativos), espaço livre do disco e preferências (arquivos ocultos, dicas, confirmação de exclusão).
 - Upload de arquivos grandes em blocos paralelos com retomada, upload de pastas inteiras (arraste e solte) e de milhares de arquivos pequenos em lote.
 - Um único binário Go com a interface embutida; imagem Docker `distroless` sem shell, rodando sem root com rootfs somente leitura.
 
@@ -103,6 +104,10 @@ Arquivos são gravados em `.filezam-upload-*.part` no diretório de destino e re
 ## Atalhos de teclado
 
 `↑ ↓ Home End PgUp PgDn` navegar · `Shift`/`Ctrl` seleção múltipla · `Ctrl+A` tudo · `Enter` abrir · `Backspace`/`Alt+↑` subir · `F2` renomear · `Del` excluir · `Ctrl+C` `Ctrl+X` `Ctrl+V` copiar/recortar/colar · `Ctrl+Shift+N` nova pasta · `Esc` limpar · digitar letras pula para o nome.
+
+## Documentação
+
+Especificações completas em [`docs/`](docs/README.md): arquitetura, segurança, API, protocolo de upload, banco, frontend, operação, testes e roadmap.
 
 ## Desenvolvimento
 

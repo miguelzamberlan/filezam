@@ -283,7 +283,14 @@ func (r *Root) UniqueName(dir, name string) (string, error) {
 	return "", fmt.Errorf("%w: no free name", ErrExists)
 }
 
-// DiskFree returns free bytes on the filesystem backing the root (0 if unknown).
-func (r *Root) DiskFree() uint64 {
-	return diskFree(r.r.Name())
+// DiskUsage describes the filesystem backing the root (zeros if unknown).
+type DiskUsage struct {
+	Total uint64 `json:"total"`
+	Free  uint64 `json:"free"`
 }
+
+// Disk returns total and available bytes of the filesystem backing the root.
+func (r *Root) Disk() DiskUsage { return diskUsage(r.r.Name()) }
+
+// DiskFree returns free bytes on the filesystem backing the root (0 if unknown).
+func (r *Root) DiskFree() uint64 { return r.Disk().Free }

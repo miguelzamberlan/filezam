@@ -83,6 +83,30 @@ func (db *DB) ListShares(ctx context.Context, userID int64) ([]*Share, error) {
 	return out, rows.Err()
 }
 
+// ListSharesByPath returns live shares for an exact base-relative path (userID<=0: any owner).
+func (db *DB) ListSharesByPath(ctx context.Context, path string, userID int64) ([]*Share, error) {
+	q := `SELECT ` + shareCols + ` FROM shares s LEFT JOIN users u ON u.id=s.created_by WHERE s.path=? AND s.revoked_at IS NULL AND s.expires_at>?`
+	args := []any{path, db.now()}
+	if userID > 0 {
+		q += ` AND s.created_by=?`
+		args = append(args, userID)
+	}
+	rows, err := db.r.QueryContext(ctx, q+` ORDER BY s.created_at DESC`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []*Share{}
+	for rows.Next() {
+		sh, err := scanShare(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, sh)
+	}
+	return out, rows.Err()
+}
+
 // RevokeShare marks a share revoked.
 func (db *DB) RevokeShare(ctx context.Context, id int64) error {
 	res, err := db.w.ExecContext(ctx, `UPDATE shares SET revoked_at=? WHERE id=? AND revoked_at IS NULL`, db.now(), id)

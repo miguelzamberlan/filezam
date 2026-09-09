@@ -1,5 +1,5 @@
 import type {
-  AdminUser, AppConfig, AuditEntry, Conflict, Entry, Favorite, Job, Listing, Share, UploadSession, User,
+  AdminUser, AppConfig, AuditEntry, Conflict, DiskUsage, Entry, EntryInfo, Favorite, Job, Listing, Share, UploadSession, User,
 } from './types'
 
 export class ApiError extends Error {
@@ -74,6 +74,8 @@ export const Api = {
   // files
   list: (path: string) => api<Listing>('GET', '/api/files' + q({ path })),
   stat: (path: string) => api<{ path: string; entry: Entry }>('GET', '/api/files/stat' + q({ path })),
+  info: (path: string) => api<EntryInfo>('GET', '/api/files/info' + q({ path })),
+  disk: () => api<DiskUsage>('GET', '/api/files/disk'),
   contentUrl: (path: string, inline = false) => '/api/files/content' + q({ path, inline: inline ? 1 : undefined }),
   zipUrl: (paths: string[], name?: string) => {
     const sp = new URLSearchParams()

@@ -16,10 +16,11 @@ import Breadcrumb from '../components/Breadcrumb'
 import ContextMenu, { type MenuItem } from '../components/ContextMenu'
 import Preview, { previewKind } from '../components/Preview'
 import ShareDialog from '../components/ShareDialog'
+import InfoDialog from '../components/InfoDialog'
 import { dialogs, toast } from '../components/dialogs'
 import { useUploads } from '../components/UploadPanel'
 import {
-  IArrowUp, ICopy, IDownload, IEdit, IFolderPlus, IGrid, IList, IPaste, IRefresh, IScissors, IShare, IStar, ITrash, IUpload, ISpinner, IEye,
+  IArrowUp, ICopy, IDownload, IEdit, IFolderPlus, IGrid, IList, IPaste, IRefresh, IScissors, IShare, IStar, ITrash, IUpload, ISpinner, IEye, IInfo,
 } from '../components/Icons'
 
 function triggerDownload(url: string) {
@@ -48,6 +49,7 @@ export default function Browser() {
   const [menu, setMenu] = useState<{ x: number; y: number; entry: Entry | null } | null>(null)
   const [preview, setPreview] = useState<number | null>(null)
   const [share, setShare] = useState<string | null>(null)
+  const [info, setInfo] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const [dragOverName, setDragOverName] = useState<string | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
@@ -58,9 +60,11 @@ export default function Browser() {
   const entries = useMemo(() => {
     const all = listing.data?.entries ?? []
     const f = ui.filter.trim().toLowerCase()
-    const filtered = f ? all.filter((e) => e.name.toLowerCase().includes(f)) : all
+    let filtered = ui.prefs.showHidden ? all : all.filter((e) => !e.name.startsWith('.'))
+    if (f) filtered = filtered.filter((e) => e.name.toLowerCase().includes(f))
     return sortEntries(filtered, ui.sort)
-  }, [listing.data, ui.filter, ui.sort])
+  }, [listing.data, ui.filter, ui.sort, ui.prefs.showHidden])
+  const hiddenCount = useMemo(() => (ui.prefs.showHidden ? 0 : (listing.data?.entries ?? []).filter((e) => e.name.startsWith('.')).length), [listing.data, ui.prefs.showHidden])
 
   const byName = useMemo(() => new Map(entries.map((e) => [e.name, e])), [entries])
   const selectedEntries = useMemo(() => entries.filter((e) => ui.selection.has(e.name)), [entries, ui.selection])
@@ -138,7 +142,7 @@ export default function Browser() {
 
   const remove = async (list = selectedEntries) => {
     if (list.length === 0) return
-    if (!(await dialogs.confirm({ title: S.deleteConfirm(list.length), message: list.length === 1 ? list[0].name : S.deleteWarning, danger: true, okLabel: S.delete }))) return
+    if (ui.prefs.confirmDelete && !(await dialogs.confirm({ title: S.deleteConfirm(list.length), message: list.length === 1 ? list[0].name : S.deleteWarning, danger: true, okLabel: S.delete }))) return
     try {
       const { job } = await Api.delete(list.map((e) => join(path, e.name)))
       track(job)
@@ -236,7 +240,7 @@ export default function Browser() {
 
   // ---- keyboard ----
   const onKeyDown = (ev: React.KeyboardEvent) => {
-    if (menu || preview !== null || share) return
+    if (menu || preview !== null || share || info !== null) return
     const tag = (ev.target as HTMLElement).tagName
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
     const mod = ev.ctrlKey || ev.metaKey
@@ -317,8 +321,12 @@ export default function Browser() {
   const menuItems = (entry: Entry | null): MenuItem[] => {
     const sel = entry && !ui.selection.has(entry.name) ? [entry] : selectedEntries
     const one = sel.length === 1 ? sel[0] : null
+    const header: MenuItem = { label: '/' + (one ? join(path, one.name) : path), disabled: true, icon: <IInfo size={14} /> }
     if (!entry && sel.length === 0) {
       return [
+        header,
+        { label: S.properties, icon: <IInfo size={16} />, onClick: () => setInfo(path) },
+        { separator: true, label: '' },
         { label: S.newFolder, icon: <IFolderPlus size={16} />, onClick: newFolder, shortcut: 'Ctrl+Shift+N' },
         { label: S.uploadFiles, icon: <IUpload size={16} />, onClick: () => fileInput.current?.click() },
         { label: S.uploadFolder, icon: <IUpload size={16} />, onClick: () => dirInput.current?.click() },
@@ -331,7 +339,10 @@ export default function Browser() {
         { label: S.refresh, icon: <IRefresh size={16} />, onClick: refresh },
       ]
     }
-    const items: MenuItem[] = [{ label: one?.type === 'dir' ? S.open : previewKind(one!) ? S.preview : S.download, icon: <IEye size={16} />, onClick: () => one && open(one), disabled: !one, shortcut: 'Enter' }]
+    const items: MenuItem[] = [
+      ...(one ? [header] : []),
+      { label: one?.type === 'dir' ? S.open : previewKind(one!) ? S.preview : S.download, icon: <IEye size={16} />, onClick: () => one && open(one), disabled: !one, shortcut: 'Enter' },
+    ]
     if (one?.type === 'dir') items.push({ label: S.paste, icon: <IPaste size={16} />, onClick: () => paste(join(path, one.name)), disabled: !ui.clipboard })
     items.push(
       { label: S.download, icon: <IDownload size={16} />, onClick: () => download(sel) },
@@ -340,6 +351,8 @@ export default function Browser() {
       { label: S.cut, icon: <IScissors size={16} />, onClick: () => clip('cut', sel), shortcut: 'Ctrl+X' },
       { label: S.rename, icon: <IEdit size={16} />, onClick: () => rename(one!), disabled: !one, shortcut: 'F2' },
       { label: S.delete, icon: <ITrash size={16} />, onClick: () => remove(sel), danger: true, shortcut: 'Del' },
+      { separator: true, label: '' },
+      { label: S.properties, icon: <IInfo size={16} />, onClick: () => one && setInfo(join(path, one.name)), disabled: !one },
     )
     if (one?.type === 'dir') {
       const p = join(path, one.name)
@@ -393,7 +406,11 @@ export default function Browser() {
         <span className="mx-1 h-5 border-l border-neutral-300 dark:border-neutral-700" />
         <button className="btn-ghost" onClick={() => setShare(one?.type === 'dir' ? join(path, one.name) : path)} disabled={selectedEntries.length > 1 || (one !== null && one.type !== 'dir')}><IShare size={16} /> {S.share}</button>
         <button className="btn-ghost" onClick={() => toggleFavorite()} title={isFav ? S.removeFavorite : S.addFavorite}><IStar size={16} filled={!!isFav} className={isFav ? 'text-amber-500' : ''} /></button>
-        <span className="ml-auto text-xs text-neutral-500">{selectedEntries.length > 0 ? S.selected(selectedEntries.length) : S.items(entries.length)}</span>
+        <button className="btn-ghost" onClick={() => setInfo(one ? join(path, one.name) : path)} disabled={selectedEntries.length > 1} title={S.properties}><IInfo size={16} /></button>
+        <span className="ml-auto text-xs text-neutral-500">
+          {selectedEntries.length > 0 ? S.selected(selectedEntries.length) : S.items(entries.length)}
+          {hiddenCount > 0 && <span title={S.prefShowHidden}> · {hiddenCount} ocultos</span>}
+        </span>
       </div>
 
       {uploads.pending.length > 0 && (
@@ -435,7 +452,7 @@ export default function Browser() {
           />
         )}
       </div>
-      <div className="hidden border-t border-neutral-200 px-3 py-1 text-[11px] text-neutral-400 dark:border-neutral-800 md:block">{S.keyboardHint}</div>
+      {ui.prefs.showHints && <div className="hidden border-t border-neutral-200 px-3 py-1 text-[11px] text-neutral-400 dark:border-neutral-800 md:block">{S.keyboardHint}</div>}
 
       {dragOver && (
         <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center border-4 border-dashed border-blue-500 bg-blue-500/10 text-lg font-medium text-blue-700 dark:text-blue-200">
@@ -450,6 +467,7 @@ export default function Browser() {
       {preview !== null && entries[preview] && (
         <Preview entries={entries} index={preview} urlFor={(e, inline) => Api.contentUrl(join(path, e.name), inline)} maxText={cfg?.previewMaxText ?? 1 << 20} onClose={() => setPreview(null)} onIndex={setPreview} />
       )}
+      {info !== null && <InfoDialog path={info} onClose={() => setInfo(null)} />}
       {share !== null && <ShareDialog path={share} name={shareName} maxTtl={cfg?.shareMaxTtl ?? 30 * 86400} onClose={() => setShare(null)} onCreated={() => qc.invalidateQueries({ queryKey: ['shares'] })} />}
       {user === null && null}
     </div>

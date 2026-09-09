@@ -7,7 +7,17 @@ export interface Clipboard {
   names: string[]
 }
 
+export interface Prefs {
+  showHidden: boolean
+  showHints: boolean
+  confirmDelete: boolean
+}
+
+const defaultPrefs: Prefs = { showHidden: false, showHints: true, confirmDelete: true }
+
 interface UIState {
+  prefs: Prefs
+  setPrefs: (p: Partial<Prefs>) => void
   selection: Set<string>
   anchor: string | null
   focused: string | null
@@ -42,6 +52,13 @@ function persist(key: string, v: unknown) {
 }
 
 export const useUI = create<UIState>((set) => ({
+  prefs: { ...defaultPrefs, ...load<Partial<Prefs>>('filezam.prefs', {}) },
+  setPrefs: (p) =>
+    set((st) => {
+      const prefs = { ...st.prefs, ...p }
+      persist('filezam.prefs', prefs)
+      return { prefs }
+    }),
   selection: new Set(),
   anchor: null,
   focused: null,

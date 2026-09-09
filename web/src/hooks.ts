@@ -50,6 +50,8 @@ export function useInvalidateDirs() {
   const qc = useQueryClient()
   return (dirs: string[]) => {
     for (const d of dirs) void qc.invalidateQueries({ queryKey: listKey(d) })
+    void qc.invalidateQueries({ queryKey: ['disk'] })
+    void qc.invalidateQueries({ queryKey: ['info'] })
   }
 }
 

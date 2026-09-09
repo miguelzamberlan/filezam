@@ -21,10 +21,11 @@ func preallocate(f *os.File, size int64) error {
 	return err
 }
 
-func diskFree(path string) uint64 {
+func diskUsage(path string) DiskUsage {
 	var st syscall.Statfs_t
 	if err := syscall.Statfs(path, &st); err != nil {
-		return 0
+		return DiskUsage{}
 	}
-	return st.Bavail * uint64(st.Bsize)
+	bs := uint64(st.Bsize)
+	return DiskUsage{Total: st.Blocks * bs, Free: st.Bavail * bs}
 }

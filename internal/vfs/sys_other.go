@@ -6,4 +6,4 @@ import "os"
 
 func preallocate(f *os.File, size int64) error { return f.Truncate(size) }
 
-func diskFree(path string) uint64 { return 0 }
+func diskUsage(path string) DiskUsage { return DiskUsage{} }

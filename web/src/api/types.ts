@@ -106,3 +106,17 @@ export interface AuditEntry {
 }
 
 export type Conflict = 'rename' | 'overwrite' | 'skip'
+
+export interface DiskUsage {
+  total: number
+  free: number
+  used: number
+}
+
+export interface EntryInfo {
+  path: string
+  entry: Entry
+  totals?: { files: number; dirs: number; bytes: number; partial: boolean }
+  shares?: Share[]
+  favorite?: boolean
+}

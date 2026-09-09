@@ -526,3 +526,33 @@ func TestSPAAndHeaders(t *testing.T) {
 	u, _ := url.Parse(c.srv.URL)
 	_ = u
 }
+
+func TestInfoAndDisk(t *testing.T) {
+	admin, _, root := newEnv(t)
+	admin.login("admin", "admin")
+	admin.expect("POST", "/api/auth/password", map[string]string{"current": "admin", "new": "correct horse battery"}, 200)
+	o := admin.expect("GET", "/api/files/disk", nil, 200)
+	if o["total"].(float64) <= 0 || o["free"].(float64) <= 0 {
+		t.Fatalf("disk: %v", o)
+	}
+	os.WriteFile(filepath.Join(root, "teamA", "pub", "b.txt"), []byte("12345"), 0o644)
+	admin.expect("POST", "/api/shares", map[string]any{"path": "teamA/pub", "expiresIn": 600}, 201)
+	admin.expect("POST", "/api/favorites", map[string]string{"path": "teamA/pub"}, 201)
+	o = admin.expect("GET", "/api/files/info?path=teamA/pub", nil, 200)
+	tot := o["totals"].(map[string]any)
+	if int(tot["files"].(float64)) != 2 || int(tot["bytes"].(float64)) != 15 || tot["partial"] != false {
+		t.Fatalf("totals: %v", tot)
+	}
+	if len(o["shares"].([]any)) != 1 || o["favorite"] != true {
+		t.Fatalf("info shares/fav: %v", o)
+	}
+	o = admin.expect("GET", "/api/files/info?path=teamA", nil, 200)
+	if int(o["totals"].(map[string]any)["dirs"].(float64)) != 1 {
+		t.Fatalf("dirs: %v", o)
+	}
+	o = admin.expect("GET", "/api/files/info?path=teamA/pub/doc.txt", nil, 200)
+	if _, has := o["totals"]; has {
+		t.Fatal("file info should not scan")
+	}
+	admin.expect("GET", "/api/files/info?path=../x", nil, 400)
+}

@@ -45,6 +45,8 @@ export const ILogout = (p: P) => base(p, <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 
 export const IKey = (p: P) => base(p, <><circle cx="8" cy="15" r="4" /><path d="m11 12 9-9m-3 3 3 3m-6 0 2 2" /></>)
 export const IMenu = (p: P) => base(p, <path d="M4 7h16M4 12h16M4 17h16" />)
 export const ISpinner = (p: P) => base({ ...p, className: 'animate-spin ' + (p.className ?? '') }, <path d="M21 12a9 9 0 1 1-6.2-8.6" />)
+export const ISettings = (p: P) => base(p, <><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></>)
+export const IInfo = (p: P) => base(p, <><circle cx="12" cy="12" r="9" /><path d="M12 16v-4m0-4h.01" /></>)
 export const ILog = (p: P) => base(p, <><path d="M4 4h16v16H4z" /><path d="M8 9h8M8 13h8M8 17h5" /></>)
 
 export function iconFor(name: string, type: string, size = 18) {

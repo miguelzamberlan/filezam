@@ -44,8 +44,37 @@ func (p *Progress) warn(path string, err error) {
 
 // Totals describes a tree.
 type Totals struct {
-	Files int
-	Bytes int64
+	Files int   `json:"files"`
+	Dirs  int   `json:"dirs"`
+	Bytes int64 `json:"bytes"`
+}
+
+// ErrScanLimit signals that ScanLimited stopped early.
+var ErrScanLimit = errors.New("scan limit reached")
+
+// ScanLimited counts files, dirs and bytes under p, stopping with ErrScanLimit
+// after maxEntries entries so huge trees do not block a request.
+func (r *Root) ScanLimited(ctx context.Context, p string, maxEntries int) (Totals, error) {
+	var t Totals
+	n := 0
+	err := r.walk(ctx, p, func(path string, fi fs.FileInfo) error {
+		if path == p && fi.IsDir() {
+			return nil
+		}
+		n++
+		if n > maxEntries {
+			return ErrScanLimit
+		}
+		switch {
+		case fi.IsDir():
+			t.Dirs++
+		case fi.Mode().IsRegular():
+			t.Files++
+			t.Bytes += fi.Size()
+		}
+		return nil
+	})
+	return t, err
 }
 
 // Scan walks a path and counts files and bytes (symlinks and special files ignored).

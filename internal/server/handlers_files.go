@@ -77,6 +77,72 @@ func (s *Server) handleStat(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+// handleDisk reports the space of the filesystem backing the user's scope.
+func (s *Server) handleDisk(w http.ResponseWriter, r *http.Request) error {
+	root, _, err := s.userRoot(r)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	d := root.Disk()
+	writeJSON(w, r, 200, map[string]any{"total": d.Total, "free": d.Free, "used": d.Total - d.Free})
+	return nil
+}
+
+const infoScanLimit = 200000
+
+// handleInfo returns properties of an entry: totals for folders, its shares and favorite state.
+func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) error {
+	root, u, err := s.userRoot(r)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	p, err := queryPath(r, "path")
+	if err != nil {
+		return err
+	}
+	e, err := root.Stat(p)
+	if err != nil {
+		return err
+	}
+	out := map[string]any{"path": p, "entry": e}
+	if e.Type == "dir" {
+		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+		t, serr := root.ScanLimited(ctx, p, infoScanLimit)
+		cancel()
+		partial := serr != nil
+		out["totals"] = map[string]any{"files": t.Files, "dirs": t.Dirs, "bytes": t.Bytes, "partial": partial}
+		uid := u.ID
+		if u.IsAdmin() {
+			uid = 0
+		}
+		shares, err := s.db.ListSharesByPath(r.Context(), vfs.Join(u.Scope, p), uid)
+		if err != nil {
+			return err
+		}
+		views := make([]shareView, 0, len(shares))
+		for _, sh := range shares {
+			views = append(views, s.viewShare(sh, u))
+		}
+		out["shares"] = views
+		favs, err := s.db.ListFavorites(r.Context(), u.ID)
+		if err != nil {
+			return err
+		}
+		fav := false
+		for _, f := range favs {
+			if f.Path == vfs.Join(u.Scope, p) {
+				fav = true
+				break
+			}
+		}
+		out["favorite"] = fav
+	}
+	writeJSON(w, r, 200, out)
+	return nil
+}
+
 func (s *Server) handleContent(w http.ResponseWriter, r *http.Request) error {
 	root, _, err := s.userRoot(r)
 	if err != nil {
