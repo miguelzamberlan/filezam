@@ -56,6 +56,8 @@ export const en: Strings = {
   preview: 'Preview',
   previewFormatted: 'Formatted',
   previewPlain: 'Plain text',
+  pdfNoInline: 'This browser cannot show PDFs inside the page.',
+  openInNewTab: 'Open in new tab',
   selectAll: 'Select all',
   selected: (n: number) => (n === 1 ? '1 item selected' : `${n} items selected`),
   items: (n: number) => (n === 1 ? '1 item' : `${n} items`),

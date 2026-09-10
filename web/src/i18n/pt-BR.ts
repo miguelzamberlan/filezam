@@ -54,6 +54,8 @@ export const ptBR = {
   preview: 'Visualizar',
   previewFormatted: 'Formatado',
   previewPlain: 'Texto',
+  pdfNoInline: 'Este navegador não mostra PDF dentro da página.',
+  openInNewTab: 'Abrir em nova aba',
   selectAll: 'Selecionar tudo',
   selected: (n: number) => (n === 1 ? '1 item selecionado' : `${n} itens selecionados`),
   items: (n: number) => (n === 1 ? '1 item' : `${n} itens`),

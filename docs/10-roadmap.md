@@ -16,6 +16,7 @@
 - **Pesquisa só por nome**: não indexa conteúdo.
 - **Dispositivos confiáveis sem revogação individual**: desligar e religar o 2FA invalida todos de uma vez.
 - **Arrastar dentro da UI** só com mouse; no toque use recortar/colar.
+- **PDF no celular abre fora da interface**: navegadores móveis não mostram PDF em iframe, então o preview oferece nova aba/download. Mostrar dentro exigiria embutir o pdf.js (centenas de KB carregados sob demanda, worker próprio e revisão da CSP).
 
 ## Próximos passos sugeridos (ordem de valor)
 

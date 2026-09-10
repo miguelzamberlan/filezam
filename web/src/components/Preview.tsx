@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 import type { Entry } from '../api/types'
 import { extOf, formatBytes, formatDate } from '../lib/format'
 import { S } from '../strings'
-import { IChevronLeft, IChevronRight, IClose, IDownload, ISpinner } from './Icons'
+import { IChevronLeft, IChevronRight, IClose, IDownload, IPdf, ISpinner } from './Icons'
 
 const IMG = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'bmp', 'svg', 'ico'])
 const VID = new Set(['mp4', 'webm', 'ogv', 'mov', 'm4v'])
@@ -12,6 +12,14 @@ const TXT = new Set(['txt', 'md', 'markdown', 'log', 'json', 'xml', 'yml', 'yaml
 // react-markdown + remark-gfm só são baixados quando um .md é aberto
 const Markdown = lazy(() => import('./Markdown'))
 const MD = new Set(['md', 'markdown'])
+
+// Navegadores móveis não mostram PDF dentro de <iframe>: o Chrome do Android não tem visualizador embutido
+// (pdfViewerEnabled = false) e o Safari do iOS/iPadOS desenha só a primeira página, sem rolagem. Nesses casos
+// o preview oferece abrir em nova aba (visualizador nativo do sistema) ou baixar. iPadOS se apresenta como Mac.
+const canEmbedPdf =
+  navigator.pdfViewerEnabled !== false &&
+  !/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) &&
+  !(/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)
 
 export type PreviewKind = 'image' | 'video' | 'audio' | 'pdf' | 'text' | null
 
@@ -103,7 +111,17 @@ export default function Preview({ entries, index, urlFor, maxText, assetUrl, onC
         {kind === 'video' && <video src={src} controls autoPlay preload="metadata" className="max-h-full max-w-full" onClick={(ev) => ev.stopPropagation()} />}
         {kind === 'audio' && <audio src={src} controls autoPlay className="w-full max-w-lg" onClick={(ev) => ev.stopPropagation()} />}
         {/* Sem atributo sandbox: o Chrome recusa o visualizador de PDF em frames com sandbox (mesmo com allow-scripts); a resposta já vem com CSP `sandbox` do servidor, que isola o documento. */}
-        {kind === 'pdf' && <iframe src={src} title={e.name} className="h-full w-full max-w-5xl rounded bg-white" onClick={(ev) => ev.stopPropagation()} />}
+        {kind === 'pdf' && canEmbedPdf && <iframe src={src} title={e.name} className="h-full w-full max-w-5xl rounded bg-white" onClick={(ev) => ev.stopPropagation()} />}
+        {kind === 'pdf' && !canEmbedPdf && (
+          <div className="flex max-w-sm flex-col items-center gap-4 text-center" onClick={(ev) => ev.stopPropagation()}>
+            <IPdf size={64} className="text-red-400" />
+            <div className="text-sm text-neutral-300">{S.pdfNoInline}</div>
+            <div className="flex flex-wrap justify-center gap-2">
+              <a href={src} target="_blank" rel="noopener" className="btn-primary">{S.openInNewTab}</a>
+              <a href={urlFor(e, false)} className="btn-ghost !text-white hover:!bg-white/20" download><IDownload size={16} /> {S.download}</a>
+            </div>
+          </div>
+        )}
         {kind === 'text' && isMd && formatted && (
           <div className="h-full w-full max-w-4xl overflow-auto rounded bg-white px-6 py-5 text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100 sm:px-10" onClick={(ev) => ev.stopPropagation()}>
             {loading || text === null ? <ISpinner /> : (
