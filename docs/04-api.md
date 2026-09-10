@@ -2,7 +2,7 @@
 
 Base: `/api`. Respostas em JSON (`Content-Type: application/json; charset=utf-8`, `Cache-Control: no-store`, gzip automático acima de 1400 bytes se aceito). Corpos de requisição JSON limitados a 1 MiB, campos desconhecidos rejeitados.
 
-Erros: `{"error":{"code":"...","message":"...", ...extras}}`. O `code` é estável e traduzido pelo frontend (`strings.ts`).
+Erros: `{"error":{"code":"...","message":"...", ...extras}}`. O `code` é estável e traduzido pelo frontend (`web/src/i18n/*.ts`, chave `errorCodes`).
 
 **Requisitos de toda requisição mutante** (`POST`, `PUT`, `PATCH`, `DELETE`): header `X-Filezam: 1` e origem do mesmo site (ver [03](03-seguranca.md#csrf)).
 

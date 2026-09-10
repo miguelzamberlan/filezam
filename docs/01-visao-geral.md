@@ -14,7 +14,10 @@ Funcionais:
 - Cada usuário acessa a raiz inteira **ou** uma subpasta específica (escopo). Não existem pastas *home* automáticas.
 - Primeiro início cria um admin padrão com troca de senha obrigatória.
 - Navegar, criar pasta, renomear, copiar, recortar/colar (mover), excluir, baixar arquivo ou ZIP, favoritos, visualizar (imagem, vídeo, áudio, PDF, texto).
-- Compartilhar uma **pasta** por link público somente leitura com prazo de validade e revogação.
+- Compartilhar uma **pasta ou um arquivo** por link público somente leitura com prazo de validade, senha opcional e revogação.
+- Lixeira com retenção configurável e restauração ao local original.
+- Pesquisa por nome em todas as subpastas do escopo, servida por um índice em SQLite atualizado por varreduras periódicas e pelas próprias operações do app.
+- Interface em pt-BR e inglês.
 - Upload de arquivos grandes, pastas inteiras e milhares de arquivos pequenos, sem travar a interface, com retomada.
 
 Não funcionais (prioridades declaradas pelo dono do projeto):
@@ -82,4 +85,4 @@ Não há shell na imagem; o healthcheck é o subcomando `healthcheck` do própri
 
 ### ADR-12 · Interface em pt-BR num único arquivo de strings
 
-Todos os textos ficam em `web/src/strings.ts`, incluindo a tradução dos códigos de erro da API. Facilita adicionar outro idioma sem tocar nos componentes.
+Todos os textos ficam em `web/src/i18n/pt-BR.ts` (referência) e `web/src/i18n/en.ts`, incluindo a tradução dos códigos de erro da API; `strings.ts` expõe o objeto `S` do idioma ativo (preferência `auto`/`pt-BR`/`en`). Um idioma novo é um arquivo em `i18n/` com as mesmas chaves, sem tocar nos componentes.
