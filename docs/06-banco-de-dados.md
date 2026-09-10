@@ -10,11 +10,7 @@ SQLite em `FILEZAM_DATA_DIR/filezam.db` (mais `-wal` e `-shm`). Driver `modernc.
 
 ## Migrações
 
-Arquivos em `internal/store/migrations/NNN_nome.sql`, embutidos com `embed`, aplicados em ordem numérica dentro de uma transação cada, registrados em `trash(id /*hex 16 bytes*/, user_id → users CASCADE, trash_dir /*base-relativo: <escopo>/.filezam-trash*/, name, path /*original, base-relativo*/,
-      type, size, deleted_at)   -- índices: deleted_at, path   (004)
-file_index(path PK /*base-relativo*/, parent, name, name_lc, type, size, mtime, gen)   -- índices: name_lc, parent   (005)
-index_state(id=1, last_full_at, entries, gen)   (005)
-schema_migrations(version, applied_at)`. Para evoluir o esquema: crie `002_algo.sql` (nunca edite um arquivo já aplicado em produção). SQLite tem `ALTER TABLE` limitado; para mudanças estruturais use o padrão criar-nova → copiar → renomear.
+Arquivos em `internal/store/migrations/NNN_nome.sql`, embutidos com `embed`, aplicados em ordem numérica dentro de uma transação cada, registrados em `schema_migrations(version, applied_at)`. Para evoluir o esquema: crie `006_algo.sql` (nunca edite um arquivo já aplicado em produção). SQLite tem `ALTER TABLE` limitado; para mudanças estruturais use o padrão criar-nova → copiar → renomear.
 
 ## Esquema (`001_init.sql` + migrações)
 
@@ -37,7 +33,10 @@ uploads(id /*hex 16 bytes*/, user_id → users CASCADE, dir /*base-relativo*/, n
         -- UNIQUE(dir,name); índice updated_at
 
 audit_log(id, ts, user_id, username, ip, action, detail /*JSON*/)   -- índice: ts
-
+trash(id /*hex 16 bytes*/, user_id → users CASCADE, trash_dir /*base-relativo: <escopo>/.filezam-trash*/, name, path /*original, base-relativo*/,
+      type, size, deleted_at)   -- índices: deleted_at, path   (004)
+file_index(path PK /*base-relativo*/, parent, name, name_lc, type, size, mtime, gen)   -- índices: name_lc, parent   (005)
+index_state(id=1, last_full_at, entries, gen)   (005)
 schema_migrations(version, applied_at)
 ```
 
