@@ -63,15 +63,18 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) error {
 		s.audit(r, nil, "login.fail", map[string]any{"username": in.Username, "reason": "unknown"})
 		return invalid
 	}
-	if u.LockedUntil != nil && time.Now().Unix() < *u.LockedUntil {
+	// Bloqueio por (usuário, IP): mesma resposta 401 de uma senha errada, para não revelar
+	// que a conta existe, e sem afetar o mesmo usuário vindo de outro endereço.
+	lockKey := strings.ToLower(u.Username) + "|" + ip
+	if locked, until := s.lockout.Locked(lockKey); locked {
 		auth.VerifyPassword(dummyHash, in.Password)
-		s.audit(r, u, "login.locked", nil)
-		return errorf(http.StatusLocked, "locked", "account temporarily locked; try again later")
+		s.audit(r, u, "login.locked", map[string]any{"until": until.Unix()})
+		return invalid
 	}
 	if !auth.VerifyPassword(u.PasswordHash, in.Password) {
-		until, _ := s.db.RecordLoginFailure(ctx, u.ID, lockoutThreshold, lockoutBase)
+		_ = s.db.RecordLoginFailure(ctx, u.ID)
 		detail := map[string]any{"reason": "password"}
-		if until != nil {
+		if locked, until := s.lockout.Fail(lockKey); locked {
 			detail["lockedUntil"] = until.Unix()
 		}
 		s.audit(r, u, "login.fail", detail)
@@ -81,6 +84,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) error {
 		s.audit(r, u, "login.fail", map[string]any{"reason": "disabled"})
 		return invalid
 	}
+	s.lockout.Reset(lockKey)
 	_ = s.db.RecordLoginSuccess(ctx, u.ID)
 	tok, exp, err := s.createSession(ctx, r, u)
 	if err != nil {

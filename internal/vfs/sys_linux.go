@@ -21,6 +21,14 @@ func preallocate(f *os.File, size int64) error {
 	return err
 }
 
+// identity returns (device, inode) of fi, or zeros when unavailable.
+func identity(fi os.FileInfo) (uint64, uint64) {
+	if st, ok := fi.Sys().(*syscall.Stat_t); ok {
+		return uint64(st.Dev), st.Ino
+	}
+	return 0, 0
+}
+
 func diskUsage(path string) DiskUsage {
 	var st syscall.Statfs_t
 	if err := syscall.Statfs(path, &st); err != nil {

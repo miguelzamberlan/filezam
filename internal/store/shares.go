@@ -14,6 +14,7 @@ type Share struct {
 	Token         string // token em claro; vazio nos links criados antes da migração 002
 	Kind          string // "dir" | "file" (migração 003)
 	PasswordHash  string // Argon2id; vazio = sem senha
+	Dev, Ino      uint64 // identidade do item no momento da criação (migração 006); 0 = desconhecida
 	Path          string
 	Name          string
 	CreatedBy     int64
@@ -25,12 +26,12 @@ type Share struct {
 	LastAccessAt  *int64
 }
 
-const shareCols = `s.id, s.token_hash, COALESCE(s.token,''), COALESCE(s.kind,'dir'), COALESCE(s.password_hash,''), s.path, s.name, s.created_by, COALESCE(u.username,''), s.created_at, s.expires_at, s.revoked_at, s.access_count, s.last_access_at`
+const shareCols = `s.id, s.token_hash, COALESCE(s.token,''), COALESCE(s.kind,'dir'), COALESCE(s.password_hash,''), COALESCE(s.dev,0), COALESCE(s.ino,0), s.path, s.name, s.created_by, COALESCE(u.username,''), s.created_at, s.expires_at, s.revoked_at, s.access_count, s.last_access_at`
 
 func scanShare(row interface{ Scan(...any) error }) (*Share, error) {
 	var s Share
 	var rev, last sql.NullInt64
-	if err := row.Scan(&s.ID, &s.TokenHash, &s.Token, &s.Kind, &s.PasswordHash, &s.Path, &s.Name, &s.CreatedBy, &s.CreatedByName, &s.CreatedAt, &s.ExpiresAt, &rev, &s.AccessCount, &last); err != nil {
+	if err := row.Scan(&s.ID, &s.TokenHash, &s.Token, &s.Kind, &s.PasswordHash, &s.Dev, &s.Ino, &s.Path, &s.Name, &s.CreatedBy, &s.CreatedByName, &s.CreatedAt, &s.ExpiresAt, &rev, &s.AccessCount, &last); err != nil {
 		return nil, mapErr(err)
 	}
 	if rev.Valid {
@@ -47,8 +48,8 @@ func (db *DB) CreateShare(ctx context.Context, s *Share) (*Share, error) {
 	if s.Kind == "" {
 		s.Kind = "dir"
 	}
-	res, err := db.w.ExecContext(ctx, `INSERT INTO shares(token_hash, token, kind, password_hash, path, name, created_by, created_at, expires_at) VALUES(?,?,?,?,?,?,?,?,?)`,
-		s.TokenHash, s.Token, s.Kind, s.PasswordHash, s.Path, s.Name, s.CreatedBy, s.CreatedAt, s.ExpiresAt)
+	res, err := db.w.ExecContext(ctx, `INSERT INTO shares(token_hash, token, kind, password_hash, dev, ino, path, name, created_by, created_at, expires_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+		s.TokenHash, s.Token, s.Kind, s.PasswordHash, int64(s.Dev), int64(s.Ino), s.Path, s.Name, s.CreatedBy, s.CreatedAt, s.ExpiresAt)
 	if err != nil {
 		return nil, mapErr(err)
 	}

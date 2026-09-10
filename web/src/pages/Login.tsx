@@ -23,7 +23,7 @@ export default function Login() {
       navigate(user.mustChangePassword ? '/change-password' : ((loc.state as { from?: string })?.from ?? '/b'), { replace: true })
     } catch (e) {
       if (e instanceof ApiError) {
-        setErr(e.code === 'locked' ? S.loginLocked : e.code === 'rate_limited' ? S.loginRateLimited : e.status === 401 ? S.loginFailed : errorMessage(e.code, e.message))
+        setErr(e.code === 'rate_limited' ? S.loginRateLimited : e.status === 401 ? S.loginFailed : errorMessage(e.code, e.message))
       } else setErr(String(e))
     } finally {
       setBusy(false)

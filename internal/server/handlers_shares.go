@@ -126,8 +126,9 @@ func (s *Server) handleShareCreate(w http.ResponseWriter, r *http.Request) error
 	if err != nil {
 		return err
 	}
+	dev, ino, _ := root.Identity(p) // zeros quando o sistema de arquivos não informa
 	now := time.Now().Unix()
-	sh, err := s.db.CreateShare(r.Context(), &store.Share{TokenHash: auth.HashToken(tok), Token: tok, Kind: e.Type, PasswordHash: pwHash, Path: vfs.Join(u.Scope, p), Name: name, CreatedBy: u.ID, CreatedAt: now, ExpiresAt: now + in.ExpiresIn})
+	sh, err := s.db.CreateShare(r.Context(), &store.Share{TokenHash: auth.HashToken(tok), Token: tok, Kind: e.Type, PasswordHash: pwHash, Dev: dev, Ino: ino, Path: vfs.Join(u.Scope, p), Name: name, CreatedBy: u.ID, CreatedAt: now, ExpiresAt: now + in.ExpiresIn})
 	if err != nil {
 		return err
 	}

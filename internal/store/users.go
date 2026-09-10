@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"database/sql"
-	"time"
 )
 
 // User is a login account.
@@ -113,30 +112,11 @@ func (db *DB) DeleteUser(ctx context.Context, id int64) error {
 	return nil
 }
 
-// RecordLoginFailure increments the failure counter and applies lockout when the threshold is reached.
-// Returns the lockout end time if a lockout was applied.
-func (db *DB) RecordLoginFailure(ctx context.Context, id int64, threshold int, base time.Duration) (*time.Time, error) {
-	u, err := db.GetUser(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	u.FailedLogins++
-	var lockedUntil *int64
-	var until *time.Time
-	if u.FailedLogins >= threshold {
-		u.Lockouts++
-		d := base
-		for i := 1; i < u.Lockouts && d < 24*time.Hour; i++ {
-			d *= 2
-		}
-		t := db.Now().Add(d)
-		ts := t.Unix()
-		lockedUntil = &ts
-		until = &t
-		u.FailedLogins = 0
-	}
-	_, err = db.w.ExecContext(ctx, `UPDATE users SET failed_logins=?, lockouts=?, locked_until=? WHERE id=?`, u.FailedLogins, u.Lockouts, nullInt(lockedUntil), id)
-	return until, err
+// RecordLoginFailure counts a failed attempt (for the admin view). The lock itself is kept
+// in memory per (user, IP) by auth.Lockout; locked_until is no longer written.
+func (db *DB) RecordLoginFailure(ctx context.Context, id int64) error {
+	_, err := db.w.ExecContext(ctx, `UPDATE users SET failed_logins=failed_logins+1 WHERE id=?`, id)
+	return err
 }
 
 // RecordLoginSuccess clears failure counters.

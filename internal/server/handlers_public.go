@@ -75,6 +75,14 @@ func (s *Server) shareRoot(r *http.Request) (*vfs.Root, *store.Share, error) {
 		root.Close()
 		return nil, nil, errShareNotFound
 	}
+	// Item substituído (apagado e recriado com o mesmo nome) não herda o link.
+	if sh.Ino != 0 {
+		if dev, ino, err := root.Identity(shareFile(sh)); err != nil || dev != sh.Dev || ino != sh.Ino {
+			root.Close()
+			s.log.Info("share target replaced", "id", sh.ID, "path", sh.Path)
+			return nil, nil, errShareNotFound
+		}
+	}
 	return root, sh, nil
 }
 

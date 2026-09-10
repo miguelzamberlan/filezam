@@ -40,6 +40,7 @@ type Server struct {
 	uploadSem   *auth.KeyedSemaphore
 	searchSem   *auth.KeyedSemaphore
 	shareUnlock *auth.Limiter // tentativas de senha por link
+	lockout     *auth.Lockout // bloqueio por (usuário, IP) após falhas seguidas
 	adminMu     sync.Mutex    // serializa alterações de usuários: a checagem de "último admin" não é atômica no banco
 
 	bg     context.Context
@@ -61,6 +62,7 @@ func New(cfg *config.Config, db *store.DB, base *vfs.Root, log *slog.Logger, ver
 		uploadSem:   auth.NewKeyedSemaphore(8),
 		searchSem:   auth.NewKeyedSemaphore(2),
 		shareUnlock: auth.NewLimiter(5, 5),
+		lockout:     auth.NewLockout(lockoutThreshold, lockoutBase),
 		bg:          bg, cancel: cancel,
 	}
 	if cfg.IndexInterval > 0 {

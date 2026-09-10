@@ -56,6 +56,17 @@ func (r *Root) Find(ctx context.Context, p, q string, lim SearchLimits) (hits []
 	return hits, false, err
 }
 
+// Identity returns the (device, inode) pair of p without following a final symlink,
+// or zeros when the platform cannot tell. Shares use it to notice a replaced item.
+func (r *Root) Identity(p string) (dev, ino uint64, err error) {
+	fi, err := r.r.Lstat(osPath(p))
+	if err != nil {
+		return 0, 0, MapError(err)
+	}
+	dev, ino = identity(fi)
+	return dev, ino, nil
+}
+
 // WalkEntries calls fn for p itself (unless p is the root) and every descendant, as Entry
 // values with root-relative paths. Lstat only: symlinks are reported but never followed;
 // reserved names are skipped. Meant for background indexing (no limits besides ctx).

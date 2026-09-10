@@ -117,7 +117,6 @@ export default function AdminUsers() {
       toast(e instanceof ApiError ? errorMessage(e.code, e.message) : String(e), 'error')
     }
   }
-  const now = Date.now() / 1000
   return (
     <div className="flex h-full flex-col overflow-auto p-4">
       <div className="mb-4 flex items-center gap-2">
@@ -145,7 +144,6 @@ export default function AdminUsers() {
                     {u.username}
                     {u.disabled && <span className="ml-2 rounded bg-neutral-200 px-1.5 text-xs dark:bg-neutral-800">{S.disabled}</span>}
                     {u.mustChangePassword && <span className="ml-2 rounded bg-amber-100 px-1.5 text-xs text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">{S.changePassword}</span>}
-                    {u.lockedUntil && u.lockedUntil > now && <span className="ml-2 rounded bg-red-100 px-1.5 text-xs text-red-800">{S.locked} {formatDate(u.lockedUntil, true)}</span>}
                   </td>
                   <td className="px-3 py-2">{u.role === 'admin' ? S.roleAdmin : S.roleUser}</td>
                   <td className="max-w-xs truncate px-3 py-2">{u.scope === '' ? S.scopeRoot : '/' + u.scope}</td>

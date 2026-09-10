@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"net/netip"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -19,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/zamberlan/filezam/internal/auth"
 	"github.com/zamberlan/filezam/internal/config"
 	"github.com/zamberlan/filezam/internal/store"
 	"github.com/zamberlan/filezam/internal/vfs"
@@ -996,4 +998,76 @@ func TestSearchIndex(t *testing.T) {
 		t.Fatalf("reindex: %v", o)
 	}
 	bob.expect("POST", "/api/admin/reindex", nil, 403)
+}
+
+// Bloqueio: nunca 423, sempre 401 (não revela a conta); vale por (usuário, IP), então o
+// mesmo usuário entra normalmente de outro endereço; senha certa depois do bloqueio expirar.
+func TestLockoutIsSilentAndPerIP(t *testing.T) {
+	admin, s, _ := newEnv(t)
+	s.cfg.TrustedProxies = []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")}
+	s.lockout = auth.NewLockout(3, time.Hour) // limiar baixo para caber no rate limit por usuário (5/min)
+	attacker := map[string]string{"X-Forwarded-For": "203.0.113.9"}
+	victim := map[string]string{"X-Forwarded-For": "198.51.100.7"}
+	for i := 0; i < 3; i++ {
+		resp, _ := admin.do("POST", "/api/auth/login", map[string]string{"username": "admin", "password": "wrong"}, attacker)
+		io.ReadAll(resp.Body)
+		if resp.StatusCode != 401 {
+			t.Fatalf("attempt %d: %d", i, resp.StatusCode)
+		}
+	}
+	// bloqueado: a senha certa do mesmo IP também dá 401, nunca 423
+	resp, body := admin.do("POST", "/api/auth/login", map[string]string{"username": "admin", "password": "admin"}, attacker)
+	if resp.StatusCode != 401 || body["error"].(map[string]any)["code"] != "bad_credentials" {
+		t.Fatalf("locked response: %d %v", resp.StatusCode, body)
+	}
+	// de outro IP a vítima entra normalmente
+	resp, _ = admin.do("POST", "/api/auth/login", map[string]string{"username": "admin", "password": "admin"}, victim)
+	io.ReadAll(resp.Body)
+	if resp.StatusCode != 200 {
+		t.Fatalf("victim login from another IP: %d", resp.StatusCode)
+	}
+	if locked, _ := s.lockout.Locked("admin|203.0.113.9"); !locked {
+		t.Fatal("attacker key should stay locked")
+	}
+	// auditoria: login.locked registrado, sem 423 em lugar nenhum (zera o limitador por usuário gasto acima)
+	s.loginUser = auth.NewLimiter(5, 5)
+	admin.expect("POST", "/api/auth/password", map[string]string{"current": "admin", "new": "correct horse battery"}, 200)
+	o := admin.expect("GET", "/api/admin/audit?limit=50", nil, 200)
+	seen := false
+	for _, e := range o["entries"].([]any) {
+		if e.(map[string]any)["action"] == "login.locked" {
+			seen = true
+		}
+	}
+	if !seen {
+		t.Fatal("audit login.locked missing")
+	}
+}
+
+// Link amarrado ao inode: apagar e recriar o item no mesmo caminho não reativa o link.
+func TestShareBoundToInode(t *testing.T) {
+	admin, _, root := newEnv(t)
+	admin.login("admin", "admin")
+	admin.expect("POST", "/api/auth/password", map[string]string{"current": "admin", "new": "correct horse battery"}, 200)
+	pubJar, _ := cookiejar.New(nil)
+	pub := &client{t: t, srv: admin.srv, c: &http.Client{Jar: pubJar}}
+	o := admin.expect("POST", "/api/shares", map[string]any{"path": "teamA/pub", "expiresIn": 600}, 201)
+	tokDir := o["token"].(string)
+	o = admin.expect("POST", "/api/shares", map[string]any{"path": "teamA/pub/doc.txt", "expiresIn": 600}, 201)
+	tokFile := o["token"].(string)
+	pub.expect("GET", "/api/public/"+tokDir, nil, 200)
+	pub.expect("GET", "/api/public/"+tokFile, nil, 200)
+	// mover para fora e voltar: mesmo inode, link continua
+	os.Rename(filepath.Join(root, "teamA", "pub"), filepath.Join(root, "teamA", "pub-moved"))
+	pub.expect("GET", "/api/public/"+tokDir, nil, 404)
+	os.Rename(filepath.Join(root, "teamA", "pub-moved"), filepath.Join(root, "teamA", "pub"))
+	pub.expect("GET", "/api/public/"+tokDir, nil, 200)
+	// apagar e recriar: inode novo → 404 para a pasta e para o arquivo
+	os.RemoveAll(filepath.Join(root, "teamA", "pub"))
+	os.MkdirAll(filepath.Join(root, "teamA", "pub"), 0o755)
+	os.WriteFile(filepath.Join(root, "teamA", "pub", "doc.txt"), []byte("novo"), 0o644)
+	pub.expect("GET", "/api/public/"+tokDir, nil, 404)
+	pub.expect("GET", "/api/public/"+tokFile, nil, 404)
+	// links antigos (sem inode gravado) continuam por caminho
+	admin.expect("GET", "/api/shares", nil, 200)
 }
