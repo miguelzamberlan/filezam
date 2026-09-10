@@ -10,12 +10,12 @@ SQLite em `FILEZAM_DATA_DIR/filezam.db` (mais `-wal` e `-shm`). Driver `modernc.
 
 ## Migrações
 
-Arquivos em `internal/store/migrations/NNN_nome.sql`, embutidos com `embed`, aplicados em ordem numérica dentro de uma transação cada, registrados em `schema_migrations(version, applied_at)`. Para evoluir o esquema: crie `006_algo.sql` (nunca edite um arquivo já aplicado em produção). SQLite tem `ALTER TABLE` limitado; para mudanças estruturais use o padrão criar-nova → copiar → renomear.
+Arquivos em `internal/store/migrations/NNN_nome.sql`, embutidos com `embed`, aplicados em ordem numérica dentro de uma transação cada, registrados em `schema_migrations(version, applied_at)`. Para evoluir o esquema: crie `009_algo.sql` (nunca edite um arquivo já aplicado em produção). SQLite tem `ALTER TABLE` limitado; para mudanças estruturais use o padrão criar-nova → copiar → renomear.
 
 ## Esquema (`001_init.sql` + migrações)
 
 ```sql
-users(id, username UNIQUE NOCASE, password_hash /*PHC argon2id*/, role CHECK IN ('admin','user'),
+users(id, username UNIQUE NOCASE, password_hash /*PHC argon2id*/, role CHECK IN ('admin','user'), quota /*bytes, 007*/,
       scope TEXT DEFAULT '' /*base-relativo; '' = raiz*/, must_change_password, disabled,
       failed_logins, lockouts, locked_until, created_at, updated_at)
 
@@ -24,7 +24,7 @@ sessions(id /*hex sha256 do token*/, user_id → users ON DELETE CASCADE, create
 
 favorites(id, user_id → users CASCADE, path /*base-relativo*/, name, created_at, UNIQUE(user_id,path))
 
-shares(id, token_hash UNIQUE, token /*em claro, 002; '' nos links anteriores*/, kind /*'dir'|'file', 003*/, password_hash /*argon2id ou '', 003*/,
+shares(id, token_hash UNIQUE, token /*em claro, 002; '' nos links anteriores*/, kind /*'dir'|'file', 003*/, password_hash /*argon2id ou '', 003*/, dev, ino /*identidade do item, 006*/,
        path /*base-relativo*/, name, created_by → users CASCADE,
        created_at, expires_at, revoked_at, access_count, last_access_at)   -- índice: expires_at
 
@@ -37,6 +37,7 @@ trash(id /*hex 16 bytes*/, user_id → users CASCADE, trash_dir /*base-relativo:
       type, size, deleted_at)   -- índices: deleted_at, path   (004)
 file_index(path PK /*base-relativo*/, parent, name, name_lc, type, size, mtime, gen)   -- índices: name_lc, parent   (005)
 index_state(id=1, last_full_at, entries, gen)   (005)
+jobs(id, user_id → users CASCADE, type, label, state, done, total, bytes_done, bytes_total, error, warnings, started_at, finished_at)   -- índice: (user_id, started_at)   (008)
 schema_migrations(version, applied_at)
 ```
 
@@ -47,6 +48,9 @@ Migrações aplicadas depois de `001_init.sql`:
 | 002 | `002_share_token.sql` | `shares.token` (texto, default `''`): guarda o token do link público para poder copiá-lo de novo |
 | 003 | `003_share_file_password.sql` | `shares.kind` (`dir`/`file`) e `shares.password_hash` (Argon2id, `''` = sem senha) |
 | 004 | `004_trash.sql` | Tabela `trash(id, user_id → users CASCADE, trash_dir, name, path, type, size, deleted_at)`: itens da lixeira com o caminho original base-relativo |
+| 006 | `006_share_inode.sql` | `shares.dev`, `shares.ino`: identidade do item compartilhado (0 = desconhecida) |
+| 007 | `007_user_quota.sql` | `users.quota` (bytes, 0 = sem limite) |
+| 008 | `008_jobs.sql` | Tabela `jobs(id, user_id → users CASCADE, type, label, state, done, total, bytes_done, bytes_total, error, warnings, started_at, finished_at)`: histórico de operações |
 | 005 | `005_file_index.sql` | `file_index(path PK, parent, name, name_lc, type, size, mtime, gen)` com índices em `name_lc` e `parent`, e `index_state(id=1, last_full_at, entries, gen)` |
 
 Todos os timestamps são segundos Unix, exceto `uploads.mtime` (ms, vindo do cliente).

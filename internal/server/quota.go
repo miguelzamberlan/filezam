@@ -2,8 +2,10 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"github.com/zamberlan/filezam/internal/jobs"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -94,11 +96,30 @@ func (s *Server) checkQuota(ctx context.Context, u *store.User, incoming int64) 
 }
 
 // startJob enforces the per-user cap on running background jobs.
-func (s *Server) startJob(u *store.User, typ string, dirs []string, fn func(ctx context.Context, j *jobsJob) error) (*jobsJob, error) {
+func (s *Server) startJob(u *store.User, typ, label string, dirs []string, fn func(ctx context.Context, j *jobsJob) error) (*jobsJob, error) {
 	if s.jobs.Running(u.ID) >= maxJobsPerUser {
 		return nil, errorf(http.StatusTooManyRequests, "busy", "too many operations running; wait for one to finish")
 	}
-	return s.jobs.Start(u.ID, typ, dirs, fn), nil
+	return s.jobs.StartLabeled(u.ID, typ, label, dirs, fn), nil
+}
+
+// jobLabel summarises the items of an operation for the history ("a.txt, b.txt +3 → Fotos").
+func jobLabel(paths []string, dest string) string {
+	names := make([]string, 0, 2)
+	for i, p := range paths {
+		if i == 2 {
+			break
+		}
+		names = append(names, vfs.Base(p))
+	}
+	label := strings.Join(names, ", ")
+	if len(paths) > 2 {
+		label += fmt.Sprintf(" +%d", len(paths)-2)
+	}
+	if dest != "" {
+		label += " → /" + dest
+	}
+	return label
 }
 
 // quotaView is the per-user part of /api/files/disk.

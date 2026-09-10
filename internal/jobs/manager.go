@@ -23,6 +23,7 @@ const (
 type View struct {
 	ID         string   `json:"id"`
 	Type       string   `json:"type"`
+	Label      string   `json:"label,omitempty"` // descrição curta para o histórico (ex.: "3 itens → Fotos")
 	State      string   `json:"state"`
 	Done       int      `json:"done"`
 	Total      int      `json:"total"`
@@ -121,6 +122,9 @@ type Manager struct {
 	jobs map[string]*Job
 	ctx  context.Context
 	wg   sync.WaitGroup
+	// Persist, when set, receives a snapshot at start, about once a second while running,
+	// and at the end (for the SQLite history).
+	Persist func(userID int64, v View)
 }
 
 // New creates a manager whose jobs are cancelled when ctx ends.
@@ -130,17 +134,40 @@ func New(ctx context.Context) *Manager {
 
 // Start launches fn in a goroutine and returns the job.
 func (m *Manager) Start(userID int64, typ string, dirs []string, fn func(ctx context.Context, j *Job) error) *Job {
+	return m.StartLabeled(userID, typ, "", dirs, fn)
+}
+
+// StartLabeled is Start with a human label kept in the history.
+func (m *Manager) StartLabeled(userID int64, typ, label string, dirs []string, fn func(ctx context.Context, j *Job) error) *Job {
 	id, _ := auth.NewID(8)
 	ctx, cancel := context.WithCancel(m.ctx)
 	j := &Job{id: id, userID: userID, typ: typ, cancel: cancel, done: make(chan struct{})}
-	j.view = View{ID: id, Type: typ, State: StateRunning, StartedAt: time.Now().Unix(), Dirs: dirs}
+	j.view = View{ID: id, Type: typ, Label: label, State: StateRunning, StartedAt: time.Now().Unix(), Dirs: dirs}
 	m.mu.Lock()
 	m.jobs[id] = j
 	m.prune()
 	m.mu.Unlock()
+	if m.Persist != nil {
+		m.Persist(userID, j.Snapshot())
+	}
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
+		if m.Persist != nil {
+			// progresso periódico para a linha do histórico não ficar parada
+			t := time.NewTicker(time.Second)
+			defer t.Stop()
+			go func() {
+				for {
+					select {
+					case <-j.done:
+						return
+					case <-t.C:
+						m.Persist(userID, j.Snapshot())
+					}
+				}
+			}()
+		}
 		err := fn(ctx, j)
 		j.mu.Lock()
 		j.view.FinishedAt = time.Now().Unix()
@@ -157,6 +184,9 @@ func (m *Manager) Start(userID int64, typ string, dirs []string, fn func(ctx con
 		j.mu.Unlock()
 		cancel()
 		close(j.done)
+		if m.Persist != nil {
+			m.Persist(userID, j.Snapshot())
+		}
 	}()
 	return j
 }

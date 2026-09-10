@@ -727,7 +727,7 @@ func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) error {
 	}
 	root.Close()
 	useTrash := s.cfg.TrashRetention > 0 && !in.Permanent
-	j, err := s.startJob(u, "delete", parentDirs(paths), func(ctx context.Context, j *jobs.Job) error {
+	j, err := s.startJob(u, "delete", jobLabel(paths, ""), parentDirs(paths), func(ctx context.Context, j *jobs.Job) error {
 		root, err := s.scopeRoot(u)
 		if err != nil {
 			return err
@@ -805,7 +805,7 @@ func (s *Server) handleCopy(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	j, err := s.startJob(u, "copy", parentDirs(nil, dest), func(ctx context.Context, j *jobs.Job) error {
+	j, err := s.startJob(u, "copy", jobLabel(sources, dest), parentDirs(nil, dest), func(ctx context.Context, j *jobs.Job) error {
 		root, err := s.scopeRoot(u)
 		if err != nil {
 			return err
@@ -855,7 +855,7 @@ func (s *Server) handleMove(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	j, err := s.startJob(u, "move", parentDirs(sources, dest), func(ctx context.Context, j *jobs.Job) error {
+	j, err := s.startJob(u, "move", jobLabel(sources, dest), parentDirs(sources, dest), func(ctx context.Context, j *jobs.Job) error {
 		root, err := s.scopeRoot(u)
 		if err != nil {
 			return err

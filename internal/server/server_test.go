@@ -1141,3 +1141,43 @@ func TestQuotaAndJobCap(t *testing.T) {
 		t.Log("job cap not hit (copies finished too fast); acceptable")
 	}
 }
+
+func TestJobHistoryAndMetrics(t *testing.T) {
+	admin, s, root := newEnv(t)
+	admin.login("admin", "admin")
+	admin.expect("POST", "/api/auth/password", map[string]string{"current": "admin", "new": "correct horse battery"}, 200)
+	os.WriteFile(filepath.Join(root, "teamA", "h.txt"), []byte("h"), 0o644)
+	o := admin.expect("POST", "/api/files/copy", map[string]any{"sources": []string{"teamA/h.txt"}, "destDir": "teamB", "onConflict": "rename"}, 200)
+	jid := o["job"].(map[string]any)["id"].(string)
+	waitFor(t, "job persisted as done", func() bool {
+		h := admin.expect("GET", "/api/jobs/history", nil, 200)["jobs"].([]any)
+		for _, j := range h {
+			m := j.(map[string]any)
+			if m["id"] == jid && m["state"] == "done" && m["label"] == "h.txt → /teamB" && m["finishedAt"] != nil {
+				return true
+			}
+		}
+		return false
+	})
+	// um job "running" herdado de um processo anterior vira failed na inicialização
+	s.db.UpsertJob(context.Background(), &store.JobRecord{ID: "stale1", UserID: 1, Type: "copy", State: "running", StartedAt: time.Now().Unix()})
+	if n, err := s.db.MarkInterruptedJobs(context.Background()); err != nil || n != 1 {
+		t.Fatalf("mark interrupted: %d %v", n, err)
+	}
+	// metrics: desativado sem token; com token exige Bearer ou sessão admin
+	admin.expect("GET", "/metrics", nil, 404)
+	s.cfg.MetricsToken = "sekret"
+	anon := &client{t: t, srv: admin.srv, c: &http.Client{}}
+	anon.expect("GET", "/metrics", nil, 401)
+	resp, _ := anon.do("GET", "/metrics", nil, map[string]string{"Authorization": "Bearer sekret"})
+	b, _ := io.ReadAll(resp.Body)
+	body := string(b)
+	if resp.StatusCode != 200 || !strings.Contains(body, "filezam_http_requests_total{") || !strings.Contains(body, "filezam_users_total 1") || !strings.Contains(body, `filezam_jobs_finished_total{type="copy",state="done"} 1`) || !strings.Contains(body, `filezam_logins_total{result="ok"}`) {
+		t.Fatalf("metrics: %d\n%s", resp.StatusCode, body)
+	}
+	resp, _ = admin.do("GET", "/metrics", nil, nil) // sessão admin também vale
+	io.ReadAll(resp.Body)
+	if resp.StatusCode != 200 {
+		t.Fatalf("metrics via admin session: %d", resp.StatusCode)
+	}
+}

@@ -27,6 +27,7 @@ Além das variáveis do README:
 |---|---|---|
 | `FILEZAM_TRASH_RETENTION` | `720h` | Quanto tempo itens excluídos ficam na lixeira (`<escopo>/.filezam-trash`) antes de serem apagados; `0` desativa a lixeira (excluir apaga de vez) |
 | `FILEZAM_INDEX_INTERVAL` | `6h` | Intervalo da varredura completa do índice de nomes usado pela pesquisa; `0` desativa o índice (a pesquisa percorre o disco) |
+| `FILEZAM_METRICS_TOKEN` | vazio | Liga `GET /metrics` (Prometheus); o coletor envia `Authorization: Bearer <token>`. Vazio = desativado |
 
 Ver tabela completa no [README](../README.md#variáveis-de-ambiente). Validações no startup: raiz não pode ser `/`; `FILEZAM_DATA_DIR` não pode estar dentro da raiz; chunk entre 1 MiB e 1 GiB; `FILEZAM_SECURE_COOKIES=auto` sem proxies confiáveis gera aviso (cookies não serão `Secure` atrás de proxy).
 
@@ -51,6 +52,10 @@ Migrações do banco rodam automaticamente no início. Jobs em andamento são pe
 
 A versão do Go está fixada em `go.mod` e no `Dockerfile`; ao subir de versão (correções de segurança da biblioteca padrão), reconstrua a imagem. Uma imagem construída antes de um commit não recebe nada dele: `docker compose up -d` sem `--build` só reinicia o container antigo.
 
+## Métricas
+
+Com `FILEZAM_METRICS_TOKEN` definido, aponte o Prometheus para `/metrics` com `authorization: {credentials: <token>}` (ou `bearer_token`). Métricas: `filezam_http_requests_total{method,code}`, `filezam_http_request_seconds_{sum,count}`, `filezam_logins_total{result}`, `filezam_upload_bytes_total`, `filezam_jobs_finished_total{type,state}`, `filezam_users_total`, `filezam_sessions_active`, `filezam_shares_active`, `filezam_trash_items`, `filezam_trash_bytes`, `filezam_index_entries`, `filezam_index_last_scan_timestamp_seconds`, `filezam_jobs{state}`, `filezam_disk_total_bytes`, `filezam_disk_free_bytes`, `filezam_build_info{version}`. Não exponha `/metrics` sem HTTPS: o token viaja no cabeçalho.
+
 ## Backup
 
 Parar o serviço, copiar `filezam.db`, `filezam.db-wal`, `filezam.db-shm` de `/config`. Os arquivos em `/data` são seus e devem ter backup próprio.
@@ -70,6 +75,9 @@ Parar o serviço, copiar `filezam.db`, `filezam.db-wal`, `filezam.db-shm` de `/c
 | Arquivo sumiu depois de excluir | foi para a lixeira | Menu **Lixeira** → Restaurar (itens expiram após `FILEZAM_TRASH_RETENTION`) |
 | Pesquisa não acha arquivo copiado por Samba/SSH | índice de nomes só vê mudanças feitas pelo Filezam até a próxima varredura | Aguardar `FILEZAM_INDEX_INTERVAL` ou **Reconstruir índice** na tela Pesquisar (admin) |
 | Pasta `.filezam-trash` no disco | lixeira do Filezam; invisível na interface | Não apagar à mão: use Esvaziar lixeira |
+| Usuário diz que a senha certa não entra | bloqueio de 15 min+ por (usuário, IP) após 10 erros; a resposta é igual à de senha errada | Esperar, ou entrar de outro endereço; ver `login.locked` na auditoria |
+| 507 `quota_exceeded` | cota do usuário (Administração → Usuários) estourada | Aumentar a cota ou liberar espaço; a medição atualiza em até 30 s |
+| Operação sumiu depois de reiniciar | jobs não retomam; ficam como "interrompida por reinício" em **Operações** | Refazer a operação |
 | Preview de PDF em branco ou com ícone de bloqueio | build antigo (cabeçalho `X-Frame-Options: DENY` no conteúdo inline) | Reconstruir a imagem |
 | 429 `rate_limited` ao trocar a senha | mais de 5 tentativas/min com a senha atual errada | Aguardar um minuto |
 | `scope_unavailable` | pasta de escopo apagada/renomeada | Admin redefine o escopo do usuário |

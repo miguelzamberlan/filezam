@@ -9,7 +9,7 @@ import { uploadManager } from '../upload/manager'
 import { dialogs, toast } from './dialogs'
 import JobToasts from './JobToasts'
 import UploadPanel, { useUploads } from './UploadPanel'
-import { IFolder, IStar, IShare, IUsers, ILog, ILogout, IKey, IMenu, IClose, IUpload, ISettings, ISearch, ITrash } from './Icons'
+import { IFolder, IStar, IShare, IUsers, ILog, ILogout, IKey, IMenu, IClose, IUpload, ISettings, ISearch, ITrash, IList } from './Icons'
 import { useUI } from '../store/ui'
 import DiskBar from './DiskBar'
 import SettingsDialog from './SettingsDialog'
@@ -85,6 +85,7 @@ export default function Shell() {
       <div className="mt-3 flex flex-col gap-0.5">
         <NavLink to="/shares" className={linkCls} onClick={() => setMenuOpen(false)}><IShare size={16} /> {S.shares}</NavLink>
         <NavLink to="/trash" className={linkCls} onClick={() => setMenuOpen(false)}><ITrash size={16} /> {S.trash}</NavLink>
+        <NavLink to="/jobs" className={linkCls} onClick={() => setMenuOpen(false)}><IList size={16} /> {S.jobsTitle}</NavLink>
         <button className={linkCls({ isActive: false }) + ' text-left'} onClick={showUploads} title={S.uploadsShow}>
           <IUpload size={16} /> {S.uploads}
           {activeUploads > 0 ? (

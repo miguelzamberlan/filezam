@@ -137,6 +137,7 @@ func (s *Server) logging(next http.Handler) http.Handler {
 		start := time.Now()
 		sw := &statusWriter{ResponseWriter: w, status: 200}
 		next.ServeHTTP(sw, r)
+		s.metrics.HTTP(r.Method, sw.status, int64(time.Since(start)))
 		if s.log.Enabled(r.Context(), slog.LevelDebug) || sw.status >= 400 {
 			s.log.Log(r.Context(), slog.LevelDebug, "http", "method", r.Method, "path", logPath(r.URL.Path), "status", sw.status, "ms", time.Since(start).Milliseconds(), "ip", ipFrom(r))
 		}

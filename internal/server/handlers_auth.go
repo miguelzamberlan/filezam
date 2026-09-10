@@ -58,10 +58,14 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	invalid := errorf(http.StatusUnauthorized, "bad_credentials", "invalid username or password")
+	fail := func() error {
+		s.metrics.Inc("filezam_logins_total", `result="fail"`, 1)
+		return invalid
+	}
 	if u == nil {
 		auth.VerifyPassword(dummyHash, in.Password)
 		s.audit(r, nil, "login.fail", map[string]any{"username": in.Username, "reason": "unknown"})
-		return invalid
+		return fail()
 	}
 	// Bloqueio por (usuário, IP): mesma resposta 401 de uma senha errada, para não revelar
 	// que a conta existe, e sem afetar o mesmo usuário vindo de outro endereço.
@@ -69,7 +73,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) error {
 	if locked, until := s.lockout.Locked(lockKey); locked {
 		auth.VerifyPassword(dummyHash, in.Password)
 		s.audit(r, u, "login.locked", map[string]any{"until": until.Unix()})
-		return invalid
+		return fail()
 	}
 	if !auth.VerifyPassword(u.PasswordHash, in.Password) {
 		_ = s.db.RecordLoginFailure(ctx, u.ID)
@@ -78,11 +82,11 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) error {
 			detail["lockedUntil"] = until.Unix()
 		}
 		s.audit(r, u, "login.fail", detail)
-		return invalid
+		return fail()
 	}
 	if u.Disabled {
 		s.audit(r, u, "login.fail", map[string]any{"reason": "disabled"})
-		return invalid
+		return fail()
 	}
 	s.lockout.Reset(lockKey)
 	_ = s.db.RecordLoginSuccess(ctx, u.ID)
@@ -92,6 +96,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) error {
 	}
 	s.setSessionCookie(w, r, tok, exp)
 	s.audit(r, u, "login.ok", nil)
+	s.metrics.Inc("filezam_logins_total", `result="ok"`, 1)
 	writeJSON(w, r, 200, map[string]any{"user": viewUser(u)})
 	return nil
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/zamberlan/filezam/internal/config"
 	"github.com/zamberlan/filezam/internal/index"
 	"github.com/zamberlan/filezam/internal/jobs"
+	"github.com/zamberlan/filezam/internal/metrics"
 	"github.com/zamberlan/filezam/internal/store"
 	"github.com/zamberlan/filezam/internal/uploads"
 	"github.com/zamberlan/filezam/internal/vfs"
@@ -29,6 +30,7 @@ type Server struct {
 	uploads *uploads.Service
 	jobs    *jobs.Manager
 	indexer *index.Indexer // nil quando FILEZAM_INDEX_INTERVAL=0
+	metrics *metrics.Registry
 	log     *slog.Logger
 	version string
 
@@ -56,6 +58,7 @@ func New(cfg *config.Config, db *store.DB, base *vfs.Root, log *slog.Logger, ver
 		cfg: cfg, db: db, base: base, log: log, version: version,
 		uploads:     uploads.New(db, cfg.ChunkSize, cfg.Fsync, log),
 		jobs:        jobs.New(bg),
+		metrics:     metrics.New(),
 		loginIP:     auth.NewLimiter(10, 10),
 		loginUser:   auth.NewLimiter(5, 5),
 		loginSem:    auth.NewSemaphore(4),
@@ -71,6 +74,20 @@ func New(cfg *config.Config, db *store.DB, base *vfs.Root, log *slog.Logger, ver
 	}
 	if cfg.IndexInterval > 0 {
 		s.indexer = index.New(db, base, log, cfg.IndexInterval)
+	}
+	// histórico de jobs: snapshots vão para o SQLite; o que ficou "running" de um processo anterior é marcado como interrompido
+	s.jobs.Persist = func(userID int64, v jobs.View) {
+		rec := &store.JobRecord{ID: v.ID, UserID: userID, Type: v.Type, Label: v.Label, State: v.State, Done: v.Done, Total: v.Total, BytesDone: v.BytesDone, BytesTotal: v.BytesTotal, Error: v.Error, Warnings: len(v.Warnings), StartedAt: v.StartedAt}
+		if v.FinishedAt > 0 {
+			rec.FinishedAt = &v.FinishedAt
+			s.metrics.Inc("filezam_jobs_finished_total", `type="`+v.Type+`",state="`+v.State+`"`, 1)
+		}
+		if err := db.UpsertJob(context.Background(), rec); err != nil {
+			log.Warn("persist job", "id", v.ID, "err", err)
+		}
+	}
+	if n, err := db.MarkInterruptedJobs(bg); err == nil && n > 0 {
+		log.Warn("jobs interrupted by a previous restart", "count", n)
 	}
 	if err := s.ensureAdmin(bg); err != nil {
 		cancel()
@@ -133,6 +150,9 @@ func (s *Server) StartBackground() {
 			s.log.Warn("prune audit", "err", err)
 		}
 		s.sweepTrash(ctx)
+		if err := s.db.PruneJobs(ctx, time.Now().Add(-30*24*time.Hour).Unix()); err != nil {
+			s.log.Warn("prune jobs", "err", err)
+		}
 	}
 	if s.indexer != nil {
 		go func() {
@@ -195,6 +215,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	authed := func(fn handlerFunc) http.Handler { return chain(s.h(fn), s.requireUser) }
 
 	mux.Handle("GET /api/health", s.h(s.handleHealth))
+	mux.Handle("GET /metrics", s.h(s.handleMetrics))
 	mux.Handle("GET /api/config", authed(s.handleConfig))
 
 	mux.Handle("POST /api/auth/login", chain(s.h(s.handleLogin), s.csrf))
@@ -218,6 +239,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.Handle("POST /api/files/move", user(s.handleMove))
 
 	mux.Handle("GET /api/jobs", user(s.handleJobs))
+	mux.Handle("GET /api/jobs/history", user(s.handleJobHistory))
 	mux.Handle("GET /api/jobs/{id}", user(s.handleJob))
 	mux.Handle("DELETE /api/jobs/{id}", user(s.handleJobCancel))
 

@@ -12,7 +12,7 @@
 | Quem obtém o banco | Reutilizar sessões e tokens | Sessões só como hash SHA-256; senhas em Argon2id; tokens de link público ficam em claro (ver "Links públicos") |
 | Quem rouba um cookie de sessão | Trocar a senha e tomar a conta | Troca de senha exige a senha atual, com os mesmos limites de taxa do login |
 
-Fora do escopo: proteção contra um administrador do host, ataques ao proxy reverso, e sigilo de arquivos frente a quem tem acesso legítimo ao escopo. **Usuários autenticados são semi-confiáveis quanto a recursos**: não há cota de disco nem limite de zips/jobs simultâneos por usuário (um upload chunked pré-aloca o tamanho declarado, até o espaço livre); veja [10](10-roadmap.md). O escopo de um admin é uma conveniência de navegação, **não uma fronteira de confidencialidade**: a tela Compartilhados e o diálogo de propriedades mostram a um admin todos os links (com token) de todos os usuários, inclusive de pastas fora do escopo dele.
+Fora do escopo: proteção contra um administrador do host, ataques ao proxy reverso, e sigilo de arquivos frente a quem tem acesso legítimo ao escopo. **Recursos por usuário**: o admin pode definir uma cota de disco (`users.quota`, bytes no escopo; uploads, lote, sessões chunked e cópias são recusados com `507 quota_exceeded` quando estourariam), há no máximo 2 zips e 4 jobs em andamento por usuário (`429 busy`), e um upload chunked pré-aloca o tamanho declarado dentro da cota e do espaço livre. O uso é medido pelo índice de nomes (ou varredura limitada) com cache de 30 s ajustado a cada escrita aceita, então pequenas ultrapassagens transitórias são possíveis; lixeira e partes de upload não contam. O escopo de um admin é uma conveniência de navegação, **não uma fronteira de confidencialidade**: a tela Compartilhados e o diálogo de propriedades mostram a um admin todos os links (com token) de todos os usuários, inclusive de pastas fora do escopo dele.
 
 ## Sandbox de caminhos (`internal/vfs`)
 
@@ -31,7 +31,7 @@ Fora do escopo: proteção contra um administrador do host, ataques ao proxy rev
 ## Autenticação e sessões
 
 - Senhas: Argon2id com `m=64 MiB, t=3, p=2`, salt de 16 bytes, formato PHC. Política mínima: 8 caracteres (máximo 256). Verificação em tempo constante; usuário inexistente também executa Argon2 (hash fictício) para igualar o tempo.
-- Bloqueio: 10 falhas seguidas → 15 min, dobrando a cada bloqueio subsequente enquanto o degrau anterior for menor que 24 h (último degrau: 32 h). Sucesso zera contadores. Consequência aceita: a resposta `423 locked` revela que a conta existe, e 10 tentativas por janela mantêm um usuário conhecido bloqueado.
+- Bloqueio (`auth.Lockout`, em memória): 10 falhas seguidas para o mesmo par **(usuário, IP)** → 15 min, dobrando a cada bloqueio até 24 h; sucesso zera. A resposta é sempre `401 bad_credentials`, idêntica à de senha errada e com o mesmo custo de Argon2 (hash fictício), então o bloqueio não revela que a conta existe; por ser por IP, um atacante não consegue manter o usuário legítimo bloqueado de outro endereço (quem divide o mesmo NAT com o atacante é afetado: aceito). O evento `login.locked` vai para a auditoria com o fim do bloqueio; `users.failed_logins` continua contando para o admin.
 - Limites de login: 10/min por IP, 5/min por usuário, 4 verificações Argon2 simultâneas. **A troca de senha (`POST /api/auth/password`) passa pelos mesmos limites e semáforo**, com evento `password.ratelimited` na auditoria: quem roubou um cookie não consegue forçar a senha atual.
 - Sessão: token de 32 bytes aleatórios em cookie `filezam_session` (`HttpOnly`, `SameSite=Strict`, `Path=/`, `Secure` conforme `FILEZAM_SECURE_COOKIES`). O banco guarda só o SHA-256. Validade deslizante `FILEZAM_SESSION_TTL` (renovada no máximo a cada 5 min; valores acima de 30 dias são reduzidos a 30 dias na carga da configuração), teto absoluto de 30 dias a partir da criação.
 - Revogação: troca de senha (própria ou pelo admin), mudança de escopo, de perfil ou desativação apagam as demais sessões do usuário. Exclusão de usuário cascateia. As alterações de usuários pelo admin são serializadas por um mutex no processo, para que a checagem de "último admin" não corra com outra requisição.
@@ -74,13 +74,17 @@ Na SPA: `Content-Security-Policy: default-src 'self'; script-src 'self'; style-s
 - **Senha opcional**: Argon2id em `shares.password_hash`. `POST /api/public/{token}/unlock` verifica (5/min por link, semáforo do Argon2, auditoria `share.unlock.fail`) e grava o cookie `fz_s_<16 hex do hash do token>` = HMAC-SHA256(chave = hash da senha, mensagem = hash do token), `HttpOnly`, `SameSite=Strict`, 24 h. Sem cookie válido, `info` devolve só `locked: true` e nome; `list`/`content`/`zip` respondem 401 `share_locked`. Revogar o link ou criar outro invalida o cookie porque a chave muda.
 - Rate limit por IP e no máximo 2 downloads/zips simultâneos por IP.
 - Mesma resposta 404 para inexistente, expirado, revogado, dono desativado ou pasta removida.
-- **Shares são por caminho**: mover ou renomear a pasta invalida o link, mas se outra pasta ocupar o mesmo caminho antes de o link expirar ele volta a funcionar apontando para ela. Revogue links de pastas que você recria.
+- **Shares são por caminho e por identidade**: o link guarda `dev`/`inode` do item na criação (migração 006) e a cada acesso o item encontrado no caminho precisa ter a mesma identidade; mover ou renomear invalida (404) e um item novo criado no mesmo caminho **não** reativa o link. Mover para fora e de volta preserva o inode e o link volta a funcionar. Em sistemas de arquivos que não informam inode (`Identity` devolve zeros) vale só o caminho, como antes; links criados antes da migração 006 também.
 - Tokens nunca vão para os logs: o middleware de log e o `recoverer` mascaram o segmento de token em `/api/public/…` e `/s/…`.
 - A API devolve `url` construída com `FILEZAM_PUBLIC_URL` ou, na ausência, com esquema/host da requisição (`X-Forwarded-Proto`/`X-Forwarded-Host` só de proxies confiáveis). A interface web ignora essa `url` quando `FILEZAM_PUBLIC_URL` não está definido e monta o link com a origem do próprio navegador (`window.location.origin`), que é sempre o endereço que o usuário está usando.
 
 ## IP real e proxies
 
 `X-Forwarded-For` é considerado apenas quando `RemoteAddr` está em `FILEZAM_TRUSTED_PROXIES`; toma-se o salto mais à direita que não seja um proxy confiável. O IP é usado para rate limit, auditoria e cookie `Secure=auto`.
+
+## Métricas
+
+`GET /metrics` (formato Prometheus, sem dependência externa) só existe com `FILEZAM_METRICS_TOKEN` definido e aceita `Authorization: Bearer <token>` (comparação em tempo constante) ou uma sessão de admin. Expõe contadores (requisições por método/classe de status, soma e contagem de duração, logins ok/falha, bytes recebidos em chunks, jobs concluídos por tipo/estado) e medidores no momento da coleta (usuários, sessões, links ativos, itens/bytes na lixeira, entradas e última varredura do índice, jobs por estado, disco). Nenhum nome de arquivo, usuário ou token aparece nas métricas.
 
 ## Auditoria
 

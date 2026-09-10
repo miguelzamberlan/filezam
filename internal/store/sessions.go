@@ -56,3 +56,10 @@ func (db *DB) PurgeExpiredSessions(ctx context.Context) error {
 	_, err := db.w.ExecContext(ctx, `DELETE FROM sessions WHERE expires_at<=?`, db.now())
 	return err
 }
+
+// CountSessions counts sessions not yet expired.
+func (db *DB) CountSessions(ctx context.Context) (int64, error) {
+	var n int64
+	err := db.r.QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions WHERE expires_at>?`, db.now()).Scan(&n)
+	return n, err
+}

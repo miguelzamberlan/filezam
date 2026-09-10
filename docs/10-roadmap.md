@@ -2,11 +2,11 @@
 
 ## Limitações atuais
 
-- **Jobs em memória**: reiniciar o container perde o progresso exibido (não os dados). Copiar cancelado deixa a parte já copiada no destino.
-- **Shares por caminho**: mover/renomear a pasta (ou o arquivo) compartilhada invalida o link, mas um item novo no mesmo caminho reativa um link ainda não expirado. Revogue antes de recriar.
-- **Sem cotas nem limites por usuário para zips, jobs e pré-alocação de upload**: um usuário autenticado consegue ocupar o disco (a sessão de upload reserva o tamanho declarado) ou saturar I/O com muitos zips/jobs. Usuários são considerados semi-confiáveis; ver [03](03-seguranca.md).
+- **Jobs não retomam**: reiniciar o container interrompe a operação (fica registrada como interrompida em Operações); copiar cancelado ou interrompido deixa a parte já copiada no destino.
+- **Shares não seguem o item**: mover/renomear invalida o link (ele volta se o item retornar ao caminho com o mesmo inode). Em sistemas de arquivos sem inode estável (alguns FUSE/SMB), vale só o caminho.
+- **Cota é aproximada**: medida com cache de 30 s e ajustada por escrita; entre duas medições uma pequena ultrapassagem é possível, e sem índice pronto a varredura limitada pode subestimar árvores enormes.
 - **Admin com escopo vê todos os links** (com token e caminho completo) em Compartilhados e nas propriedades: o escopo do admin não é fronteira de confidencialidade.
-- **Bloqueio de conta revela que o usuário existe** (`423 locked`) e permite manter um usuário conhecido bloqueado com 10 tentativas por janela.
+- **Bloqueio por (usuário, IP)**: quem divide o IP com um atacante (mesmo NAT) fica bloqueado junto por até 24 h.
 - **Retomada de upload exige soltar o arquivo de novo**: o navegador não guarda o `File`. Em Chrome seria possível persistir `FileSystemFileHandle` no IndexedDB.
 - **Listagem paginada só na ordem do servidor**: enquanto faltam páginas, o filtro da pasta e `Ctrl+A` só alcançam o que já foi carregado.
 - **Índice de nomes não vê mudanças externas** (Samba, SSH) até a próxima varredura completa ou um "Reconstruir índice".
@@ -20,15 +20,13 @@
 ## Próximos passos sugeridos (ordem de valor)
 
 1. Retomada automática no Chrome com File System Access API.
-2. Persistir jobs no SQLite para sobreviver a reinícios e permitir histórico.
-3. 2FA TOTP para admins.
-4. Métricas Prometheus em `/metrics` (protegido).
-5. Cota de disco por usuário e limite de zips/jobs simultâneos; link público amarrado ao inode em vez do caminho.
-6. Pesquisa por conteúdo (texto) sobre o índice.
+2. 2FA TOTP para admins.
+3. Pesquisa por conteúdo (texto) sobre o índice.
+4. Retomar jobs interrompidos por reinício a partir do histórico.
 
 ## Feito
 
-Lixeira com retenção, índice de nomes em SQLite, link de arquivo único e senha no link, arrastar e soltar interno, listagem paginada e interface em inglês (setembro de 2026).
+Lixeira com retenção, índice de nomes em SQLite, link de arquivo único e senha no link, arrastar e soltar interno, listagem paginada, interface em inglês, histórico de operações persistido, métricas Prometheus, cota de disco por usuário com limites de zips/jobs, link amarrado ao inode e bloqueio de login silencioso por (usuário, IP) (setembro de 2026).
 
 ## Ideias descartadas
 

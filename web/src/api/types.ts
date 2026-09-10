@@ -74,6 +74,22 @@ export interface Job {
   startedAt: number
   finishedAt?: number
   dirs?: string[]
+  label?: string
+}
+
+export interface JobRecord {
+  id: string
+  type: 'copy' | 'move' | 'delete'
+  label: string
+  state: 'running' | 'done' | 'failed' | 'cancelled'
+  done: number
+  total: number
+  bytesDone: number
+  bytesTotal: number
+  error?: string
+  warnings: number
+  startedAt: number
+  finishedAt: number | null
 }
 
 export interface Favorite {

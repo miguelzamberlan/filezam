@@ -85,6 +85,9 @@ func (s *Server) handleUploadChunk(w http.ResponseWriter, r *http.Request) error
 		return errorf(http.StatusRequestEntityTooLarge, "too_large", "chunk exceeds chunk size")
 	}
 	info, err := s.uploads.WriteChunk(r.Context(), root, u.Scope, u.ID, r.PathValue("id"), index, r.ContentLength, bodyReader(w, r, s.cfg.ChunkSize))
+	if err == nil && r.ContentLength > 0 {
+		s.metrics.Inc("filezam_upload_bytes_total", "", r.ContentLength)
+	}
 	if err != nil {
 		return err
 	}

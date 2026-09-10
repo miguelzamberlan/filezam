@@ -43,6 +43,7 @@ type Config struct {
 	UploadStaleAge time.Duration
 	TrashRetention time.Duration // 0 = lixeira desativada (exclusão permanente)
 	IndexInterval  time.Duration // varredura completa do índice de nomes; 0 = índice desativado
+	MetricsToken   string        // token do /metrics; vazio = desativado
 }
 
 // resolve follows symlinks when the path exists; otherwise the absolute path is used as is.
@@ -63,6 +64,7 @@ func Load() (*Config, error) {
 		AdminUser:      env("FILEZAM_ADMIN_USER", "admin"),
 		AdminPassword:  env("FILEZAM_ADMIN_PASSWORD", "admin"),
 		LogLevel:       strings.ToLower(env("FILEZAM_LOG_LEVEL", "info")),
+		MetricsToken:   env("FILEZAM_METRICS_TOKEN", ""),
 		BatchMaxFiles:  200,
 		BatchMaxBytes:  32 << 20,
 		MaxParallel:    4,

@@ -50,7 +50,7 @@ Três prioridades guiam cada decisão, nesta ordem:
 - **Uploads sérios**: arquivos de vários GB em blocos paralelos com retomada, pastas inteiras por arrastar e soltar, milhares de arquivos pequenos em lote, tudo com painel de progresso, pausa e repetição de falhas.
 - **Links públicos**: compartilhe uma pasta ou um arquivo por link somente leitura com prazo de validade, senha opcional, contagem de acessos e revogação imediata.
 - **Interface**: em português ou inglês, tema claro/escuro/sistema, cores personalizáveis, zoom da listagem, ícones por tipo de arquivo, arrastar e soltar para mover, listagem paginada para pastas enormes, atalhos de teclado e uso confortável no celular.
-- **Administração**: gestão de usuários, auditoria de logins e alterações, bloqueio progressivo contra força bruta.
+- **Administração**: gestão de usuários com cota de disco, auditoria de logins e alterações, bloqueio progressivo contra força bruta, histórico de operações e métricas Prometheus.
 - **Operação**: binário estático, imagem `distroless` sem shell, rootfs somente leitura, SQLite embutido (sem CGO), migrações automáticas, healthcheck.
 
 <p align="center">
@@ -101,6 +101,7 @@ Discos NTFS/exFAT montados com `uid=`/`gid=` funcionam normalmente: basta que o 
 | `FILEZAM_SHARE_MAX_TTL` | `720h` | Validade máxima de um link público |
 | `FILEZAM_TRASH_RETENTION` | `720h` | Tempo na lixeira antes de apagar de vez; `0` desativa a lixeira |
 | `FILEZAM_INDEX_INTERVAL` | `6h` | Varredura completa do índice de nomes da pesquisa; `0` desativa o índice |
+| `FILEZAM_METRICS_TOKEN` | vazio | Liga `GET /metrics` (Prometheus) com `Authorization: Bearer` |
 | `FILEZAM_FSYNC` | `true` | `fsync` antes de finalizar cada upload |
 | `FILEZAM_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
 
@@ -144,7 +145,7 @@ Receitas completas, backup, atualização e diagnóstico de problemas comuns est
 
 Em **Administração → Usuários** o admin cria contas e define o perfil (administrador ou usuário) e a **pasta de acesso**: a raiz inteira ou uma subpasta específica. O usuário restrito enxerga a subpasta como se fosse a raiz e não consegue alcançar nada fora dela. Alterar escopo ou senha invalida as sessões do usuário; estreitar o escopo também apaga os links públicos que ele tinha fora da nova pasta. Não é possível remover ou rebaixar o último administrador.
 
-Contas são bloqueadas por 15 minutos (dobrando a cada repetição) após 10 falhas seguidas de login; há também limite por IP e por usuário. Tudo fica registrado em **Auditoria**.
+Após 10 falhas seguidas de login do mesmo endereço, aquele par usuário + IP fica bloqueado por 15 minutos (dobrando a cada repetição); a resposta é a mesma de senha errada, então ninguém descobre se a conta existe, e o usuário legítimo continua entrando de outro endereço. Há também limite de tentativas por IP e por usuário. O admin pode dar a cada conta uma **cota de disco** (em GB). Tudo fica registrado em **Auditoria**.
 
 ### Links públicos
 

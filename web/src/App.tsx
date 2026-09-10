@@ -7,6 +7,7 @@ import Browser from './pages/Browser'
 import Shares from './pages/Shares'
 import Search from './pages/Search'
 import Trash from './pages/Trash'
+import Jobs from './pages/Jobs'
 import AdminUsers from './pages/AdminUsers'
 import AdminAudit from './pages/AdminAudit'
 import PublicShare from './pages/PublicShare'
@@ -62,6 +63,7 @@ export default function App() {
           <Route path="search" element={<Search />} />
           <Route path="shares" element={<Shares />} />
           <Route path="trash" element={<Trash />} />
+          <Route path="jobs" element={<Jobs />} />
           <Route path="admin/users" element={<AdminUsers />} />
           <Route path="admin/audit" element={<AdminAudit />} />
           <Route path="*" element={<Navigate to="/b" replace />} />

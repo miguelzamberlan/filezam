@@ -37,7 +37,7 @@ Timestamps: `mtime` em milissegundos; os demais em segundos Unix.
 
 | Método | Rota | Auth | Corpo → Resposta |
 |---|---|---|---|
-| POST | `/api/auth/login` | - | `{username, password}` → `{user}`; 401 `bad_credentials`, 423 `locked`, 429 `rate_limited`/`busy` |
+| POST | `/api/auth/login` | - | `{username, password}` → `{user}`; 401 `bad_credentials` (também para conta bloqueada, desativada ou inexistente), 429 `rate_limited`/`busy` |
 | POST | `/api/auth/logout` | S | → `{ok}`; limpa o cookie |
 | GET | `/api/auth/me` | S | → `{user}` |
 | POST | `/api/auth/password` | S | `{current, new}` → `{user}`; 401 `bad_credentials`, 400 `weak_password`, 429 `rate_limited`/`busy` (mesmos limites do login). Revoga as outras sessões |
@@ -50,15 +50,15 @@ Timestamps: `mtime` em milissegundos; os demais em segundos Unix.
 | GET | `/api/files/stat?path=` | U | `{path, entry}` |
 | GET | `/api/files/info?path=` | U | Propriedades: `{path, entry, totals?: {files, dirs, bytes, partial}, shares?: Share[], favorite?: bool}`. `totals`/`shares`/`favorite` só para pastas; a contagem para em 200 000 entradas ou 15 s (`partial: true`). Shares: os do usuário, ou todos se admin |
 | GET | `/api/files/search?path=&q=&limit=` | U | Pesquisa por nome (substring, sem diferenciar maiúsculas) a partir de `path` (pasta; 409 `not_dir`), dentro do escopo: `{path, q, results: [{dir, entry}], partial, source: "index"\|"walk", indexedAt}`. Com o índice de nomes pronto (`source: index`) a resposta vem do SQLite e cada acerto é conferido no disco (fantasmas somem); senão percorre o disco (`walk`). `dir` é a pasta do item relativa ao escopo. Para em 500 resultados (`limit` ≤ 500), 200 000 entradas visitadas ou 10 s → `partial: true`. Symlinks não são seguidos; nomes `.filezam-*` nunca aparecem. 400 `bad_query` sem `q` (máx. 255 bytes); 429 `busy` acima de 2 pesquisas simultâneas por usuário |
-| GET | `/api/files/disk` | U | `{total, free, used}` em bytes do sistema de arquivos da raiz do escopo (`statfs`; zeros se desconhecido) |
+| GET | `/api/files/disk` | U | `{total, free, used}` em bytes do sistema de arquivos da raiz do escopo (`statfs`; zeros se desconhecido); com cota, também `{quota, quotaUsed}` |
 | GET | `/api/files/content?path=&inline=0\|1` | U | Conteúdo com suporte a `Range`; `inline=1` só para tipos permitidos ([03](03-seguranca.md)) |
 | PUT | `/api/files/content?path=&mtime=&overwrite=0\|1` | U | Upload pequeno (corpo bruto ≤ `chunkSize`) → 201 `{path, entry}`; 409 `exists`, 413 `too_large`, 507 `no_space` |
 | POST | `/api/files/batch?dir=&overwrite=` | U | Multipart (ver [05](05-uploads.md#lote)) → `{dir, results:[{path, ok, code?, error?, entry?}]}` |
-| GET | `/api/files/zip?path=a&path=b&name=` | U | ZIP streaming (método Store) das entradas; `name` opcional para o arquivo |
+| GET | `/api/files/zip?path=a&path=b&name=` | U | ZIP streaming (método Store) das entradas; `name` opcional para o arquivo. Máximo 2 simultâneos por usuário (429 `busy`) |
 | POST | `/api/files/mkdir` | U | `{path}` → 201 `{path, entry}`; cria pais; 409 `exists`, 400 `invalid_name` (caracteres de controle) |
 | POST | `/api/files/rename` | U | `{path, newName}` → `{path, entry}`; 409 `exists`, 400 `invalid_name` |
 | POST | `/api/files/delete` | U | `{paths: [], permanent?: bool}` → `{job}` (sync-or-job). Com a lixeira ativa e sem `permanent`, os itens vão para `<escopo>/.filezam-trash/<id>/<nome>` e ganham uma linha em `trash`; senão são apagados |
-| POST | `/api/files/copy` | U | `{sources: [], destDir, onConflict: "rename"\|"overwrite"\|"skip"}` → `{job}` |
+| POST | `/api/files/copy` | U | `{sources: [], destDir, onConflict: "rename"\|"overwrite"\|"skip"}` → `{job}`; o job falha com "disk quota exceeded" se a cópia estourar a cota |
 | POST | `/api/files/move` | U | idem → `{job}`; rename atômico, fallback copiar+apagar entre dispositivos |
 
 Validações de copy/move: `destDir` deve existir e ser pasta; cada origem deve existir; origem não pode conter o destino (400 `nested`); a raiz não pode ser origem (400 `root_op`). Até 10 000 caminhos por chamada (400 `too_many`).
@@ -69,6 +69,7 @@ Sync-or-job: o servidor aguarda até 300 ms; se o job terminou, `job.state` já 
 
 | Método | Rota | Auth | Descrição |
 |---|---|---|---|
+| GET | `/api/jobs/history?limit=` | U | Jobs persistidos do usuário (últimos 30 dias, mais recentes primeiro, `limit` ≤ 500): `{jobs: [{id, type, label, state, done, total, bytesDone, bytesTotal, error?, warnings, startedAt, finishedAt}]}`. Jobs em andamento aparecem com progresso de até 1 s atrás; os que um reinício interrompeu ficam `failed` com `error: "interrupted by server restart"` |
 | GET | `/api/jobs` | U | `{jobs: Job[]}` do usuário (últimos 50) |
 | GET | `/api/jobs/{id}` | U | `{job}`; 404 se de outro usuário |
 | DELETE | `/api/jobs/{id}` | U | Cancela → `{ok}` |
@@ -130,10 +131,11 @@ Tudo responde 404 `not_found` para token inválido/expirado/revogado; 429 por ra
 | Método | Rota | Auth | Descrição |
 |---|---|---|---|
 | GET | `/api/admin/users` | A | `{users: AdminUser[]}` |
-| POST | `/api/admin/users` | A | `{username, password, role?, scope?, mustChangePassword?}` → 201 `{user}`; 400 `invalid_username`/`invalid_role`/`invalid_scope`/`weak_password`, 409 `exists` |
-| PATCH | `/api/admin/users/{id}` | A | Qualquer de `{role, scope, disabled, password, mustChangePassword}` → `{user}`; 409 `last_admin`. Mudanças de role/scope/senha/disabled revogam sessões; estreitar `scope` apaga os links públicos do usuário que ficaram fora dele (`sharesRevoked` no evento de auditoria) |
+| POST | `/api/admin/users` | A | `{username, password, role?, scope?, mustChangePassword?, quota?}` → 201 `{user}`; 400 `invalid_username`/`invalid_role`/`invalid_scope`/`weak_password`, 409 `exists` |
+| PATCH | `/api/admin/users/{id}` | A | Qualquer de `{role, scope, disabled, password, mustChangePassword, quota}` (`quota` em bytes, 0 = sem limite; 400 `bad_quota`) → `{user}`; 409 `last_admin`. Mudanças de role/scope/senha/disabled revogam sessões; estreitar `scope` apaga os links públicos do usuário que ficaram fora dele (`sharesRevoked` no evento de auditoria) |
 | DELETE | `/api/admin/users/{id}` | A | → `{ok}`; 409 `self`/`last_admin`; remove partes de upload pendentes |
 | GET | `/api/admin/dirs?path=` | A | `{path, dirs: [string]}` só diretórios reais da **raiz base**, para o seletor de escopo |
+| GET | `/metrics` | token | Prometheus text format; exige `FILEZAM_METRICS_TOKEN` (`Authorization: Bearer`) ou sessão admin; 404 quando desativado |
 | GET | `/api/admin/index` | A | `{enabled, ready, running, entries, lastFullAt, interval}` do índice de nomes |
 | POST | `/api/admin/reindex` | A | Inicia uma varredura completa → `{started}` (`false` se já roda); 409 `unsupported` com índice desativado |
 | GET | `/api/admin/audit?before=&limit=` | A | `{entries}` mais recentes primeiro; `before` = id para paginar; `limit` ≤ 500 |
@@ -152,14 +154,14 @@ Regras de `username`: 2–64 caracteres de `A-Z a-z 0-9 . _ - @`, único sem dis
 
 | HTTP | code | Quando |
 |---|---|---|
-| 400 | `bad_json`, `invalid_path` (inclui tamanho de upload fora de `[0, 1 PiB]` e nomes `.filezam-*`), `invalid_name` (inclui caracteres de controle em nomes novos), `bad_query`, `nested`, `root_op`, `bad_index`, `bad_length`, `bad_conflict`, `bad_expiry`, `bad_id`, `bad_meta`, `bad_multipart`, `no_paths`, `too_many`, `too_many_files`, `weak_password`, `invalid_username`, `invalid_role`, `invalid_scope`, `unsupported` | Entrada inválida |
+| 400 | `bad_json`, `invalid_path` (inclui tamanho de upload fora de `[0, 1 PiB]` e nomes `.filezam-*`), `invalid_name` (inclui caracteres de controle em nomes novos), `bad_query`, `nested`, `root_op`, `bad_index`, `bad_length`, `bad_conflict`, `bad_expiry`, `bad_id`, `bad_meta`, `bad_multipart`, `no_paths`, `too_many`, `too_many_files`, `weak_password`, `invalid_username`, `invalid_role`, `invalid_scope`, `bad_quota`, `unsupported` | Entrada inválida |
 | 401 | `unauthorized`, `bad_credentials`, `share_locked` | Sem sessão / credenciais erradas / link com senha pendente |
 | 403 | `forbidden`, `csrf`, `password_change_required`, `scope_unavailable`, `fs_permission` | Sem permissão |
 | 404 | `not_found` | Caminho, job, share, usuário |
 | 409 | `exists`, `is_dir`, `not_dir`, `conflict`, `cross_device`, `upload_in_progress`, `incomplete`, `last_admin`, `self` | Conflito de estado |
 | 411 | `length_required` | Chunk sem `Content-Length` |
 | 413 | `too_large` | Corpo maior que o limite |
-| 423 | `locked` | Conta bloqueada |
+| 507 | `no_space`, `quota_exceeded` | Disco cheio / cota do usuário estourada |
 | 429 | `rate_limited`, `busy` | Limite de taxa ou concorrência (`Retry-After: 1`) |
 | 499 | `cancelled` | Cliente desistiu |
 | 503 | `db`, `root` | Health |

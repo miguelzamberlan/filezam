@@ -1,5 +1,5 @@
 import type {
-  AdminUser, AppConfig, AuditEntry, Conflict, DiskUsage, Entry, EntryInfo, Favorite, IndexStatus, Job, ListPage, Listing, PublicInfo, SearchResult, Share, TrashItem, UploadSession, User,
+  AdminUser, AppConfig, AuditEntry, Conflict, DiskUsage, Entry, EntryInfo, Favorite, IndexStatus, Job, JobRecord, ListPage, Listing, PublicInfo, SearchResult, Share, TrashItem, UploadSession, User,
 } from './types'
 
 export class ApiError extends Error {
@@ -95,6 +95,7 @@ export const Api = {
 
   // jobs
   jobs: () => api<{ jobs: Job[] }>('GET', '/api/jobs'),
+  jobHistory: (limit = 100) => api<{ jobs: JobRecord[] }>('GET', '/api/jobs/history' + q({ limit })),
   job: (id: string) => api<{ job: Job }>('GET', '/api/jobs/' + id),
   cancelJob: (id: string) => api<{ ok: true }>('DELETE', '/api/jobs/' + id),
 

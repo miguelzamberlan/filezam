@@ -36,6 +36,7 @@ web/src/
 | `/b/*` | Browser (`*` = caminho escopo-relativo, cada segmento `encodeURIComponent`) | sessão + senha em dia |
 | `/search?path=&q=` | Search (pesquisa recursiva por nome a partir de `path`; resultados levam a `/b/<pasta>?sel=<nome>`, que seleciona o item) | sessão + senha em dia |
 | `/trash` | Trash (itens excluídos: restaurar, excluir de vez, esvaziar) | idem |
+| `/jobs` | Jobs ("Operações": em andamento com progresso e cancelamento + histórico de 30 dias vindo de `/api/jobs/history`; polling de 1 s só enquanto há job rodando) | idem |
 | `/shares`, `/admin/users`, `/admin/audit` | idem | idem (admin para `/admin/*`; a API também valida) |
 | `/s/:token/*` | PublicShare | — |
 
@@ -86,6 +87,10 @@ Virtualizada com `@tanstack/react-virtual` (34 px por linha; grade com colunas c
 ## Página Search (`pages/Search.tsx`)
 
 Estado na URL (`?path=&q=`), consulta `['search', path, q]` (staleTime 30 s). Mostra de onde veio a resposta (`source`: índice com data da última varredura, ou disco) e, para admin, o botão "Reconstruir índice" (`POST /api/admin/reindex`). Filtra localmente itens ocultos (nome ou pasta iniciados por ponto) conforme `prefs.showHidden`. Aviso quando `partial`. O botão de lupa na barra do Browser abre a pesquisa já a partir da pasta atual.
+
+## DiskBar e cota
+
+`DiskBar` mostra a cota do usuário (`quota`/`quotaUsed` de `/api/files/disk`) quando existe, senão o disco do escopo. No formulário de usuário o admin informa a cota em GB (convertida para bytes; vazio = sem limite). `quota_exceeded` (507) é traduzido como os demais códigos.
 
 ## Página Trash (`pages/Trash.tsx`) e PublicShare
 

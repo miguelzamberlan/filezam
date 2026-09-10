@@ -21,8 +21,9 @@ Um único processo: servidor HTTP, workers de jobs e tarefas de manutenção. Se
 | `internal/vfs` | **Núcleo de segurança**: normalização de caminhos, `Root`, listagem, pesquisa (`Find`), cópia, movimento, remoção, zip, arquivos `.part` | `os.Root`, `x/sys/unix` |
 | `internal/uploads` | Sessões chunked: bitset, escrita por offset, finalização, limpeza | store, vfs |
 | `internal/index` | Índice de nomes em SQLite: varredura completa periódica (`WalkEntries`) e ajustes pontuais chamados pelos handlers | store, vfs |
+| `internal/metrics` | Contadores em memória e renderização no formato Prometheus (sem dependências) | — |
 | `internal/jobs` | Registro em memória de jobs com progresso e cancelamento | — |
-| `internal/auth` | Argon2id, tokens, hash de tokens, rate limiters e semáforos | `x/crypto` |
+| `internal/auth` | Argon2id, tokens, hash de tokens, rate limiters, semáforos e bloqueio por (usuário, IP) | `x/crypto` |
 | `internal/store` | Acesso ao SQLite, migrações embutidas, repositórios por tabela | `modernc.org/sqlite` |
 | `internal/server/webdist` | `//go:embed all:dist` com o build do Vite | — |
 
@@ -95,5 +96,9 @@ Dockerfile docker-compose.yml .env.example Makefile README.md CLAUDE.md
 | Senha de link público | 5 tentativas/min por link + `loginSem` | `shareUnlock` |
 | Listagem paginada | até 5000 por página (`listPageMax`); a UI pede 2000 | `handleList` |
 | Lixeira | restaurar/apagar até 1000 ids por requisição | `readIDs` |
+| Zips autenticados simultâneos por usuário | 2 | `zipSem` |
+| Jobs em andamento por usuário | 4 | `startJob` |
+| Cota de disco por usuário | `users.quota` (0 = sem limite); uso em cache 30 s | `checkQuota` |
+| Bloqueio de login | 10 falhas por (usuário, IP) → 15 min dobrando até 24 h | `auth.Lockout` |
 
 Sem limite (aceito, ver [10](10-roadmap.md)): zips/downloads autenticados simultâneos, jobs por usuário, cota de disco.
