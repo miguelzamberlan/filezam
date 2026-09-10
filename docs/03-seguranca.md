@@ -73,6 +73,7 @@ Na SPA: `Content-Security-Policy: default-src 'self'; script-src 'self'; style-s
 - Tudo que é texto (inclusive `.html`, `.js`, `.svg` fora do modo imagem, JSON, XML) é servido como `text/plain; charset=utf-8` quando inline. `.xhtml`, `.mht`, `.wasm` e afins caem em `application/octet-stream` + `attachment`.
 - Respostas inline levam `Content-Security-Policy: sandbox; default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'self'`.
 - Qualquer outro tipo é `application/octet-stream` + `attachment`.
+- **Markdown formatado** é renderizado pela SPA, não pelo servidor (que continua mandando `text/plain`): `react-markdown` gera elementos React, sem `dangerouslySetInnerHTML`; HTML bruto do arquivo é descartado (`skipHtml`), `defaultUrlTransform` zera protocolos fora de `http(s)`/`mailto`/etc. (`javascript:`, `data:`), e imagens externas continuam bloqueadas pelo `img-src 'self'` da CSP da SPA (evita rastreamento por pixel). Relativos só alcançam a pasta do arquivo e passam pelas mesmas rotas de conteúdo (`vfs`, escopo, share).
 - `Content-Disposition` usa `mime.FormatMediaType` (RFC 2231 para nomes não-ASCII ou com caracteres especiais; o `net/http` ainda substitui CR/LF em cabeçalhos).
 
 ## Links públicos

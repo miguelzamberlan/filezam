@@ -35,6 +35,30 @@ export function decodePath(p: string): string {
     .join('/')
 }
 
+/**
+ * Resolve an href found in a document (e.g. `./img/a%20b.png`, `../x.md#top`) against `dir`.
+ * Returns a slash-joined path, or null for empty, absolute (`/…`) or hrefs that climb above `dir`.
+ */
+export function resolveRelative(dir: string, href: string): string | null {
+  let bare = href.split(/[?#]/)[0]
+  try {
+    bare = decodeURIComponent(bare) // antes do split: %2F e %2E%2E contam como separador e ".."
+  } catch {
+    /* mantém como veio */
+  }
+  if (bare === '' || bare.startsWith('/')) return null
+  const out = segments(dir)
+  const floor = out.length
+  for (const s of bare.split('/')) {
+    if (s === '' || s === '.') continue
+    if (s === '..') {
+      if (out.length === floor) return null
+      out.pop()
+    } else out.push(s)
+  }
+  return out.length > floor ? out.join('/') : null
+}
+
 export function isWithin(parent: string, child: string): boolean {
   return parent === '' || child === parent || child.startsWith(parent + '/')
 }

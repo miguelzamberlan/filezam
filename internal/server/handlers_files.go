@@ -212,7 +212,7 @@ var inlineTypes = map[string]bool{
 }
 
 var textExt = map[string]bool{
-	".txt": true, ".md": true, ".log": true, ".json": true, ".xml": true, ".yml": true, ".yaml": true,
+	".txt": true, ".md": true, ".markdown": true, ".log": true, ".json": true, ".xml": true, ".yml": true, ".yaml": true,
 	".csv": true, ".ini": true, ".conf": true, ".cfg": true, ".toml": true, ".sh": true, ".py": true, ".go": true,
 	".js": true, ".ts": true, ".tsx": true, ".jsx": true, ".css": true, ".html": true, ".htm": true, ".sql": true,
 	".env": true, ".gitignore": true, ".java": true, ".c": true, ".h": true, ".cpp": true, ".rs": true, ".rb": true,

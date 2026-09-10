@@ -54,6 +54,8 @@ export const en: Strings = {
   removeFavorite: 'Remove from favorites',
   open: 'Open',
   preview: 'Preview',
+  previewFormatted: 'Formatted',
+  previewPlain: 'Plain text',
   selectAll: 'Select all',
   selected: (n: number) => (n === 1 ? '1 item selected' : `${n} items selected`),
   items: (n: number) => (n === 1 ? '1 item' : `${n} items`),

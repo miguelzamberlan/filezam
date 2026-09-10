@@ -70,18 +70,19 @@ export default function UploadPanel() {
         </div>
       </div>
       {open && (
-        <div ref={parentRef} className="max-h-56 overflow-auto border-t border-neutral-200 dark:border-neutral-800">
+        <div ref={parentRef} className="max-h-56 overflow-y-auto overflow-x-hidden border-t border-neutral-200 dark:border-neutral-800">
           <div style={{ height: rowVirtualizer.getTotalSize(), position: 'relative' }}>
             {rowVirtualizer.getVirtualItems().map((v) => {
               const it = items[v.index]
               return (
                 <div key={it.id} className="absolute left-0 flex w-full items-center gap-2 px-3" style={{ top: v.start, height: v.size }}>
                   <span className="min-w-0 flex-1 truncate" title={it.relPath}>{it.relPath}</span>
-                  {it.state === 'failed' && <span className="truncate text-xs text-red-600">{errorMessage(it.errorCode, it.error)}</span>}
-                  <span className="w-16 text-right text-xs text-neutral-500">{formatBytes(it.size, 0)}</span>
-                  <span className="w-10 text-right">{stateLabel(it)}</span>
+                  {/* status com largura mínima, não fixa: "Cancelado"/"Cancelled" não cabem em w-10 e vazavam, criando rolagem horizontal; o nome encolhe no lugar */}
+                  {it.state === 'failed' && <span className="min-w-0 max-w-[45%] truncate text-xs text-red-600" title={errorMessage(it.errorCode, it.error)}>{errorMessage(it.errorCode, it.error)}</span>}
+                  <span className="w-16 shrink-0 text-right text-xs text-neutral-500">{formatBytes(it.size, 0)}</span>
+                  <span className="min-w-10 shrink-0 whitespace-nowrap text-right">{stateLabel(it)}</span>
                   {(it.state === 'queued' || it.state === 'uploading' || it.state === 'conflict') && (
-                    <button className="btn-ghost !p-0.5" onClick={() => uploadManager.cancel(it.id)}><IClose size={12} /></button>
+                    <button className="btn-ghost shrink-0 !p-0.5" onClick={() => uploadManager.cancel(it.id)}><IClose size={12} /></button>
                   )}
                 </div>
               )

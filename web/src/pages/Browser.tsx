@@ -566,7 +566,7 @@ export default function Browser() {
 
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu.entry)} onClose={() => setMenu(null)} />}
       {preview !== null && entries[preview] && (
-        <Preview entries={entries} index={preview} urlFor={(e, inline) => Api.contentUrl(join(path, e.name), inline)} maxText={cfg?.previewMaxText ?? 1 << 20} onClose={() => setPreview(null)} onIndex={setPreview} />
+        <Preview entries={entries} index={preview} urlFor={(e, inline) => Api.contentUrl(join(path, e.name), inline)} maxText={cfg?.previewMaxText ?? 1 << 20} assetUrl={(p) => Api.contentUrl(join(path, p), true)} onClose={() => setPreview(null)} onIndex={setPreview} />
       )}
       {info !== null && <InfoDialog path={info} onClose={() => setInfo(null)} />}
       {share !== null && <ShareDialog path={share} name={shareName} kind={share !== path && byName.get(basename(share))?.type === 'file' ? 'file' : 'dir'} maxTtl={cfg?.shareMaxTtl ?? 30 * 86400} onClose={() => setShare(null)} onCreated={() => qc.invalidateQueries({ queryKey: ['shares'] })} />}

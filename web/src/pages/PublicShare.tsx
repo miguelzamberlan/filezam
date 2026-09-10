@@ -174,7 +174,7 @@ export default function PublicShare() {
         />
       )}
       {preview !== null && entries[preview] && (
-        <Preview entries={entries} index={preview} urlFor={urlFor} maxText={1 << 20} onClose={() => setPreview(null)} onIndex={setPreview} />
+        <Preview entries={entries} index={preview} urlFor={urlFor} maxText={1 << 20} assetUrl={(p) => Api.publicContentUrl(token, join(path, p), true)} onClose={() => setPreview(null)} onIndex={setPreview} />
       )}
       {one.length === 0 && null}
     </div>

@@ -91,3 +91,31 @@ button, [role="button"] {
   @apply flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-neutral-100 dark:hover:bg-neutral-800
     disabled:opacity-40 disabled:hover:bg-transparent;
 }
+/* Markdown formatado no preview (components/Markdown.tsx); sem @tailwindcss/typography para não crescer o CSS */
+@utility markdown {
+  @apply text-[0.95rem] leading-relaxed break-words;
+  & > * + * { @apply mt-4; }
+  & h1, & h2, & h3, & h4, & h5, & h6 { @apply font-semibold leading-snug mt-7 first:mt-0; }
+  & h1 { @apply text-2xl border-b border-neutral-200 dark:border-neutral-800 pb-2; }
+  & h2 { @apply text-xl border-b border-neutral-200 dark:border-neutral-800 pb-1.5; }
+  & h3 { @apply text-lg; }
+  & h4, & h5, & h6 { @apply text-base; }
+  & a { @apply text-accent underline underline-offset-2; }
+  & ul { @apply list-disc pl-6; }
+  & ol { @apply list-decimal pl-6; }
+  & li + li, & li > ul, & li > ol { @apply mt-1; }
+  /* listas de tarefas (classes do remark-gfm): sem marcador; sub-listas alinham com o texto depois da caixa */
+  & ul.contains-task-list { @apply list-none pl-1; }
+  & .task-list-item > ul, & .task-list-item > ol { @apply pl-11; }
+  & .task-list-item > ul.contains-task-list { @apply pl-6; }
+  & input[type="checkbox"] { @apply mr-1.5 align-middle; }
+  & blockquote { @apply border-l-4 border-neutral-300 dark:border-neutral-700 pl-4 text-neutral-600 dark:text-neutral-400; }
+  & code { @apply rounded bg-neutral-100 dark:bg-neutral-800 px-1 py-0.5 font-mono text-[0.85em]; }
+  & pre { @apply overflow-x-auto rounded-md bg-neutral-100 dark:bg-neutral-800 p-3 text-xs leading-normal; }
+  & pre code { @apply bg-transparent p-0 text-[inherit]; }
+  & hr { @apply border-neutral-200 dark:border-neutral-800; }
+  & img { @apply inline max-w-full; }
+  & table { @apply border-collapse text-sm; }
+  & th, & td { @apply border border-neutral-300 dark:border-neutral-700 px-3 py-1.5 text-left; }
+  & th { @apply bg-neutral-100 dark:bg-neutral-800 font-semibold; }
+}

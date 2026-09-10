@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import type { Entry } from '../api/types'
 import { extOf, formatBytes, formatDate } from '../lib/format'
 import { S } from '../strings'
@@ -7,7 +7,11 @@ import { IChevronLeft, IChevronRight, IClose, IDownload, ISpinner } from './Icon
 const IMG = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'bmp', 'svg', 'ico'])
 const VID = new Set(['mp4', 'webm', 'ogv', 'mov', 'm4v'])
 const AUD = new Set(['mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac', 'opus'])
-const TXT = new Set(['txt', 'md', 'log', 'json', 'xml', 'yml', 'yaml', 'csv', 'ini', 'conf', 'cfg', 'toml', 'sh', 'py', 'go', 'js', 'ts', 'tsx', 'jsx', 'css', 'html', 'htm', 'sql', 'env', 'java', 'c', 'h', 'cpp', 'rs', 'rb', 'php', 'bat', 'ps1', 'srt', 'vtt'])
+const TXT = new Set(['txt', 'md', 'markdown', 'log', 'json', 'xml', 'yml', 'yaml', 'csv', 'ini', 'conf', 'cfg', 'toml', 'sh', 'py', 'go', 'js', 'ts', 'tsx', 'jsx', 'css', 'html', 'htm', 'sql', 'env', 'java', 'c', 'h', 'cpp', 'rs', 'rb', 'php', 'bat', 'ps1', 'srt', 'vtt'])
+
+// react-markdown + remark-gfm só são baixados quando um .md é aberto
+const Markdown = lazy(() => import('./Markdown'))
+const MD = new Set(['md', 'markdown'])
 
 export type PreviewKind = 'image' | 'video' | 'audio' | 'pdf' | 'text' | null
 
@@ -27,13 +31,17 @@ export interface PreviewProps {
   index: number
   urlFor: (e: Entry, inline: boolean) => string
   maxText: number
+  /** URL inline de um caminho relativo à pasta (imagens/links relativos do Markdown); omitido quando irmãos não são alcançáveis. */
+  assetUrl?: (relPath: string) => string
   onClose: () => void
   onIndex: (i: number) => void
 }
 
-export default function Preview({ entries, index, urlFor, maxText, onClose, onIndex }: PreviewProps) {
+export default function Preview({ entries, index, urlFor, maxText, assetUrl, onClose, onIndex }: PreviewProps) {
   const e = entries[index]
   const kind = previewKind(e)
+  const isMd = kind === 'text' && MD.has(extOf(e.name))
+  const [formatted, setFormatted] = useState(true)
   const [text, setText] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const previewable = entries.map((x, i) => (previewKind(x) ? i : -1)).filter((i) => i >= 0)
@@ -75,6 +83,11 @@ export default function Preview({ entries, index, urlFor, maxText, onClose, onIn
     <div className="fixed inset-0 z-[90] flex flex-col bg-black/85 text-white" onClick={onClose}>
       <div className="flex items-center gap-2 px-4 py-2" onClick={(ev) => ev.stopPropagation()}>
         <div className="min-w-0 flex-1 truncate text-sm font-medium">{e.name}</div>
+        {isMd && (
+          <button className="btn-ghost !text-white hover:!bg-white/20" onClick={() => setFormatted(!formatted)}>
+            {formatted ? S.previewPlain : S.previewFormatted}
+          </button>
+        )}
         <div className="text-xs text-neutral-300">{formatBytes(e.size)} · {formatDate(e.mtime)}</div>
         <a href={urlFor(e, false)} className="btn-ghost !text-white hover:!bg-white/20" download><IDownload size={16} /> {S.download}</a>
         <button className="btn-ghost !text-white hover:!bg-white/20" onClick={onClose}><IClose /></button>
@@ -91,7 +104,17 @@ export default function Preview({ entries, index, urlFor, maxText, onClose, onIn
         {kind === 'audio' && <audio src={src} controls autoPlay className="w-full max-w-lg" onClick={(ev) => ev.stopPropagation()} />}
         {/* Sem atributo sandbox: o Chrome recusa o visualizador de PDF em frames com sandbox (mesmo com allow-scripts); a resposta já vem com CSP `sandbox` do servidor, que isola o documento. */}
         {kind === 'pdf' && <iframe src={src} title={e.name} className="h-full w-full max-w-5xl rounded bg-white" onClick={(ev) => ev.stopPropagation()} />}
-        {kind === 'text' && (
+        {kind === 'text' && isMd && formatted && (
+          <div className="h-full w-full max-w-4xl overflow-auto rounded bg-white px-6 py-5 text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100 sm:px-10" onClick={(ev) => ev.stopPropagation()}>
+            {loading || text === null ? <ISpinner /> : (
+              <Suspense fallback={<ISpinner />}>
+                <Markdown text={text} assetUrl={assetUrl} />
+              </Suspense>
+            )}
+            {truncated && <div className="mt-4 text-xs text-amber-600 dark:text-amber-300">… ({formatBytes(maxText)} de {formatBytes(e.size)})</div>}
+          </div>
+        )}
+        {kind === 'text' && !(isMd && formatted) && (
           <div className="h-full w-full max-w-5xl overflow-auto rounded bg-neutral-900 p-4" onClick={(ev) => ev.stopPropagation()}>
             {loading ? <ISpinner /> : <pre className="whitespace-pre-wrap break-words font-mono text-xs text-neutral-100">{text}</pre>}
             {truncated && <div className="mt-2 text-xs text-amber-300">… ({formatBytes(maxText)} de {formatBytes(e.size)})</div>}

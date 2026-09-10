@@ -35,6 +35,8 @@ Os testes de integração criam raiz e banco temporários; nada toca o sistema r
 9. Usuário com escopo não vê o pai; admin muda o escopo → sessão cai.
 10. Atrás do proxy real: cookie `Secure`, IP real na auditoria, upload de 200 MB completa.
 11. Preview de PDF abre dentro da interface (Chrome e Firefox).
+11a. `.md` com tabela, lista de tarefas, imagem relativa (`img/x.png`), `<script>`/`<img onerror>` e `[x](javascript:alert(1))`: abre formatado, imagem aparece, nenhum alerta, o HTML some e o link perigoso vira texto; "Texto" mostra o fonte. Também pelo link público de pasta.
+11c. Painel de upload: cancelar itens e cancelar tudo não cria barra de rolagem horizontal na lista (status "Cancelado" é mais largo que a porcentagem).
 11b. No celular (ou DevTools em modo touch, 390 px): toque abre, toque longo abre o menu e seleciona, "⋯" mostra as ações, tabelas cabem na largura; tema claro/escuro e cores em Configurações refletem na hora.
 12. `go run golang.org/x/vuln/cmd/govulncheck@latest ./...` sem vulnerabilidades alcançáveis e `cd web && npm audit --omit=dev` limpo; se o Go tiver correção nova, subir `go.mod` e `Dockerfile`.
 13. Com `FILEZAM_METRICS_TOKEN`: `curl -H 'Authorization: Bearer …' /metrics` responde e o Prometheus consegue coletar; sem token → 404.

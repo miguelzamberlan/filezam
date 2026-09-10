@@ -22,7 +22,7 @@ web/src/
   upload/walk.ts      travessia de DataTransfer/FileList
   upload/xhr.ts       XMLHttpRequest com progresso → Promise
   components/         Shell, FileList, Breadcrumb, Toolbar (dentro de Browser), ContextMenu,
-                      Preview, ShareDialog, InfoDialog (propriedades), SettingsDialog, DiskBar,
+                      Preview, Markdown (lazy), ShareDialog, InfoDialog (propriedades), SettingsDialog, DiskBar,
                       UploadPanel, JobToasts, dialogs (prompt/confirm/conflict/toast), Icons
   pages/              Login, ChangePassword, Browser, Shares, AdminUsers, AdminAudit, PublicShare
 ```
@@ -112,11 +112,13 @@ API imperativa baseada em Promises: `dialogs.prompt({title, initial, selectExt})
 
 `previewKind(entry)` por extensão: imagem (`<img>`), vídeo/áudio (`<video>/<audio>` com `preload=metadata`, seeking via Range), PDF (`<iframe>` **sem** atributo `sandbox`: o Chrome bloqueia o visualizador de PDF em frames com sandbox; o isolamento vem da CSP `sandbox` que o servidor envia com o arquivo, ver [03](03-seguranca.md#cabeçalhos-http)), texto (fetch com `Range: bytes=0-<previewMaxText>` em `<pre>`). Setas navegam entre os previewáveis da pasta.
 
+`.md`/`.markdown` abrem **formatados** por padrão; o botão "Texto"/"Formatado" no cabeçalho alterna para o `<pre>` (a escolha vale enquanto o preview está aberto). `components/Markdown.tsx` usa `react-markdown` + `remark-gfm` (tabelas, listas de tarefas, riscado, autolinks) e é importado com `React.lazy`, então o chunk (~48 KB gzip) só é baixado quando um Markdown é aberto. Estilos no `@utility markdown` de `index.css` (sem `@tailwindcss/typography`). Links `http(s)`/`mailto` abrem em nova aba com `noopener noreferrer`; caminhos relativos (imagens e links) são resolvidos contra a pasta do arquivo por `resolveRelative` (`lib/paths.ts`) e viram URLs de conteúdo inline via a prop `assetUrl` — `null` para absolutos (`/…`) ou que sobem acima da pasta, e a prop fica ausente no link público de arquivo, onde irmãos não são alcançáveis; âncoras viram texto. Segurança em [03](03-seguranca.md#conteúdo-enviado-por-usuários).
+
 ## UploadManager
 
 Ver [05](05-uploads.md) para o protocolo. Estados de item: `queued → uploading → done | failed | cancelled | skipped | conflict`. Métodos públicos: `configure(cfg)`, `add(files, destDir)`, `pause/resume`, `cancel(id)`, `cancelAll`, `retryFailed`, `clearDone`, `loadPending/discardPending`, `resetConflictDefault`. Callbacks injetados pelo `Shell`: `onConflict`, `onDirChanged`, `onError`.
 
-`nextWork()` prioriza blocos de arquivos chunked já em andamento, depois o primeiro item da fila (lote agrupado, único ou nova sessão). O painel mostra progresso total, velocidade, ETA, contadores, pausa, cancelar tudo, repetir falhos.
+`nextWork()` prioriza blocos de arquivos chunked já em andamento, depois o primeiro item da fila (lote agrupado, único ou nova sessão). O painel mostra progresso total, velocidade, ETA, contadores, pausa, cancelar tudo, repetir falhos. Na lista, tamanho e status têm largura mínima e não encolhem; quem cede espaço é o nome (truncado), e a lista só rola na vertical — rótulos longos como "Cancelado" não criam rolagem horizontal.
 
 A velocidade é amostrada em janelas de 1s e suavizada por EMA (`0.75 * anterior + 0.25 * instantânea`); `formatSpeed` a imprime sempre com duas casas decimais, deixando só a unidade mudar (B/s, KB/s, MB/s…), e o painel usa `tabular-nums` para o número não mudar de largura a cada atualização.
 

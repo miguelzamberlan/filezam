@@ -52,6 +52,8 @@ export const ptBR = {
   removeFavorite: 'Remover dos favoritos',
   open: 'Abrir',
   preview: 'Visualizar',
+  previewFormatted: 'Formatado',
+  previewPlain: 'Texto',
   selectAll: 'Selecionar tudo',
   selected: (n: number) => (n === 1 ? '1 item selecionado' : `${n} itens selecionados`),
   items: (n: number) => (n === 1 ? '1 item' : `${n} itens`),

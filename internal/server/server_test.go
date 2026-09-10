@@ -243,6 +243,16 @@ func TestEndToEnd(t *testing.T) {
 			t.Fatalf("html inline type: %s", ct)
 		}
 	}
+	// markdown (the SPA renders it; the server only ever sends text/plain)
+	bob.expect("PUT", "/api/files/content?path=docs/readme.markdown", []byte("# t\n<script>alert(1)</script>"), 201)
+	{
+		resp, _ := bob.do("GET", "/api/files/content?path=docs/readme.markdown&inline=1", nil, nil)
+		io.ReadAll(resp.Body)
+		if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "text/plain") || resp.Header.Get("Content-Security-Policy") == "" {
+			t.Fatalf("markdown inline headers: %v", resp.Header)
+		}
+		os.Remove(filepath.Join(root, "teamA", "docs", "readme.markdown")) // não altera as contagens de docs/ mais abaixo
+	}
 
 	// batch upload
 	{
