@@ -35,6 +35,7 @@ var (
 	errForbidden    = errorf(http.StatusForbidden, "forbidden", "not allowed")
 	errCSRF         = errorf(http.StatusForbidden, "csrf", "cross-site request rejected")
 	errBadJSON      = errorf(http.StatusBadRequest, "bad_json", "invalid JSON body")
+	errShareLocked  = errorf(http.StatusUnauthorized, "share_locked", "this link requires a password")
 )
 
 // toAPIError maps domain errors to API errors.

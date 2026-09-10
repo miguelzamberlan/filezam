@@ -665,7 +665,8 @@ func parentDirs(paths []string, extra ...string) []string {
 func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) error {
 	u := userFrom(r)
 	var in struct {
-		Paths []string `json:"paths"`
+		Paths     []string `json:"paths"`
+		Permanent bool     `json:"permanent"` // ignora a lixeira
 	}
 	if err := readJSON(r, &in); err != nil {
 		return err
@@ -679,13 +680,15 @@ func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	for _, p := range paths {
-		if _, err := root.Stat(p); err != nil {
+	stats := make([]*vfs.Entry, len(paths))
+	for i, p := range paths {
+		if stats[i], err = root.Stat(p); err != nil {
 			root.Close()
 			return err
 		}
 	}
 	root.Close()
+	useTrash := s.cfg.TrashRetention > 0 && !in.Permanent
 	j := s.jobs.Start(u.ID, "delete", parentDirs(paths), func(ctx context.Context, j *jobs.Job) error {
 		root, err := s.scopeRoot(u)
 		if err != nil {
@@ -693,9 +696,13 @@ func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) error {
 		}
 		defer root.Close()
 		j.SetTotals(len(paths), 0)
-		for _, p := range paths {
+		for i, p := range paths {
 			j.SetCurrent(p)
-			if err := root.RemoveTree(ctx, p, nil); err != nil {
+			if useTrash {
+				if err := s.trashOne(ctx, root, u, p, stats[i]); err != nil {
+					return err
+				}
+			} else if err := root.RemoveTree(ctx, p, nil); err != nil {
 				return err
 			}
 			_ = s.db.DeleteFavoriteByPath(context.Background(), u.ID, vfs.Join(u.Scope, p))

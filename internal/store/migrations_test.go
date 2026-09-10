@@ -36,7 +36,7 @@ func TestUpgradeFrom001(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(shares) != 1 || shares[0].TokenHash != "h1" || shares[0].Token != "" {
+	if len(shares) != 1 || shares[0].TokenHash != "h1" || shares[0].Token != "" || shares[0].Kind != "dir" || shares[0].PasswordHash != "" {
 		t.Fatalf("shares after upgrade: %+v", shares)
 	}
 }

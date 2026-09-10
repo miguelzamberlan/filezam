@@ -42,7 +42,7 @@ web/src/
 
 ## Estado
 
-- **Servidor** (TanStack Query): `['me']`, `['config']` (staleTime ∞), `['list', path]` (staleTime 10 s), `['favorites']`, `['shares']`, `['admin-users']`, `['admin-dirs', path]`, `['job', id]` (refetch 500 ms enquanto `running`), `['public', token, ...]`. Mutações invalidam as chaves afetadas; `useInvalidateDirs(dirs)` é o ponto único para listagens.
+- **Servidor** (TanStack Query): `['me']`, `['config']` (staleTime ∞), `['list', path, sortKey, sortDir, showHidden]` (`useInfiniteQuery`, páginas de `LIST_PAGE` = 2000 entradas via `GET /api/files?limit=&offset=&sort=&dir=&hidden=`; `useInvalidateDirs` invalida pelo prefixo `['list', path]`), `['favorites']`, `['shares']`, `['admin-users']`, `['admin-dirs', path]`, `['job', id]` (refetch 500 ms enquanto `running`), `['public', token, ...]`. Mutações invalidam as chaves afetadas; `useInvalidateDirs(dirs)` é o ponto único para listagens.
 - **UI** (zustand `useUI`): `selection: Set<string>` de nomes na pasta atual, `anchor`/`focused` para Shift/teclado, `clipboard {op: copy|cut, dir, names}`, `sort`, `view`, `filter` e `prefs` (persistidos em `localStorage`: `sort`, `view`, `prefs`).
 - **Preferências** (`prefs`, editadas em `SettingsDialog` pela engrenagem do rodapé): `showHidden` (arquivos iniciados por ponto; o servidor sempre os lista, o filtro é no cliente e o rodapé mostra "N ocultos"), `showHints` (dicas de atalhos), `confirmDelete`, `zoom` (fator da listagem, passos em `ZOOM_STEPS`; botões −/%/+ na barra do Browser e seleção em Configurações). `theme` (`system`/`light`/`dark`: `lib/theme.ts` põe a classe `.dark` no `<html>` e `color-scheme`; o Tailwind usa `@custom-variant dark (&:where(.dark, .dark *))`, nunca a media query direto) e `accent`/`selection`/`focus` (hex; viram as variáveis `--accent`/`--selection`/`--focus` no `<html>`, expostas como `bg-accent`, `text-accent`, `ring-focus` etc. via `@theme inline`; `row-selected`, `nav-active` e `btn-primary` derivam tons com `color-mix`, então uma cor serve para os dois temas). `uploadPanelOpen` e `sidebarOpen` (não persistidos) controlam a lista do painel de envios e o menu lateral em telas estreitas; o item **Uploads** do menu lateral expande o painel ou, sem envios, explica como enviar. Novas preferências: adicionar em `Prefs`/`defaultPrefs` em `store/ui.ts`, uma linha no `SettingsDialog` e o texto em `strings.ts`.
 - **Uploads**: fora do React; `useUploads()` lê o snapshot via `useSyncExternalStore`.
@@ -55,9 +55,15 @@ Concentra as ações. Convenções:
 - Abrir: pasta navega; arquivo com preview abre o modal; senão baixa por `<a download>` invisível.
 - Colar: se algum nome já existe no destino, pergunta uma vez (`dialogs.conflict`) e envia a política à API; `cut` limpa o clipboard após o job.
 - Soltar arquivos: no fundo → pasta atual; sobre uma linha de pasta → dentro dela (destaque azul). Tipos sem `Files` são ignorados.
+- Arrastar e soltar interno: linhas são `draggable`; o `dataTransfer` leva `application/x-filezam` (JSON com os nomes; a seleção inteira se o item arrastado estiver nela). Pastas da listagem e os ancestrais da trilha aceitam o drop e chamam `moveInto(dest, names)`, que lista o destino, pergunta uma vez em caso de conflito (`dialogs.conflict`) e dispara `Api.move`. Soltar sobre um item da própria seleção ou dentro dele mesmo é recusado. No toque não há arraste: use recortar/colar.
+- Listagem paginada: o servidor filtra ocultos e ordena; a página seguinte é pedida quando a rolagem virtual chega a 20 linhas do fim (`onEndReached`). Enquanto faltam páginas a ordem do servidor é mantida (sem `sortEntries` no cliente) e o rodapé mostra "N de total carregados"; o filtro da pasta só peneira o que já foi carregado.
 - Erros da API viram toast com `errorMessage(code)`.
 
 Atalhos: `↑ ↓ Home End PgUp PgDn` (com Shift estende), `→ ←` na grade, `Enter`, `Backspace`/`Alt+↑`, `Esc`, `F2`, `Delete`, `Espaço` alterna, `Ctrl+A/C/X/V`, `Ctrl+Shift+N`, digitação salta para o prefixo (buffer de 700 ms). O handler ignora eventos vindos de inputs e quando há menu/preview/diálogo aberto.
+
+## Idiomas (`strings.ts`, `i18n/`)
+
+`i18n/pt-BR.ts` é a referência; `i18n/en.ts` é tipado como `Strings = typeof ptBR`, então uma chave faltando quebra o `tsc`. `S` é um objeto mutável: `applyLocale()` (chamado em `main.tsx` antes do primeiro render, com `resolveLocale(prefs.lang)`: `auto` segue `navigator.language`, `pt*` → pt-BR, senão en) copia o idioma para dentro dele e ajusta `<html lang>`. Componentes leem `S.chave` no render; constantes de módulo (ex.: `OPTIONS` do `ShareDialog`) só mudam com recarga, por isso trocar o idioma em Configurações recarrega a página. Datas relativas usam `S.relAgo`/`S.relIn`; `formatDate` usa o locale do navegador. Para adicionar um idioma: novo arquivo em `i18n/`, entrada em `LOCALES`/`LOCALE_NAMES` e no tipo `Locale`.
 
 ## Celular e toque
 

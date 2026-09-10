@@ -244,6 +244,12 @@ func (s *Server) handleAdminUserDelete(w http.ResponseWriter, r *http.Request) e
 			return errorf(http.StatusConflict, "last_admin", "cannot delete the last admin")
 		}
 	}
+	// a lixeira do usuário some com ele (as linhas cascateiam; os arquivos não)
+	if items, err := s.db.ListTrash(ctx, id); err == nil {
+		for _, it := range items {
+			_ = s.base.RemoveTrashItem(ctx, it.TrashDir, it.ID)
+		}
+	}
 	// abort pending uploads so part files are removed
 	if ups, err := s.db.ListUploads(ctx, id); err == nil {
 		for _, up := range ups {

@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -115,6 +116,9 @@ func (r *Root) walk(ctx context.Context, p string, fn func(path string, fi fs.Fi
 		if err := ctx.Err(); err != nil {
 			return err
 		}
+		if strings.HasPrefix(de.Name(), ReservedPrefix) {
+			continue // partes de upload e lixeira nunca são contadas, copiadas ou zipadas
+		}
 		child := Join(p, de.Name())
 		cfi, err := de.Info()
 		if err != nil {
@@ -210,6 +214,9 @@ func (r *Root) copyDir(ctx context.Context, src, dst string, fi fs.FileInfo, pol
 		return MapError(err)
 	}
 	for _, de := range des {
+		if strings.HasPrefix(de.Name(), ReservedPrefix) {
+			continue
+		}
 		cfi, err := de.Info()
 		if err != nil {
 			continue

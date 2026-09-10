@@ -3,6 +3,7 @@ package server
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -388,7 +389,7 @@ func TestEndToEnd(t *testing.T) {
 	bob.expect("DELETE", fmt.Sprintf("/api/favorites/%d", fid), nil, 200)
 
 	// shares
-	bob.expect("POST", "/api/shares", map[string]any{"path": "docs/hi.txt", "expiresIn": 60}, 409)
+	bob.expect("POST", "/api/shares", map[string]any{"path": "docs/nope.txt", "expiresIn": 60}, 404)
 	bob.expect("POST", "/api/shares", map[string]any{"path": "pub", "expiresIn": 0}, 400)
 	o = bob.expect("POST", "/api/shares", map[string]any{"path": "pub", "expiresIn": 120}, 201)
 	token := o["token"].(string)
@@ -724,5 +725,183 @@ func TestListPaging(t *testing.T) {
 	o = admin.expect("GET", "/api/files?path=teamA/many&limit=10&offset=999", nil, 200)
 	if len(o["entries"].([]any)) != 0 {
 		t.Fatalf("offset past end: %v", o)
+	}
+}
+
+func TestFileShareAndPassword(t *testing.T) {
+	admin, _, root := newEnv(t)
+	admin.login("admin", "admin")
+	admin.expect("POST", "/api/auth/password", map[string]string{"current": "admin", "new": "correct horse battery"}, 200)
+	os.WriteFile(filepath.Join(root, "teamA", "pub", "other.txt"), []byte("other"), 0o644)
+	pubJar, _ := cookiejar.New(nil)
+	pub := &client{t: t, srv: admin.srv, c: &http.Client{Jar: pubJar}}
+
+	// share de arquivo único
+	o := admin.expect("POST", "/api/shares", map[string]any{"path": "teamA/pub/doc.txt", "expiresIn": 600}, 201)
+	tok := o["token"].(string)
+	if sv := o["share"].(map[string]any); sv["kind"] != "file" || sv["hasPassword"] != false {
+		t.Fatalf("share view: %v", sv)
+	}
+	o = pub.expect("GET", "/api/public/"+tok, nil, 200)
+	if o["kind"] != "file" || o["locked"] != false || o["size"].(float64) != 10 || o["fileName"] != "doc.txt" {
+		t.Fatalf("file info: %v", o)
+	}
+	for _, q := range []string{"", "?path=other.txt", "?path=../teamB/secret.txt"} {
+		resp, _ := pub.do("GET", "/api/public/"+tok+"/content"+q, nil, nil)
+		b, _ := io.ReadAll(resp.Body)
+		if resp.StatusCode != 200 || string(b) != "public doc" {
+			t.Fatalf("file content %q: %d %q", q, resp.StatusCode, b)
+		}
+	}
+	pub.expect("GET", "/api/public/"+tok+"/list", nil, 409)
+	pub.expect("GET", "/api/public/"+tok+"/zip", nil, 409)
+	admin.expect("POST", "/api/shares", map[string]any{"path": "teamA/pub/doc.txt", "expiresIn": 600, "password": "abc"}, 400)
+
+	// pasta com senha
+	o = admin.expect("POST", "/api/shares", map[string]any{"path": "teamA/pub", "expiresIn": 600, "password": "s3gredo"}, 201)
+	tok2 := o["token"].(string)
+	if o["share"].(map[string]any)["hasPassword"] != true {
+		t.Fatalf("hasPassword: %v", o)
+	}
+	o = pub.expect("GET", "/api/public/"+tok2, nil, 200)
+	if o["locked"] != true || o["size"] != nil {
+		t.Fatalf("locked info: %v", o)
+	}
+	pub.expect("GET", "/api/public/"+tok2+"/list?path=", nil, 401)
+	pub.expect("GET", "/api/public/"+tok2+"/content?path=doc.txt", nil, 401)
+	pub.expect("GET", "/api/public/"+tok2+"/zip", nil, 401)
+	pub.expect("POST", "/api/public/"+tok2+"/unlock", map[string]string{"password": "errada"}, 401)
+	pub.expect("POST", "/api/public/"+tok2+"/unlock", map[string]string{"password": "s3gredo"}, 200)
+	o = pub.expect("GET", "/api/public/"+tok2, nil, 200)
+	if o["locked"] != false {
+		t.Fatalf("unlocked info: %v", o)
+	}
+	if o = pub.expect("GET", "/api/public/"+tok2+"/list?path=", nil, 200); len(o["entries"].([]any)) != 2 {
+		t.Fatalf("unlocked list: %v", o)
+	}
+	// outro visitante continua bloqueado; força bruta é limitada
+	otherJar, _ := cookiejar.New(nil)
+	other := &client{t: t, srv: admin.srv, c: &http.Client{Jar: otherJar}}
+	other.expect("GET", "/api/public/"+tok2+"/content?path=doc.txt", nil, 401)
+	got429 := false
+	for i := 0; i < 8 && !got429; i++ {
+		resp, _ := other.do("POST", "/api/public/"+tok2+"/unlock", map[string]string{"password": "x"}, nil)
+		io.ReadAll(resp.Body)
+		got429 = resp.StatusCode == 429
+	}
+	if !got429 {
+		t.Fatal("unlock not rate limited")
+	}
+	// link sem senha: unlock é no-op
+	pub.expect("POST", "/api/public/"+tok+"/unlock", map[string]string{"password": ""}, 200)
+	// auditoria registrou a falha
+	o = admin.expect("GET", "/api/admin/audit?limit=50", nil, 200)
+	found := false
+	for _, e := range o["entries"].([]any) {
+		if e.(map[string]any)["action"] == "share.unlock.fail" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("audit share.unlock.fail missing")
+	}
+}
+
+func TestTrash(t *testing.T) {
+	admin, s, root := newEnv(t)
+	s.cfg.TrashRetention = time.Hour
+	admin.login("admin", "admin")
+	admin.expect("POST", "/api/auth/password", map[string]string{"current": "admin", "new": "correct horse battery"}, 200)
+	admin.expect("POST", "/api/admin/users", map[string]any{"username": "bob", "password": "bobpassword1", "scope": "teamA"}, 201)
+	bobJar, _ := cookiejar.New(nil)
+	bob := &client{t: t, srv: admin.srv, c: &http.Client{Jar: bobJar}}
+	bob.login("bob", "bobpassword1")
+
+	// bob exclui dentro do escopo: vai para teamA/.filezam-trash e some da listagem
+	bob.expect("POST", "/api/files/delete", map[string]any{"paths": []string{"pub/doc.txt"}}, 200)
+	if _, err := os.Stat(filepath.Join(root, "teamA", "pub", "doc.txt")); !os.IsNotExist(err) {
+		t.Fatal("file still in place")
+	}
+	o := bob.expect("GET", "/api/trash", nil, 200)
+	items := o["items"].([]any)
+	if len(items) != 1 || items[0].(map[string]any)["path"] != "pub/doc.txt" || items[0].(map[string]any)["by"] != "bob" || o["retention"].(float64) != 3600 {
+		t.Fatalf("bob trash: %v", o)
+	}
+	id := items[0].(map[string]any)["id"].(string)
+	// a pasta reservada não aparece na listagem nem é endereçável
+	o = bob.expect("GET", "/api/files?path=", nil, 200)
+	for _, e := range o["entries"].([]any) {
+		if strings.HasPrefix(e.(map[string]any)["name"].(string), ".filezam-") {
+			t.Fatalf("trash dir listed: %v", e)
+		}
+	}
+	bob.expect("GET", "/api/files?path=.filezam-trash", nil, 400)
+	// admin vê a linha de bob com caminho relativo à raiz; restaura para o lugar original
+	o = admin.expect("GET", "/api/trash", nil, 200)
+	if items = o["items"].([]any); len(items) != 1 || items[0].(map[string]any)["path"] != "teamA/pub/doc.txt" {
+		t.Fatalf("admin trash: %v", o)
+	}
+	// conflito: já existe um doc.txt novo no lugar → mantém ambos
+	os.WriteFile(filepath.Join(root, "teamA", "pub", "doc.txt"), []byte("new"), 0o644)
+	o = bob.expect("POST", "/api/trash/restore", map[string]any{"ids": []string{id}}, 200)
+	rs := o["restored"].([]any)
+	if len(rs) != 1 || rs[0].(map[string]any)["path"] != "pub/doc (1).txt" || len(o["failed"].([]any)) != 0 {
+		t.Fatalf("restore: %v", o)
+	}
+	if b, _ := os.ReadFile(filepath.Join(root, "teamA", "pub", "doc (1).txt")); string(b) != "public doc" {
+		t.Fatalf("restored content: %q", b)
+	}
+	if _, err := os.Stat(filepath.Join(root, "teamA", ".filezam-trash", id)); !os.IsNotExist(err) {
+		t.Fatal("trash id folder not removed after restore")
+	}
+	if o = bob.expect("GET", "/api/trash", nil, 200); len(o["items"].([]any)) != 0 {
+		t.Fatalf("trash not empty after restore: %v", o)
+	}
+
+	// admin exclui fora do escopo de bob: bob não vê nem restaura
+	admin.expect("POST", "/api/files/delete", map[string]any{"paths": []string{"teamB/secret.txt"}}, 200)
+	o = admin.expect("GET", "/api/trash", nil, 200)
+	adminID := o["items"].([]any)[0].(map[string]any)["id"].(string)
+	if o = bob.expect("GET", "/api/trash", nil, 200); len(o["items"].([]any)) != 0 {
+		t.Fatalf("bob sees admin trash: %v", o)
+	}
+	o = bob.expect("POST", "/api/trash/restore", map[string]any{"ids": []string{adminID}}, 200)
+	if len(o["restored"].([]any)) != 0 {
+		t.Fatal("bob restored an item outside his scope")
+	}
+	// exclusão permanente de um item da lixeira
+	o = admin.expect("POST", "/api/trash/delete", map[string]any{"ids": []string{adminID}}, 200)
+	if o["deleted"].(float64) != 1 {
+		t.Fatalf("trash delete: %v", o)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".filezam-trash", adminID)); !os.IsNotExist(err) {
+		t.Fatal("purged item still on disk")
+	}
+	// permanent:true pula a lixeira; esvaziar; varredura por retenção
+	os.WriteFile(filepath.Join(root, "teamA", "x.txt"), []byte("x"), 0o644)
+	bob.expect("POST", "/api/files/delete", map[string]any{"paths": []string{"x.txt"}, "permanent": true}, 200)
+	if o = bob.expect("GET", "/api/trash", nil, 200); len(o["items"].([]any)) != 0 {
+		t.Fatalf("permanent delete went to trash: %v", o)
+	}
+	os.WriteFile(filepath.Join(root, "teamA", "y.txt"), []byte("y"), 0o644)
+	os.WriteFile(filepath.Join(root, "teamA", "z.txt"), []byte("z"), 0o644)
+	bob.expect("POST", "/api/files/delete", map[string]any{"paths": []string{"y.txt", "z.txt"}}, 200)
+	if o = bob.expect("POST", "/api/trash/empty", nil, 200); o["deleted"].(float64) != 2 {
+		t.Fatalf("empty: %v", o)
+	}
+	os.WriteFile(filepath.Join(root, "teamA", "old.txt"), []byte("o"), 0o644)
+	bob.expect("POST", "/api/files/delete", map[string]any{"paths": []string{"old.txt"}}, 200)
+	s.db.Now = func() time.Time { return time.Now().Add(2 * time.Hour) }
+	s.sweepTrash(context.Background())
+	s.db.Now = time.Now
+	if o = bob.expect("GET", "/api/trash", nil, 200); len(o["items"].([]any)) != 0 {
+		t.Fatalf("sweep left items: %v", o)
+	}
+	// lixeira desativada → exclusão direta
+	s.cfg.TrashRetention = 0
+	os.WriteFile(filepath.Join(root, "teamA", "gone.txt"), []byte("g"), 0o644)
+	bob.expect("POST", "/api/files/delete", map[string]any{"paths": []string{"gone.txt"}}, 200)
+	if o = bob.expect("GET", "/api/trash", nil, 200); len(o["items"].([]any)) != 0 {
+		t.Fatalf("disabled trash still collects: %v", o)
 	}
 }

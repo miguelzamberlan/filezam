@@ -332,3 +332,52 @@ func TestFindStaysInsideRoot(t *testing.T) {
 	}
 	checkCanary(t, outside)
 }
+
+// Conteúdo da lixeira (nome reservado) nunca é copiado, zipado, contado nem encontrado.
+func TestTrashIsInvisibleToTreeOps(t *testing.T) {
+	r, root, outside := fixture(t)
+	if err := os.MkdirAll(filepath.Join(root, "a", TrashDirName, "id1"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(root, "a", TrashDirName, "id1", "secret.txt"), []byte("trash"), 0o644)
+	ctx := context.Background()
+	if tot, err := r.ScanLimited(ctx, "a", 1000); err != nil || tot.Files != 2 {
+		t.Fatalf("scan counted trash: %+v %v", tot, err)
+	}
+	if err := r.CopyTree(ctx, "a", "acopy", ConflictRename, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "acopy", TrashDirName)); !os.IsNotExist(err) {
+		t.Fatal("trash copied")
+	}
+	var buf bytes.Buffer
+	if err := r.WriteZip(ctx, &buf, []string{"a"}); err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(buf.Bytes(), []byte("secret.txt")) {
+		t.Fatal("trash zipped")
+	}
+	if hits, _, _ := r.Find(ctx, "", "secret", SearchLimits{MaxScan: 1000, MaxResults: 10}); len(hits) != 0 {
+		t.Fatalf("trash found: %+v", hits)
+	}
+	// mover para a lixeira e restaurar
+	if err := r.MoveToTrash(ctx, "a/file.txt", Join("a", TrashDirName), "id2"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "a", TrashDirName, "id2", "file.txt")); err != nil {
+		t.Fatal("not in trash")
+	}
+	if err := r.RestoreFromTrash(ctx, Join("a", TrashDirName), "id2", "file.txt", "a/sub/file.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(root, "a", "sub", "file.txt")); string(b) != "hello" {
+		t.Fatalf("restored: %q", b)
+	}
+	if _, err := os.Stat(filepath.Join(root, "a", TrashDirName, "id2")); !os.IsNotExist(err) {
+		t.Fatal("id dir left behind")
+	}
+	if err := r.MoveToTrash(ctx, "", TrashDirName, "x"); err == nil {
+		t.Fatal("root moved to trash")
+	}
+	checkCanary(t, outside)
+}

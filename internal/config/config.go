@@ -41,6 +41,7 @@ type Config struct {
 	Fsync          bool
 	LogLevel       string
 	UploadStaleAge time.Duration
+	TrashRetention time.Duration // 0 = lixeira desativada (exclusão permanente)
 }
 
 // resolve follows symlinks when the path exists; otherwise the absolute path is used as is.
@@ -72,6 +73,11 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	if c.ShareMaxTTL, err = durationEnv("FILEZAM_SHARE_MAX_TTL", 720*time.Hour); err != nil {
+		return nil, err
+	}
+	if env("FILEZAM_TRASH_RETENTION", "") == "0" {
+		c.TrashRetention = 0
+	} else if c.TrashRetention, err = durationEnv("FILEZAM_TRASH_RETENTION", 720*time.Hour); err != nil {
 		return nil, err
 	}
 	if c.ChunkSize, err = bytesEnv("FILEZAM_MAX_UPLOAD_CHUNK", 16<<20); err != nil {

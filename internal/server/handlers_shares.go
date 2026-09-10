@@ -22,6 +22,8 @@ type shareView struct {
 	Expired      bool   `json:"expired"`
 	AccessCount  int64  `json:"accessCount"`
 	LastAccessAt *int64 `json:"lastAccessAt"`
+	Kind         string `json:"kind"`        // "dir" | "file"
+	HasPassword  bool   `json:"hasPassword"` // nunca o hash
 }
 
 func (s *Server) viewShare(sh *store.Share, u *store.User) shareView {
@@ -30,7 +32,7 @@ func (s *Server) viewShare(sh *store.Share, u *store.User) shareView {
 		p = rel
 	}
 	return shareView{ID: sh.ID, Token: sh.Token, Path: p, Name: sh.Name, CreatedBy: sh.CreatedByName, Mine: sh.CreatedBy == u.ID, CreatedAt: sh.CreatedAt,
-		ExpiresAt: sh.ExpiresAt, Expired: sh.ExpiresAt <= time.Now().Unix() || sh.RevokedAt != nil, AccessCount: sh.AccessCount, LastAccessAt: sh.LastAccessAt}
+		ExpiresAt: sh.ExpiresAt, Expired: sh.ExpiresAt <= time.Now().Unix() || sh.RevokedAt != nil, AccessCount: sh.AccessCount, LastAccessAt: sh.LastAccessAt, Kind: sh.Kind, HasPassword: sh.PasswordHash != ""}
 }
 
 func (s *Server) shareURL(r *http.Request, token string) string {
@@ -79,6 +81,7 @@ func (s *Server) handleShareCreate(w http.ResponseWriter, r *http.Request) error
 		Path      string `json:"path"`
 		ExpiresIn int64  `json:"expiresIn"`
 		Name      string `json:"name"`
+		Password  string `json:"password"` // opcional; 4–256 caracteres
 	}
 	if err := readJSON(r, &in); err != nil {
 		return err
@@ -91,8 +94,20 @@ func (s *Server) handleShareCreate(w http.ResponseWriter, r *http.Request) error
 	if err != nil {
 		return err
 	}
-	if e.Type != "dir" {
+	if e.Type != "dir" && e.Type != "file" {
 		return vfs.ErrNotDir
+	}
+	if p == "" && e.Type == "file" {
+		return vfs.ErrNotDir
+	}
+	pwHash := ""
+	if in.Password != "" {
+		if n := len([]rune(in.Password)); n < 4 || n > 256 {
+			return errorf(http.StatusBadRequest, "weak_password", "share password must have 4-256 characters")
+		}
+		if pwHash, err = auth.HashPassword(in.Password); err != nil {
+			return err
+		}
 	}
 	if in.ExpiresIn <= 0 || in.ExpiresIn > int64(s.cfg.ShareMaxTTL.Seconds()) {
 		return errorf(http.StatusBadRequest, "bad_expiry", "expiresIn must be between 1 and %d seconds", int64(s.cfg.ShareMaxTTL.Seconds()))
@@ -112,11 +127,11 @@ func (s *Server) handleShareCreate(w http.ResponseWriter, r *http.Request) error
 		return err
 	}
 	now := time.Now().Unix()
-	sh, err := s.db.CreateShare(r.Context(), &store.Share{TokenHash: auth.HashToken(tok), Token: tok, Path: vfs.Join(u.Scope, p), Name: name, CreatedBy: u.ID, CreatedAt: now, ExpiresAt: now + in.ExpiresIn})
+	sh, err := s.db.CreateShare(r.Context(), &store.Share{TokenHash: auth.HashToken(tok), Token: tok, Kind: e.Type, PasswordHash: pwHash, Path: vfs.Join(u.Scope, p), Name: name, CreatedBy: u.ID, CreatedAt: now, ExpiresAt: now + in.ExpiresIn})
 	if err != nil {
 		return err
 	}
-	s.audit(r, u, "share.create", map[string]any{"id": sh.ID, "path": sh.Path, "expiresAt": sh.ExpiresAt})
+	s.audit(r, u, "share.create", map[string]any{"id": sh.ID, "path": sh.Path, "kind": sh.Kind, "password": pwHash != "", "expiresAt": sh.ExpiresAt})
 	writeJSON(w, r, 201, map[string]any{"share": s.viewShare(sh, u), "token": tok, "url": s.shareURL(r, tok)})
 	return nil
 }

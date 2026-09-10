@@ -30,14 +30,15 @@ type Server struct {
 	log     *slog.Logger
 	version string
 
-	loginIP   *auth.Limiter
-	loginUser *auth.Limiter
-	loginSem  auth.Semaphore
-	publicIP  *auth.Limiter
-	publicDL  *auth.KeyedSemaphore
-	uploadSem *auth.KeyedSemaphore
-	searchSem *auth.KeyedSemaphore
-	adminMu   sync.Mutex // serializa alterações de usuários: a checagem de "último admin" não é atômica no banco
+	loginIP     *auth.Limiter
+	loginUser   *auth.Limiter
+	loginSem    auth.Semaphore
+	publicIP    *auth.Limiter
+	publicDL    *auth.KeyedSemaphore
+	uploadSem   *auth.KeyedSemaphore
+	searchSem   *auth.KeyedSemaphore
+	shareUnlock *auth.Limiter // tentativas de senha por link
+	adminMu     sync.Mutex    // serializa alterações de usuários: a checagem de "último admin" não é atômica no banco
 
 	bg     context.Context
 	cancel context.CancelFunc
@@ -48,16 +49,17 @@ func New(cfg *config.Config, db *store.DB, base *vfs.Root, log *slog.Logger, ver
 	bg, cancel := context.WithCancel(context.Background())
 	s := &Server{
 		cfg: cfg, db: db, base: base, log: log, version: version,
-		uploads:   uploads.New(db, cfg.ChunkSize, cfg.Fsync, log),
-		jobs:      jobs.New(bg),
-		loginIP:   auth.NewLimiter(10, 10),
-		loginUser: auth.NewLimiter(5, 5),
-		loginSem:  auth.NewSemaphore(4),
-		publicIP:  auth.NewLimiter(120, 120),
-		publicDL:  auth.NewKeyedSemaphore(2),
-		uploadSem: auth.NewKeyedSemaphore(8),
-		searchSem: auth.NewKeyedSemaphore(2),
-		bg:        bg, cancel: cancel,
+		uploads:     uploads.New(db, cfg.ChunkSize, cfg.Fsync, log),
+		jobs:        jobs.New(bg),
+		loginIP:     auth.NewLimiter(10, 10),
+		loginUser:   auth.NewLimiter(5, 5),
+		loginSem:    auth.NewSemaphore(4),
+		publicIP:    auth.NewLimiter(120, 120),
+		publicDL:    auth.NewKeyedSemaphore(2),
+		uploadSem:   auth.NewKeyedSemaphore(8),
+		searchSem:   auth.NewKeyedSemaphore(2),
+		shareUnlock: auth.NewLimiter(5, 5),
+		bg:          bg, cancel: cancel,
 	}
 	if err := s.ensureAdmin(bg); err != nil {
 		cancel()
@@ -119,6 +121,7 @@ func (s *Server) StartBackground() {
 		if err := s.db.PruneAudit(ctx, time.Now().Add(-180*24*time.Hour).Unix()); err != nil {
 			s.log.Warn("prune audit", "err", err)
 		}
+		s.sweepTrash(ctx)
 	}
 	go func() {
 		run()
@@ -194,6 +197,11 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.Handle("POST /api/uploads/{id}/complete", user(s.handleUploadComplete))
 	mux.Handle("DELETE /api/uploads/{id}", user(s.handleUploadAbort))
 
+	mux.Handle("GET /api/trash", user(s.handleTrashList))
+	mux.Handle("POST /api/trash/restore", user(s.handleTrashRestore))
+	mux.Handle("POST /api/trash/delete", user(s.handleTrashDelete))
+	mux.Handle("POST /api/trash/empty", user(s.handleTrashEmpty))
+
 	mux.Handle("GET /api/favorites", user(s.handleFavorites))
 	mux.Handle("POST /api/favorites", user(s.handleFavoriteAdd))
 	mux.Handle("DELETE /api/favorites/{id}", user(s.handleFavoriteDelete))
@@ -206,6 +214,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.Handle("GET /api/public/{token}/list", s.h(s.handlePublicList))
 	mux.Handle("GET /api/public/{token}/content", s.h(s.handlePublicContent))
 	mux.Handle("GET /api/public/{token}/zip", s.h(s.handlePublicZip))
+	mux.Handle("POST /api/public/{token}/unlock", chain(s.h(s.handlePublicUnlock), s.csrf))
 
 	mux.Handle("GET /api/admin/users", admin(s.handleAdminUsers))
 	mux.Handle("POST /api/admin/users", admin(s.handleAdminUserCreate))
@@ -242,6 +251,7 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) error {
 		"maxParallel":    s.cfg.MaxParallel,
 		"shareMaxTtl":    int64(s.cfg.ShareMaxTTL.Seconds()),
 		"publicUrl":      s.cfg.PublicURL,
+		"trashRetention": int64(s.cfg.TrashRetention.Seconds()),
 		"previewMaxText": 1 << 20,
 		"version":        s.version,
 	})
