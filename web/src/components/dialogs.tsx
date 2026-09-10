@@ -37,7 +37,7 @@ export const dialogs = {
   },
 }
 
-export function Modal({ children, onClose, wide }: { children: ReactNode; onClose?: () => void; wide?: boolean }) {
+export function Modal({ children, onClose, wide, size }: { children: ReactNode; onClose?: () => void; wide?: boolean; size?: 'md' | 'lg' | 'xl' }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -50,7 +50,7 @@ export function Modal({ children, onClose, wide }: { children: ReactNode; onClos
   }, [onClose])
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" onMouseDown={(e) => e.target === e.currentTarget && onClose?.()}>
-      <div className={'card w-full p-5 ' + (wide ? 'max-w-3xl' : 'max-w-md')} role="dialog" aria-modal onKeyDown={(e) => e.stopPropagation()}>
+      <div className={'card max-h-full w-full overflow-y-auto p-5 ' + (wide || size === 'xl' ? 'max-w-3xl' : size === 'lg' ? 'max-w-xl' : 'max-w-md')} role="dialog" aria-modal onKeyDown={(e) => e.stopPropagation()}>
         {children}
       </div>
     </div>
