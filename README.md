@@ -149,7 +149,7 @@ Após 10 falhas seguidas de login do mesmo endereço, aquele par usuário + IP f
 
 ### Links públicos
 
-Selecione uma pasta ou um arquivo, clique em **Compartilhar**, escolha a validade e, se quiser, uma senha (quem abrir o link precisa digitá-la): o link (`/s/<token>`) é copiado na hora e pode ser copiado de novo em **Compartilhamentos** ou nas propriedades da pasta. Quem tiver o link pode listar, visualizar e baixar (arquivo ou ZIP), nada mais. O token tem 256 bits; a consulta pública é pelo hash, mas o token fica guardado no banco para permitir recopiar (quem tiver o arquivo do banco usa os links ativos). Revogar ou expirar invalida o link na hora; desativar o usuário ou tirar a pasta do escopo dele também. Mover ou renomear a pasta invalida o link (uma pasta nova no mesmo caminho o reativa, então revogue antes de recriar).
+Selecione uma pasta ou um arquivo, clique em **Compartilhar**, escolha a validade e, se quiser, uma senha (quem abrir o link precisa digitá-la): o link (`/s/<token>`) é copiado na hora e pode ser copiado de novo em **Compartilhamentos** ou nas propriedades da pasta. Quem tiver o link pode listar, visualizar e baixar (arquivo ou ZIP), nada mais. O token tem 256 bits; a consulta pública é pelo hash, mas o token fica guardado no banco para permitir recopiar (quem tiver o arquivo do banco usa os links ativos). Revogar ou expirar invalida o link na hora; desativar o usuário ou tirar a pasta do escopo dele também. Mover ou renomear o item compartilhado invalida o link, e um item novo criado no mesmo lugar não o reativa.
 
 ### Uploads
 
@@ -168,6 +168,7 @@ Arquivos são gravados em `.filezam-upload-*.part` no diretório de destino e re
 - **Zoom**: botões −/+ ao lado do filtro (ou em Configurações) ampliam a listagem sem mexer no zoom do navegador.
 - **Tema e cores** (engrenagem no rodapé do menu): claro, escuro ou igual ao sistema; cores de destaque, seleção e foco com combinações prontas ou seletor livre. Tudo fica no navegador, por usuário.
 - **Lixeira** (menu lateral): o que você exclui fica lá pelo prazo de `FILEZAM_TRASH_RETENTION` e pode ser restaurado para o local original. Arquivos alterados por fora do Filezam (Samba, SSH) aparecem na pesquisa após a próxima varredura do índice, ou ao clicar em **Reconstruir índice** (admin).
+- **Operações** (menu lateral): cópias, movimentações e exclusões em andamento, com cancelamento, e o histórico dos últimos 30 dias, que sobrevive a reinícios.
 - **Arrastar e soltar**: arraste itens da listagem para uma pasta ou para um nível da trilha de navegação para movê-los.
 - **Celular**: menu vira gaveta (☰), a barra de ações encolhe para o essencial mais **⋯**, um toque abre, toque longo abre o menu e seleciona (depois cada toque marca/desmarca).
 
@@ -241,7 +242,7 @@ Issues e pull requests são bem-vindos. Leia [`CONTRIBUTING.md`](CONTRIBUTING.md
 
 ## Roadmap e limitações
 
-O que já se sabe que falta (cotas por usuário, 2FA, métricas, pesquisa por conteúdo) e o que foi descartado de propósito está em [`docs/10-roadmap.md`](docs/10-roadmap.md). Sugestões passam por issue antes de virar código.
+O que já se sabe que falta (2FA, pesquisa por conteúdo, retomada de jobs) e o que foi descartado de propósito está em [`docs/10-roadmap.md`](docs/10-roadmap.md). Sugestões passam por issue antes de virar código.
 
 ## Autor
 
