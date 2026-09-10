@@ -39,9 +39,11 @@ type Server struct {
 	publicDL    *auth.KeyedSemaphore
 	uploadSem   *auth.KeyedSemaphore
 	searchSem   *auth.KeyedSemaphore
-	shareUnlock *auth.Limiter // tentativas de senha por link
-	lockout     *auth.Lockout // bloqueio por (usuário, IP) após falhas seguidas
-	adminMu     sync.Mutex    // serializa alterações de usuários: a checagem de "último admin" não é atômica no banco
+	shareUnlock *auth.Limiter        // tentativas de senha por link
+	lockout     *auth.Lockout        // bloqueio por (usuário, IP) após falhas seguidas
+	zipSem      *auth.KeyedSemaphore // zips autenticados simultâneos por usuário
+	quota       quotaCache
+	adminMu     sync.Mutex // serializa alterações de usuários: a checagem de "último admin" não é atômica no banco
 
 	bg     context.Context
 	cancel context.CancelFunc
@@ -63,6 +65,8 @@ func New(cfg *config.Config, db *store.DB, base *vfs.Root, log *slog.Logger, ver
 		searchSem:   auth.NewKeyedSemaphore(2),
 		shareUnlock: auth.NewLimiter(5, 5),
 		lockout:     auth.NewLockout(lockoutThreshold, lockoutBase),
+		zipSem:      auth.NewKeyedSemaphore(2),
+		quota:       quotaCache{m: map[int64]usageEntry{}},
 		bg:          bg, cancel: cancel,
 	}
 	if cfg.IndexInterval > 0 {

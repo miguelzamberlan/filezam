@@ -41,6 +41,7 @@ export interface AdminUser {
   scope: string
   mustChangePassword: boolean
   disabled: boolean
+  quota: number // bytes; 0 = sem limite
   lockedUntil: number | null
   createdAt: number
   updatedAt: number
@@ -128,6 +129,8 @@ export interface DiskUsage {
   total: number
   free: number
   used: number
+  quota?: number // bytes, só quando o usuário tem cota
+  quotaUsed?: number
 }
 
 export interface SearchHit {

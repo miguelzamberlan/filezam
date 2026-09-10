@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Api, ApiError } from '../api/client'
 import type { AdminUser } from '../api/types'
-import { formatDate } from '../lib/format'
+import { formatBytes, formatDate } from '../lib/format'
 import { S, errorMessage } from '../strings'
 import { Modal, dialogs, toast } from '../components/dialogs'
 import { IChevronRight, IFolder, ISpinner, ITrash, IEdit, IUsers } from '../components/Icons'
@@ -48,6 +48,8 @@ function UserForm({ user, onClose }: { user: AdminUser | null; onClose: () => vo
   const [scope, setScope] = useState(user?.scope ?? '')
   const [disabled, setDisabled] = useState(user?.disabled ?? false)
   const [mustChange, setMustChange] = useState(user ? user.mustChangePassword : true)
+  const [quotaGb, setQuotaGb] = useState(user && user.quota > 0 ? String(Math.round((user.quota / 2 ** 30) * 100) / 100) : '')
+  const quotaBytes = quotaGb.trim() === '' ? 0 : Math.round(Number(quotaGb.replace(',', '.')) * 2 ** 30)
   const [pick, setPick] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -58,11 +60,11 @@ function UserForm({ user, onClose }: { user: AdminUser | null; onClose: () => vo
     setErr(null)
     try {
       if (user) {
-        const patch: Parameters<typeof Api.adminUpdateUser>[1] = { role, scope, disabled, mustChangePassword: mustChange }
+        const patch: Parameters<typeof Api.adminUpdateUser>[1] = { role, scope, disabled, mustChangePassword: mustChange, quota: quotaBytes }
         if (password) patch.password = password
         await Api.adminUpdateUser(user.id, patch)
       } else {
-        await Api.adminCreateUser({ username, password, role, scope, mustChangePassword: mustChange })
+        await Api.adminCreateUser({ username, password, role, scope, mustChangePassword: mustChange, quota: quotaBytes })
       }
       qc.invalidateQueries({ queryKey: ['admin-users'] })
       onClose()
@@ -92,6 +94,12 @@ function UserForm({ user, onClose }: { user: AdminUser | null; onClose: () => vo
           <button type="button" className="btn-ghost" onClick={() => setPick((p) => !p)}>{S.scopePick}</button>
         </div>
         {pick && <ScopePicker value={scope} onChange={setScope} onClose={() => setPick(false)} />}
+        <label className="mt-3 block text-sm">{S.quota}</label>
+        <div className="mt-1 flex items-center gap-2">
+          <input className="input !w-32" type="number" min={0} step={0.5} placeholder="0" value={quotaGb} onChange={(e) => setQuotaGb(e.target.value)} />
+          <span className="text-sm text-neutral-500">GB</span>
+        </div>
+        <p className="mt-1 text-xs text-neutral-500">{S.quotaHint}</p>
         <label className="mt-3 flex items-center gap-2 text-sm"><input type="checkbox" checked={mustChange} onChange={(e) => setMustChange(e.target.checked)} /> {S.forcePasswordChange}</label>
         {user && <label className="mt-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={disabled} onChange={(e) => setDisabled(e.target.checked)} /> {S.disabled}</label>}
         {err && <p className="mt-3 text-sm text-red-600">{err}</p>}
@@ -133,6 +141,7 @@ export default function AdminUsers() {
                 <th className="px-3 py-2">{S.username}</th>
                 <th className="px-3 py-2">{S.role}</th>
                 <th className="px-3 py-2">{S.scope}</th>
+                <th className="hidden px-3 py-2 sm:table-cell">{S.quota}</th>
                 <th className="hidden px-3 py-2 md:table-cell">{S.created}</th>
                 <th className="px-3 py-2"></th>
               </tr>
@@ -147,6 +156,7 @@ export default function AdminUsers() {
                   </td>
                   <td className="px-3 py-2">{u.role === 'admin' ? S.roleAdmin : S.roleUser}</td>
                   <td className="max-w-xs truncate px-3 py-2">{u.scope === '' ? S.scopeRoot : '/' + u.scope}</td>
+                  <td className="hidden px-3 py-2 sm:table-cell">{u.quota > 0 ? formatBytes(u.quota, 0) : '—'}</td>
                   <td className="hidden px-3 py-2 md:table-cell">{formatDate(u.createdAt, true)}</td>
                   <td className="px-3 py-2 text-right">
                     <button className="btn-ghost" onClick={() => setEdit(u)}><IEdit size={16} /></button>

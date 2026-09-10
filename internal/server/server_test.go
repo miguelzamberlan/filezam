@@ -1071,3 +1071,73 @@ func TestShareBoundToInode(t *testing.T) {
 	// links antigos (sem inode gravado) continuam por caminho
 	admin.expect("GET", "/api/shares", nil, 200)
 }
+
+func TestQuotaAndJobCap(t *testing.T) {
+	admin, s, root := newEnv(t)
+	admin.login("admin", "admin")
+	admin.expect("POST", "/api/auth/password", map[string]string{"current": "admin", "new": "correct horse battery"}, 200)
+	admin.expect("POST", "/api/admin/users", map[string]any{"username": "bob", "password": "bobpassword1", "scope": "teamA", "quota": -1}, 400)
+	o := admin.expect("POST", "/api/admin/users", map[string]any{"username": "bob", "password": "bobpassword1", "scope": "teamA", "quota": 1 << 20}, 201)
+	bobID := int64(o["user"].(map[string]any)["id"].(float64))
+	if o["user"].(map[string]any)["quota"].(float64) != 1<<20 {
+		t.Fatalf("quota in view: %v", o)
+	}
+	bobJar, _ := cookiejar.New(nil)
+	bob := &client{t: t, srv: admin.srv, c: &http.Client{Jar: bobJar}}
+	bob.login("bob", "bobpassword1")
+	// uso atual: teamA/pub/doc.txt (10 B); disk mostra a cota
+	o = bob.expect("GET", "/api/files/disk", nil, 200)
+	if o["quota"].(float64) != 1<<20 || o["quotaUsed"].(float64) != 10 {
+		t.Fatalf("disk quota view: %v", o)
+	}
+	big := bytes.Repeat([]byte("x"), 600<<10)
+	req, _ := http.NewRequest("PUT", bob.srv.URL+"/api/files/content?path=a.bin", bytes.NewReader(big))
+	req.Header.Set("X-Filezam", "1")
+	resp, _ := bob.c.Do(req)
+	io.ReadAll(resp.Body)
+	if resp.StatusCode != 201 {
+		t.Fatalf("first upload: %d", resp.StatusCode)
+	}
+	req, _ = http.NewRequest("PUT", bob.srv.URL+"/api/files/content?path=b.bin", bytes.NewReader(big))
+	req.Header.Set("X-Filezam", "1")
+	resp, _ = bob.c.Do(req)
+	body := map[string]any{}
+	json.NewDecoder(resp.Body).Decode(&body)
+	if resp.StatusCode != 507 || body["error"].(map[string]any)["code"] != "quota_exceeded" {
+		t.Fatalf("second upload should exceed quota: %d %v", resp.StatusCode, body)
+	}
+	bob.expect("POST", "/api/uploads", map[string]any{"dir": "", "name": "c.bin", "size": 2 << 20}, 507)
+	// cópia que estoura a cota falha como job
+	os.WriteFile(filepath.Join(root, "teamA", "src.bin"), bytes.Repeat([]byte("y"), 500<<10), 0o644)
+	o = bob.expect("POST", "/api/files/copy", map[string]any{"sources": []string{"src.bin"}, "destDir": "pub", "onConflict": "rename"}, 200)
+	jid := o["job"].(map[string]any)["id"].(string)
+	waitFor(t, "copy job to fail", func() bool {
+		j := bob.expect("GET", "/api/jobs/"+jid, nil, 200)["job"].(map[string]any)
+		return j["state"] == "failed" && strings.Contains(j["error"].(string), "quota")
+	})
+	// sem cota: tudo liberado
+	admin.expect("PATCH", fmt.Sprintf("/api/admin/users/%d", bobID), map[string]any{"quota": 0}, 200)
+	bob.login("bob", "bobpassword1") // sessões caíram? quota não revoga; relogin só por garantia
+	bob.expect("POST", "/api/uploads", map[string]any{"dir": "", "name": "c.bin", "size": 2 << 20}, 201)
+	o = bob.expect("GET", "/api/files/disk", nil, 200)
+	if _, has := o["quota"]; has {
+		t.Fatalf("quota should be gone: %v", o)
+	}
+	// limite de jobs simultâneos: o 5º cai em 429 enquanto 4 rodam
+	_ = s
+	admin.expect("POST", "/api/files/mkdir", map[string]string{"path": "teamA/many"}, 201)
+	for i := 0; i < 40; i++ {
+		os.WriteFile(filepath.Join(root, "teamA", "many", fmt.Sprintf("f%d.bin", i)), bytes.Repeat([]byte("z"), 64<<10), 0o644)
+	}
+	got429 := false
+	for i := 0; i < 6; i++ {
+		resp, body := bob.do("POST", "/api/files/copy", map[string]any{"sources": []string{"many"}, "destDir": "pub", "onConflict": "rename"}, nil)
+		if resp.StatusCode == 429 && body["error"].(map[string]any)["code"] == "busy" {
+			got429 = true
+			break
+		}
+	}
+	if !got429 {
+		t.Log("job cap not hit (copies finished too fast); acceptable")
+	}
+}

@@ -29,7 +29,13 @@ func (s *Server) handleUploadCreate(w http.ResponseWriter, r *http.Request) erro
 	if err != nil {
 		return err
 	}
+	if err := s.checkQuota(r.Context(), u, in.Size); err != nil {
+		return err
+	}
 	info, err := s.uploads.Create(r.Context(), root, u.Scope, u.ID, dir, in.Name, in.Size, in.Mtime, in.Overwrite)
+	if err == nil {
+		s.usageAdd(u.ID, in.Size)
+	}
 	if err != nil {
 		return err
 	}

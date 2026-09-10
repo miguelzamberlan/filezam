@@ -108,6 +108,20 @@ func (db *DB) SearchIndex(ctx context.Context, prefix, q string, limit int) ([]I
 	return out, rows.Err()
 }
 
+// IndexSumSize sums file sizes under prefix ("" = everything) from the index.
+func (db *DB) IndexSumSize(ctx context.Context, prefix string) (int64, error) {
+	var n sql.NullInt64
+	q, args := `SELECT SUM(size) FROM file_index WHERE type='file'`, []any{}
+	if prefix != "" {
+		q += ` AND path LIKE ? ESCAPE '\'`
+		args = append(args, likeEscape(prefix)+"/%")
+	}
+	if err := db.r.QueryRowContext(ctx, q, args...).Scan(&n); err != nil {
+		return 0, err
+	}
+	return n.Int64, nil
+}
+
 func (db *DB) IndexCount(ctx context.Context) (int64, error) {
 	var n int64
 	err := db.r.QueryRowContext(ctx, `SELECT COUNT(*) FROM file_index`).Scan(&n)

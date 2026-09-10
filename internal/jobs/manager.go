@@ -192,6 +192,19 @@ func (m *Manager) List(userID int64) []View {
 	return out
 }
 
+// Running counts the user's jobs still in progress.
+func (m *Manager) Running(userID int64) int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	n := 0
+	for _, j := range m.jobs {
+		if j.userID == userID && j.Snapshot().State == StateRunning {
+			n++
+		}
+	}
+	return n
+}
+
 // Cancel stops a job.
 func (m *Manager) Cancel(id string, userID int64) bool {
 	j, ok := m.Get(id, userID)

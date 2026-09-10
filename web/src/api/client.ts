@@ -141,9 +141,9 @@ export const Api = {
 
   // admin
   adminUsers: () => api<{ users: AdminUser[] }>('GET', '/api/admin/users'),
-  adminCreateUser: (u: { username: string; password: string; role: string; scope: string; mustChangePassword: boolean }) =>
+  adminCreateUser: (u: { username: string; password: string; role: string; scope: string; mustChangePassword: boolean; quota: number }) =>
     api<{ user: AdminUser }>('POST', '/api/admin/users', u),
-  adminUpdateUser: (id: number, patch: Partial<{ role: string; scope: string; disabled: boolean; password: string; mustChangePassword: boolean }>) =>
+  adminUpdateUser: (id: number, patch: Partial<{ role: string; scope: string; disabled: boolean; password: string; mustChangePassword: boolean; quota: number }>) =>
     api<{ user: AdminUser }>('PATCH', '/api/admin/users/' + id, patch),
   adminDeleteUser: (id: number) => api<{ ok: true }>('DELETE', '/api/admin/users/' + id),
   adminDirs: (path: string) => api<{ path: string; dirs: string[] }>('GET', '/api/admin/dirs' + q({ path })),

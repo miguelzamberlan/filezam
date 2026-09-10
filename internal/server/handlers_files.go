@@ -125,13 +125,17 @@ func (s *Server) handleStat(w http.ResponseWriter, r *http.Request) error {
 
 // handleDisk reports the space of the filesystem backing the user's scope.
 func (s *Server) handleDisk(w http.ResponseWriter, r *http.Request) error {
-	root, _, err := s.userRoot(r)
+	root, u, err := s.userRoot(r)
 	if err != nil {
 		return err
 	}
 	defer root.Close()
 	d := root.Disk()
-	writeJSON(w, r, 200, map[string]any{"total": d.Total, "free": d.Free, "used": d.Total - d.Free})
+	out := map[string]any{"total": d.Total, "free": d.Free, "used": d.Total - d.Free}
+	for k, v := range s.quotaView(r.Context(), u) {
+		out[k] = v
+	}
+	writeJSON(w, r, 200, out)
 	return nil
 }
 
@@ -304,11 +308,16 @@ func serveZip(w http.ResponseWriter, r *http.Request, root *vfs.Root, paths []st
 }
 
 func (s *Server) handleZip(w http.ResponseWriter, r *http.Request) error {
-	root, _, err := s.userRoot(r)
+	root, u, err := s.userRoot(r)
 	if err != nil {
 		return err
 	}
 	defer root.Close()
+	zipKey := strconv.FormatInt(u.ID, 10)
+	if !s.zipSem.TryAcquire(zipKey) {
+		return errorf(http.StatusTooManyRequests, "busy", "too many concurrent zips")
+	}
+	defer s.zipSem.Release(zipKey)
 	var paths []string
 	for _, raw := range r.URL.Query()["path"] {
 		p, err := vfs.Normalize(raw)
@@ -428,10 +437,18 @@ func (s *Server) handlePutContent(w http.ResponseWriter, r *http.Request) error 
 	if r.ContentLength > s.cfg.ChunkSize {
 		return errorf(http.StatusRequestEntityTooLarge, "too_large", "use chunked upload for files larger than %d bytes", s.cfg.ChunkSize)
 	}
+	incoming := r.ContentLength
+	if incoming < 0 {
+		incoming = s.cfg.ChunkSize
+	}
+	if err := s.checkQuota(r.Context(), userFrom(r), incoming); err != nil {
+		return err
+	}
 	e, err := s.storeSmallFile(root, vfs.Dir(p), vfs.Base(p), mtime, queryBool(r, "overwrite"), bodyReader(w, r, s.cfg.ChunkSize))
 	if err != nil {
 		return err
 	}
+	s.usageAdd(userFrom(r).ID, e.Size)
 	s.indexTouch(indexAncestors(userFrom(r).Scope, vfs.Join(userFrom(r).Scope, p))...)
 	writeJSON(w, r, 201, map[string]any{"entry": e, "path": p})
 	return nil
@@ -466,6 +483,9 @@ func (s *Server) handleBatch(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	defer release()
+	if err := s.checkQuota(r.Context(), u, max64(r.ContentLength, 0)); err != nil {
+		return err
+	}
 	dir, err := vfs.NormalizeWritable(r.URL.Query().Get("dir"))
 	if err != nil {
 		return err
@@ -533,11 +553,16 @@ func (s *Server) handleBatch(w http.ResponseWriter, r *http.Request) error {
 		}
 	}
 	var stored []string
+	var added int64
 	for _, res := range results {
 		if res.OK {
+			if res.Entry != nil {
+				added += res.Entry.Size
+			}
 			stored = append(stored, indexAncestors(userFrom(r).Scope, vfs.Join(userFrom(r).Scope, dir, res.Path))...)
 		}
 	}
+	s.usageAdd(u.ID, added)
 	if len(stored) > 0 {
 		s.indexTouch(stored...)
 	}
@@ -702,7 +727,7 @@ func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) error {
 	}
 	root.Close()
 	useTrash := s.cfg.TrashRetention > 0 && !in.Permanent
-	j := s.jobs.Start(u.ID, "delete", parentDirs(paths), func(ctx context.Context, j *jobs.Job) error {
+	j, err := s.startJob(u, "delete", parentDirs(paths), func(ctx context.Context, j *jobs.Job) error {
 		root, err := s.scopeRoot(u)
 		if err != nil {
 			return err
@@ -724,6 +749,9 @@ func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) error {
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
 	return respondJob(w, r, j)
 }
 
@@ -777,7 +805,7 @@ func (s *Server) handleCopy(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	j := s.jobs.Start(u.ID, "copy", parentDirs(nil, dest), func(ctx context.Context, j *jobs.Job) error {
+	j, err := s.startJob(u, "copy", parentDirs(nil, dest), func(ctx context.Context, j *jobs.Job) error {
 		root, err := s.scopeRoot(u)
 		if err != nil {
 			return err
@@ -793,6 +821,10 @@ func (s *Server) handleCopy(w http.ResponseWriter, r *http.Request) error {
 			files += t.Files
 			bytes += t.Bytes
 		}
+		if err := s.checkQuota(ctx, u, bytes); err != nil {
+			return errors.New(toAPIError(err).Message) // vira o texto de erro do job
+		}
+		s.usageAdd(u.ID, bytes)
 		j.SetTotals(files, bytes)
 		prog := progressFor(j)
 		for _, src := range sources {
@@ -811,6 +843,9 @@ func (s *Server) handleCopy(w http.ResponseWriter, r *http.Request) error {
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
 	return respondJob(w, r, j)
 }
 
@@ -820,7 +855,7 @@ func (s *Server) handleMove(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	j := s.jobs.Start(u.ID, "move", parentDirs(sources, dest), func(ctx context.Context, j *jobs.Job) error {
+	j, err := s.startJob(u, "move", parentDirs(sources, dest), func(ctx context.Context, j *jobs.Job) error {
 		root, err := s.scopeRoot(u)
 		if err != nil {
 			return err
@@ -851,6 +886,9 @@ func (s *Server) handleMove(w http.ResponseWriter, r *http.Request) error {
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
 	return respondJob(w, r, j)
 }
 
@@ -959,4 +997,11 @@ func (s *Server) searchIndex(ctx context.Context, root *vfs.Root, scope, p, q st
 		indexedAt = st.LastFullAt
 	}
 	return hits, more, indexedAt, nil
+}
+
+func max64(a, b int64) int64 {
+	if a > b {
+		return a
+	}
+	return b
 }

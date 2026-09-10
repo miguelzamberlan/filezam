@@ -17,6 +17,7 @@ type User struct {
 	FailedLogins       int
 	Lockouts           int
 	LockedUntil        *int64
+	Quota              int64 // bytes; 0 = sem limite (migração 007)
 	CreatedAt          int64
 	UpdatedAt          int64
 }
@@ -24,12 +25,12 @@ type User struct {
 // IsAdmin reports whether the user has the admin role.
 func (u *User) IsAdmin() bool { return u.Role == "admin" }
 
-const userCols = `id, username, password_hash, role, scope, must_change_password, disabled, failed_logins, lockouts, locked_until, created_at, updated_at`
+const userCols = `id, username, password_hash, role, scope, must_change_password, disabled, failed_logins, lockouts, locked_until, created_at, updated_at, COALESCE(quota,0)`
 
 func scanUser(row interface{ Scan(...any) error }) (*User, error) {
 	var u User
 	var locked sql.NullInt64
-	err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.Scope, &u.MustChangePassword, &u.Disabled, &u.FailedLogins, &u.Lockouts, &locked, &u.CreatedAt, &u.UpdatedAt)
+	err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.Scope, &u.MustChangePassword, &u.Disabled, &u.FailedLogins, &u.Lockouts, &locked, &u.CreatedAt, &u.UpdatedAt, &u.Quota)
 	if err != nil {
 		return nil, mapErr(err)
 	}
@@ -49,8 +50,8 @@ func (db *DB) CountUsers(ctx context.Context) (int, error) {
 // CreateUser inserts a user and returns it.
 func (db *DB) CreateUser(ctx context.Context, u *User) (*User, error) {
 	now := db.now()
-	res, err := db.w.ExecContext(ctx, `INSERT INTO users(username, password_hash, role, scope, must_change_password, disabled, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?)`,
-		u.Username, u.PasswordHash, u.Role, u.Scope, u.MustChangePassword, u.Disabled, now, now)
+	res, err := db.w.ExecContext(ctx, `INSERT INTO users(username, password_hash, role, scope, must_change_password, disabled, quota, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?)`,
+		u.Username, u.PasswordHash, u.Role, u.Scope, u.MustChangePassword, u.Disabled, u.Quota, now, now)
 	if err != nil {
 		return nil, mapErr(err)
 	}
@@ -95,8 +96,8 @@ func (db *DB) CountAdmins(ctx context.Context) (int, error) {
 
 // UpdateUser persists mutable fields of a user.
 func (db *DB) UpdateUser(ctx context.Context, u *User) error {
-	_, err := db.w.ExecContext(ctx, `UPDATE users SET password_hash=?, role=?, scope=?, must_change_password=?, disabled=?, updated_at=? WHERE id=?`,
-		u.PasswordHash, u.Role, u.Scope, u.MustChangePassword, u.Disabled, db.now(), u.ID)
+	_, err := db.w.ExecContext(ctx, `UPDATE users SET password_hash=?, role=?, scope=?, must_change_password=?, disabled=?, quota=?, updated_at=? WHERE id=?`,
+		u.PasswordHash, u.Role, u.Scope, u.MustChangePassword, u.Disabled, u.Quota, db.now(), u.ID)
 	return mapErr(err)
 }
 

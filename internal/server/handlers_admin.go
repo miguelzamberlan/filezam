@@ -21,11 +21,12 @@ type adminUserView struct {
 	LockedUntil        *int64 `json:"lockedUntil"`
 	CreatedAt          int64  `json:"createdAt"`
 	UpdatedAt          int64  `json:"updatedAt"`
+	Quota              int64  `json:"quota"` // bytes; 0 = sem limite
 }
 
 func viewAdminUser(u *store.User) adminUserView {
 	return adminUserView{ID: u.ID, Username: u.Username, Role: u.Role, Scope: u.Scope, MustChangePassword: u.MustChangePassword,
-		Disabled: u.Disabled, LockedUntil: u.LockedUntil, CreatedAt: u.CreatedAt, UpdatedAt: u.UpdatedAt}
+		Disabled: u.Disabled, LockedUntil: u.LockedUntil, CreatedAt: u.CreatedAt, UpdatedAt: u.UpdatedAt, Quota: u.Quota}
 }
 
 func validUsername(n string) bool {
@@ -81,6 +82,7 @@ func (s *Server) handleAdminUserCreate(w http.ResponseWriter, r *http.Request) e
 		Role               string `json:"role"`
 		Scope              string `json:"scope"`
 		MustChangePassword bool   `json:"mustChangePassword"`
+		Quota              int64  `json:"quota"`
 	}
 	if err := readJSON(r, &in); err != nil {
 		return err
@@ -102,11 +104,14 @@ func (s *Server) handleAdminUserCreate(w http.ResponseWriter, r *http.Request) e
 	if err != nil {
 		return err
 	}
+	if in.Quota < 0 {
+		return errorf(http.StatusBadRequest, "bad_quota", "quota must be >= 0")
+	}
 	hash, err := auth.HashPassword(in.Password)
 	if err != nil {
 		return err
 	}
-	u, err := s.db.CreateUser(r.Context(), &store.User{Username: in.Username, PasswordHash: hash, Role: in.Role, Scope: scope, MustChangePassword: in.MustChangePassword})
+	u, err := s.db.CreateUser(r.Context(), &store.User{Username: in.Username, PasswordHash: hash, Role: in.Role, Scope: scope, MustChangePassword: in.MustChangePassword, Quota: in.Quota})
 	if err != nil {
 		if errors.Is(err, store.ErrConflict) {
 			return errorf(http.StatusConflict, "exists", "username already exists")
@@ -139,6 +144,7 @@ func (s *Server) handleAdminUserUpdate(w http.ResponseWriter, r *http.Request) e
 		Disabled           *bool   `json:"disabled"`
 		Password           *string `json:"password"`
 		MustChangePassword *bool   `json:"mustChangePassword"`
+		Quota              *int64  `json:"quota"`
 	}
 	if err := readJSON(r, &in); err != nil {
 		return err
@@ -199,6 +205,13 @@ func (s *Server) handleAdminUserUpdate(w http.ResponseWriter, r *http.Request) e
 	if in.MustChangePassword != nil {
 		u.MustChangePassword = *in.MustChangePassword
 		changes["mustChangePassword"] = u.MustChangePassword
+	}
+	if in.Quota != nil && *in.Quota != u.Quota {
+		if *in.Quota < 0 {
+			return errorf(http.StatusBadRequest, "bad_quota", "quota must be >= 0")
+		}
+		u.Quota = *in.Quota
+		changes["quota"] = u.Quota
 	}
 	if err := s.db.UpdateUser(ctx, u); err != nil {
 		return err
