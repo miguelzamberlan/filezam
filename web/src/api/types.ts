@@ -32,6 +32,8 @@ export interface User {
   role: 'admin' | 'user'
   restricted: boolean
   mustChangePassword: boolean
+  totpEnabled: boolean
+  totpRequired: boolean // admin obrigado a cadastrar o 2FA antes de usar o app
 }
 
 export interface AdminUser {
@@ -42,6 +44,7 @@ export interface AdminUser {
   mustChangePassword: boolean
   disabled: boolean
   quota: number // bytes; 0 = sem limite
+  totpEnabled: boolean
   lockedUntil: number | null
   createdAt: number
   updatedAt: number
@@ -56,6 +59,7 @@ export interface AppConfig {
   shareMaxTtl: number
   publicUrl: string
   trashRetention: number // segundos; 0 = lixeira desativada
+  require2fa: boolean
   previewMaxText: number
   version: string
 }

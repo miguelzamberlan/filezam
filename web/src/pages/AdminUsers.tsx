@@ -102,6 +102,21 @@ function UserForm({ user, onClose }: { user: AdminUser | null; onClose: () => vo
         <p className="mt-1 text-xs text-neutral-500">{S.quotaHint}</p>
         <label className="mt-3 flex items-center gap-2 text-sm"><input type="checkbox" checked={mustChange} onChange={(e) => setMustChange(e.target.checked)} /> {S.forcePasswordChange}</label>
         {user && <label className="mt-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={disabled} onChange={(e) => setDisabled(e.target.checked)} /> {S.disabled}</label>}
+        {user?.totpEnabled && (
+          <div className="mt-3 flex items-center justify-between rounded-md border border-neutral-200 px-3 py-2 text-sm dark:border-neutral-800">
+            <span>{S.totp}: <span className="text-emerald-600">{S.totpOn}</span></span>
+            <button type="button" className="btn-ghost !py-1 text-red-600" onClick={async () => {
+              if (!(await dialogs.confirm({ title: S.totpResetAdmin, message: S.totpResetConfirm(user.username), danger: true, okLabel: S.totpResetAdmin }))) return
+              try {
+                await Api.adminTOTPReset(user.id)
+                qc.invalidateQueries({ queryKey: ['admin-users'] })
+                onClose()
+              } catch (e) {
+                setErr(e instanceof ApiError ? errorMessage(e.code, e.message) : String(e))
+              }
+            }}>{S.totpResetAdmin}</button>
+          </div>
+        )}
         {err && <p className="mt-3 text-sm text-red-600">{err}</p>}
         <div className="mt-4 flex justify-end gap-2">
           <button type="button" className="btn-ghost" onClick={onClose}>{S.cancel}</button>
@@ -142,6 +157,7 @@ export default function AdminUsers() {
                 <th className="px-3 py-2">{S.role}</th>
                 <th className="px-3 py-2">{S.scope}</th>
                 <th className="hidden px-3 py-2 sm:table-cell">{S.quota}</th>
+                <th className="hidden px-3 py-2 md:table-cell">{S.totpShort}</th>
                 <th className="hidden px-3 py-2 md:table-cell">{S.created}</th>
                 <th className="px-3 py-2"></th>
               </tr>
@@ -157,6 +173,7 @@ export default function AdminUsers() {
                   <td className="px-3 py-2">{u.role === 'admin' ? S.roleAdmin : S.roleUser}</td>
                   <td className="max-w-xs truncate px-3 py-2">{u.scope === '' ? S.scopeRoot : '/' + u.scope}</td>
                   <td className="hidden px-3 py-2 sm:table-cell">{u.quota > 0 ? formatBytes(u.quota, 0) : '—'}</td>
+                  <td className="hidden px-3 py-2 md:table-cell">{u.totpEnabled ? <span className="text-emerald-600">{S.totpOn}</span> : <span className="text-neutral-400">—</span>}</td>
                   <td className="hidden px-3 py-2 md:table-cell">{formatDate(u.createdAt, true)}</td>
                   <td className="px-3 py-2 text-right">
                     <button className="btn-ghost" onClick={() => setEdit(u)}><IEdit size={16} /></button>

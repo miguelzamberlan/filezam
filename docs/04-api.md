@@ -31,13 +31,18 @@ Timestamps: `mtime` em milissegundos; os demais em segundos Unix.
 | Método | Rota | Auth | Descrição |
 |---|---|---|---|
 | GET | `/api/health` | - | `{ok:true, version}`; 503 `db`/`root` se banco ou raiz indisponíveis |
-| GET | `/api/config` | S | `{chunkSize, batchMaxFiles, batchMaxBytes, batchFileMax, maxParallel, shareMaxTtl, publicUrl, trashRetention, previewMaxText, version}` (`trashRetention` em segundos; `0` = lixeira desativada) (`publicUrl` = `FILEZAM_PUBLIC_URL`, `""` quando não definido) |
+| GET | `/api/config` | S | `{chunkSize, batchMaxFiles, batchMaxBytes, batchFileMax, maxParallel, shareMaxTtl, publicUrl, trashRetention, require2fa, previewMaxText, version}` (`trashRetention` em segundos; `0` = lixeira desativada) (`publicUrl` = `FILEZAM_PUBLIC_URL`, `""` quando não definido; `require2fa` = `FILEZAM_REQUIRE_2FA_ADMINS`) |
 
 ## Autenticação
 
 | Método | Rota | Auth | Corpo → Resposta |
 |---|---|---|---|
-| POST | `/api/auth/login` | - | `{username, password}` → `{user}`; 401 `bad_credentials` (também para conta bloqueada, desativada ou inexistente), 429 `rate_limited`/`busy` |
+| POST | `/api/auth/login` | - | `{username, password}` → `{user}`, ou `{totpRequired: true, token}` quando a conta tem 2FA e não há cookie de dispositivo confiável; 401 `bad_credentials` (também para conta bloqueada, desativada ou inexistente), 429 `rate_limited`/`busy` |
+| POST | `/api/auth/totp` | - | `{token, code, trust?}` → `{user}` + cookie de sessão (e `fz_trust` por 30 dias com `trust`). `code` = 6 dígitos ou código de recuperação. 401 `bad_totp` / `totp_expired`, 429 |
+| POST | `/api/auth/totp/setup` | S | → `{secret, uri}` (segredo pendente por 10 min) |
+| POST | `/api/auth/totp/enable` | S | `{code}` → `{user, recoveryCodes: [10]}`; 401 `bad_totp`, 409 `totp_setup_expired`. Derruba as outras sessões |
+| POST | `/api/auth/totp/disable` | S | `{password, code}` → `{user}`; 401 `bad_credentials`/`bad_totp`, 409 `totp_not_enabled` |
+| POST | `/api/auth/totp/recovery` | S | `{password, code}` → `{recoveryCodes}` novos (os antigos morrem) |
 | POST | `/api/auth/logout` | S | → `{ok}`; limpa o cookie |
 | GET | `/api/auth/me` | S | → `{user}` |
 | POST | `/api/auth/password` | S | `{current, new}` → `{user}`; 401 `bad_credentials`, 400 `weak_password`, 429 `rate_limited`/`busy` (mesmos limites do login). Revoga as outras sessões |
@@ -133,6 +138,7 @@ Tudo responde 404 `not_found` para token inválido/expirado/revogado; 429 por ra
 | GET | `/api/admin/users` | A | `{users: AdminUser[]}` |
 | POST | `/api/admin/users` | A | `{username, password, role?, scope?, mustChangePassword?, quota?}` → 201 `{user}`; 400 `invalid_username`/`invalid_role`/`invalid_scope`/`weak_password`, 409 `exists` |
 | PATCH | `/api/admin/users/{id}` | A | Qualquer de `{role, scope, disabled, password, mustChangePassword, quota}` (`quota` em bytes, 0 = sem limite; 400 `bad_quota`) → `{user}`; 409 `last_admin`. Mudanças de role/scope/senha/disabled revogam sessões; estreitar `scope` apaga os links públicos do usuário que ficaram fora dele (`sharesRevoked` no evento de auditoria) |
+| POST | `/api/admin/users/{id}/totp/reset` | A | Remove o 2FA do usuário e derruba as sessões dele → `{ok}` |
 | DELETE | `/api/admin/users/{id}` | A | → `{ok}`; 409 `self`/`last_admin`; remove partes de upload pendentes |
 | GET | `/api/admin/dirs?path=` | A | `{path, dirs: [string]}` só diretórios reais da **raiz base**, para o seletor de escopo |
 | GET | `/metrics` | token | Prometheus text format; exige `FILEZAM_METRICS_TOKEN` (`Authorization: Bearer`) ou sessão admin; 404 quando desativado |
@@ -155,10 +161,10 @@ Regras de `username`: 2–64 caracteres de `A-Z a-z 0-9 . _ - @`, único sem dis
 | HTTP | code | Quando |
 |---|---|---|
 | 400 | `bad_json`, `invalid_path` (inclui tamanho de upload fora de `[0, 1 PiB]` e nomes `.filezam-*`), `invalid_name` (inclui caracteres de controle em nomes novos), `bad_query`, `nested`, `root_op`, `bad_index`, `bad_length`, `bad_conflict`, `bad_expiry`, `bad_id`, `bad_meta`, `bad_multipart`, `no_paths`, `too_many`, `too_many_files`, `weak_password`, `invalid_username`, `invalid_role`, `invalid_scope`, `bad_quota`, `unsupported` | Entrada inválida |
-| 401 | `unauthorized`, `bad_credentials`, `share_locked` | Sem sessão / credenciais erradas / link com senha pendente |
-| 403 | `forbidden`, `csrf`, `password_change_required`, `scope_unavailable`, `fs_permission` | Sem permissão |
+| 401 | `unauthorized`, `bad_credentials`, `share_locked`, `bad_totp`, `totp_expired` | Sem sessão / credenciais erradas / link com senha pendente / código 2FA inválido ou etapa expirada |
+| 403 | `forbidden`, `csrf`, `password_change_required`, `totp_required`, `scope_unavailable`, `fs_permission` | Sem permissão |
 | 404 | `not_found` | Caminho, job, share, usuário |
-| 409 | `exists`, `is_dir`, `not_dir`, `conflict`, `cross_device`, `upload_in_progress`, `incomplete`, `last_admin`, `self` | Conflito de estado |
+| 409 | `exists`, `is_dir`, `not_dir`, `conflict`, `cross_device`, `upload_in_progress`, `incomplete`, `last_admin`, `self`, `totp_setup_expired`, `totp_not_enabled` | Conflito de estado |
 | 411 | `length_required` | Chunk sem `Content-Length` |
 | 413 | `too_large` | Corpo maior que o limite |
 | 507 | `no_space`, `quota_exceeded` | Disco cheio / cota do usuário estourada |

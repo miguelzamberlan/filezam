@@ -1181,3 +1181,93 @@ func TestJobHistoryAndMetrics(t *testing.T) {
 		t.Fatalf("metrics via admin session: %d", resp.StatusCode)
 	}
 }
+
+func TestTOTPFlow(t *testing.T) {
+	admin, s, _ := newEnv(t)
+	s.loginUser, s.loginIP = auth.NewLimiter(1000, 1000), auth.NewLimiter(1000, 1000) // o fluxo faz muitos logins seguidos
+	admin.login("admin", "admin")
+	admin.expect("POST", "/api/auth/password", map[string]string{"current": "admin", "new": "correct horse battery"}, 200)
+	if o := admin.expect("GET", "/api/auth/me", nil, 200); o["user"].(map[string]any)["totpEnabled"] != false {
+		t.Fatalf("me before: %v", o)
+	}
+	// cadastro: setup → código errado → código certo devolve códigos de recuperação
+	o := admin.expect("POST", "/api/auth/totp/setup", nil, 200)
+	secret := o["secret"].(string)
+	if !strings.HasPrefix(o["uri"].(string), "otpauth://totp/Filezam:admin?") {
+		t.Fatalf("uri: %v", o["uri"])
+	}
+	admin.expect("POST", "/api/auth/totp/enable", map[string]string{"code": "000000"}, 401)
+	code, _ := auth.TOTPCode(secret, time.Now())
+	o = admin.expect("POST", "/api/auth/totp/enable", map[string]string{"code": code}, 200)
+	rec := o["recoveryCodes"].([]any)
+	if len(rec) != 10 || o["user"].(map[string]any)["totpEnabled"] != true {
+		t.Fatalf("enable: %v", o)
+	}
+	// novo login exige a segunda etapa; o mesmo código do cadastro não vale (anti-replay)
+	fresh := func() *client {
+		jar, _ := cookiejar.New(nil)
+		return &client{t: t, srv: admin.srv, c: &http.Client{Jar: jar}}
+	}
+	c1 := fresh()
+	o = c1.expect("POST", "/api/auth/login", map[string]string{"username": "admin", "password": "correct horse battery"}, 200)
+	if o["totpRequired"] != true || o["token"] == nil {
+		t.Fatalf("login should ask for totp: %v", o)
+	}
+	ptok := o["token"].(string)
+	c1.expect("GET", "/api/auth/me", nil, 401) // sem sessão ainda
+	c1.expect("POST", "/api/auth/totp", map[string]any{"token": ptok, "code": code}, 401)
+	next, _ := auth.TOTPCode(secret, time.Now().Add(30*time.Second))
+	c1.expect("POST", "/api/auth/totp", map[string]any{"token": ptok, "code": next, "trust": true}, 200)
+	c1.expect("GET", "/api/auth/me", nil, 200)
+	c1.expect("POST", "/api/auth/totp", map[string]any{"token": ptok, "code": next}, 401) // token consumido
+	// dispositivo confiável: o próximo login do mesmo jar não pede código
+	c1.expect("POST", "/api/auth/logout", nil, 200)
+	if o = c1.expect("POST", "/api/auth/login", map[string]string{"username": "admin", "password": "correct horse battery"}, 200); o["totpRequired"] != nil {
+		t.Fatalf("trusted device still asked: %v", o)
+	}
+	// outro navegador: código de recuperação vale uma vez
+	c2 := fresh()
+	o = c2.expect("POST", "/api/auth/login", map[string]string{"username": "admin", "password": "correct horse battery"}, 200)
+	ptok2 := o["token"].(string)
+	c2.expect("POST", "/api/auth/totp", map[string]any{"token": ptok2, "code": rec[0].(string)}, 200)
+	c3 := fresh()
+	o = c3.expect("POST", "/api/auth/login", map[string]string{"username": "admin", "password": "correct horse battery"}, 200)
+	ptok3 := o["token"].(string)
+	c3.expect("POST", "/api/auth/totp", map[string]any{"token": ptok3, "code": rec[0].(string)}, 401)
+	c3.expect("POST", "/api/auth/totp", map[string]any{"token": ptok3, "code": strings.ToUpper(rec[1].(string))}, 200)
+	// desligar exige senha + código; depois o cookie de confiança deixa de valer e login volta a ser simples
+	c3.expect("POST", "/api/auth/totp/disable", map[string]any{"password": "errada", "code": rec[2]}, 401)
+	c3.expect("POST", "/api/auth/totp/disable", map[string]any{"password": "correct horse battery", "code": rec[2]}, 200)
+	if o = c1.expect("POST", "/api/auth/login", map[string]string{"username": "admin", "password": "correct horse battery"}, 200); o["totpRequired"] != nil {
+		t.Fatalf("after disable: %v", o)
+	}
+	// exigência para admins: sem 2FA, a API fecha com totp_required mas o cadastro continua acessível
+	s.cfg.Require2FA = true
+	o = c1.expect("GET", "/api/auth/me", nil, 200)
+	if o["user"].(map[string]any)["totpRequired"] != true {
+		t.Fatalf("totpRequired flag: %v", o)
+	}
+	resp, body := c1.do("GET", "/api/files?path=", nil, nil)
+	if resp.StatusCode != 403 || body["error"].(map[string]any)["code"] != "totp_required" {
+		t.Fatalf("gating: %d %v", resp.StatusCode, body)
+	}
+	o = c1.expect("POST", "/api/auth/totp/setup", nil, 200)
+	code2, _ := auth.TOTPCode(o["secret"].(string), time.Now())
+	c1.expect("POST", "/api/auth/totp/enable", map[string]string{"code": code2}, 200)
+	c1.expect("GET", "/api/files?path=", nil, 200)
+	// admin reseta o 2FA de outro usuário
+	s.cfg.Require2FA = false
+	c1.expect("POST", "/api/admin/users", map[string]any{"username": "bob", "password": "bobpassword1"}, 201)
+	users := c1.expect("GET", "/api/admin/users", nil, 200)["users"].([]any)
+	var bobID float64
+	for _, u := range users {
+		if u.(map[string]any)["username"] == "bob" {
+			bobID = u.(map[string]any)["id"].(float64)
+		}
+	}
+	c1.expect("POST", fmt.Sprintf("/api/admin/users/%d/totp/reset", int(bobID)), nil, 200)
+	// arquivo de chave criado em DataDir com permissão 0600
+	if fi, err := os.Stat(filepath.Join(s.cfg.DataDir, "secret.key")); err != nil || fi.Mode().Perm() != 0o600 {
+		t.Fatalf("secret.key: %v", err)
+	}
+}

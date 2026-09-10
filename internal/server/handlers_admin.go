@@ -22,11 +22,12 @@ type adminUserView struct {
 	CreatedAt          int64  `json:"createdAt"`
 	UpdatedAt          int64  `json:"updatedAt"`
 	Quota              int64  `json:"quota"` // bytes; 0 = sem limite
+	TOTPEnabled        bool   `json:"totpEnabled"`
 }
 
 func viewAdminUser(u *store.User) adminUserView {
 	return adminUserView{ID: u.ID, Username: u.Username, Role: u.Role, Scope: u.Scope, MustChangePassword: u.MustChangePassword,
-		Disabled: u.Disabled, LockedUntil: u.LockedUntil, CreatedAt: u.CreatedAt, UpdatedAt: u.UpdatedAt, Quota: u.Quota}
+		Disabled: u.Disabled, LockedUntil: u.LockedUntil, CreatedAt: u.CreatedAt, UpdatedAt: u.UpdatedAt, Quota: u.Quota, TOTPEnabled: u.TOTPEnabled()}
 }
 
 func validUsername(n string) bool {

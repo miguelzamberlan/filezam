@@ -10,12 +10,12 @@ SQLite em `FILEZAM_DATA_DIR/filezam.db` (mais `-wal` e `-shm`). Driver `modernc.
 
 ## Migrações
 
-Arquivos em `internal/store/migrations/NNN_nome.sql`, embutidos com `embed`, aplicados em ordem numérica dentro de uma transação cada, registrados em `schema_migrations(version, applied_at)`. Para evoluir o esquema: crie `009_algo.sql` (nunca edite um arquivo já aplicado em produção). SQLite tem `ALTER TABLE` limitado; para mudanças estruturais use o padrão criar-nova → copiar → renomear.
+Arquivos em `internal/store/migrations/NNN_nome.sql`, embutidos com `embed`, aplicados em ordem numérica dentro de uma transação cada, registrados em `schema_migrations(version, applied_at)`. Para evoluir o esquema: crie `010_algo.sql` (nunca edite um arquivo já aplicado em produção). SQLite tem `ALTER TABLE` limitado; para mudanças estruturais use o padrão criar-nova → copiar → renomear.
 
 ## Esquema (`001_init.sql` + migrações)
 
 ```sql
-users(id, username UNIQUE NOCASE, password_hash /*PHC argon2id*/, role CHECK IN ('admin','user'), quota /*bytes, 007*/,
+users(id, username UNIQUE NOCASE, password_hash /*PHC argon2id*/, role CHECK IN ('admin','user'), quota /*bytes, 007*/, totp_secret /*AES-GCM, 009*/, totp_enabled_at, totp_counter, totp_recovery /*JSON, 009*/,
       scope TEXT DEFAULT '' /*base-relativo; '' = raiz*/, must_change_password, disabled,
       failed_logins, lockouts, locked_until, created_at, updated_at)
 
@@ -50,6 +50,7 @@ Migrações aplicadas depois de `001_init.sql`:
 | 004 | `004_trash.sql` | Tabela `trash(id, user_id → users CASCADE, trash_dir, name, path, type, size, deleted_at)`: itens da lixeira com o caminho original base-relativo |
 | 006 | `006_share_inode.sql` | `shares.dev`, `shares.ino`: identidade do item compartilhado (0 = desconhecida) |
 | 007 | `007_user_quota.sql` | `users.quota` (bytes, 0 = sem limite) |
+| 009 | `009_totp.sql` | `users.totp_secret` (cifrado), `totp_enabled_at`, `totp_counter`, `totp_recovery` (JSON de hashes) |
 | 008 | `008_jobs.sql` | Tabela `jobs(id, user_id → users CASCADE, type, label, state, done, total, bytes_done, bytes_total, error, warnings, started_at, finished_at)`: histórico de operações |
 | 005 | `005_file_index.sql` | `file_index(path PK, parent, name, name_lc, type, size, mtime, gen)` com índices em `name_lc` e `parent`, e `index_state(id=1, last_full_at, entries, gen)` |
 
@@ -58,7 +59,7 @@ Todos os timestamps são segundos Unix, exceto `uploads.mtime` (ms, vindo do cli
 ## Convenções
 
 - Caminhos gravados são **base-relativos** (`vfs.Join(user.Scope, p)`), para sobreviverem a mudanças de escopo do usuário. A leitura converte para escopo-relativo e descarta o que ficou fora.
-- Nunca grave senhas ou tokens de sessão em claro (`auth.HashToken`). A única exceção é `shares.token`, gravado em claro de propósito para permitir recopiar o link ([03](03-seguranca.md#links-públicos)); a consulta pública continua sendo por `token_hash`.
+- Nunca grave senhas ou tokens de sessão em claro (`auth.HashToken`). Segredos TOTP vão cifrados com `auth.Seal` e a chave de `<DataDir>/secret.key` (ou `FILEZAM_SECRET_KEY`): **o backup precisa levar o `secret.key` junto com o banco**, senão o 2FA de todos deixa de validar. A única exceção é `shares.token`, gravado em claro de propósito para permitir recopiar o link ([03](03-seguranca.md#links-públicos)); a consulta pública continua sendo por `token_hash`.
 - `RecordLoginFailure` aplica o bloqueio progressivo; `RecordLoginSuccess` zera.
 - `ListStaleUploads`, `PurgeExpiredSessions` e `PruneAudit` são chamados pela tarefa de fundo.
 

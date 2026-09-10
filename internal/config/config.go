@@ -2,6 +2,7 @@
 package config
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/netip"
@@ -44,6 +45,8 @@ type Config struct {
 	TrashRetention time.Duration // 0 = lixeira desativada (exclusão permanente)
 	IndexInterval  time.Duration // varredura completa do índice de nomes; 0 = índice desativado
 	MetricsToken   string        // token do /metrics; vazio = desativado
+	SecretKey      []byte        // 32 bytes para cifrar segredos TOTP e assinar cookies de dispositivo confiável; vazio = arquivo em DataDir
+	Require2FA     bool          // administradores precisam ter 2FA ativo
 }
 
 // resolve follows symlinks when the path exists; otherwise the absolute path is used as is.
@@ -96,6 +99,16 @@ func Load() (*Config, error) {
 	}
 	if c.Fsync, err = boolEnv("FILEZAM_FSYNC", true); err != nil {
 		return nil, err
+	}
+	if c.Require2FA, err = boolEnv("FILEZAM_REQUIRE_2FA_ADMINS", false); err != nil {
+		return nil, err
+	}
+	if v := env("FILEZAM_SECRET_KEY", ""); v != "" {
+		key, err := hex.DecodeString(strings.TrimSpace(v))
+		if err != nil || len(key) != 32 {
+			return nil, errors.New("FILEZAM_SECRET_KEY must be 64 hex characters (32 bytes)")
+		}
+		c.SecretKey = key
 	}
 	switch strings.ToLower(env("FILEZAM_SECURE_COOKIES", "auto")) {
 	case "auto":

@@ -14,19 +14,19 @@
 - **Move com "substituir" entre pastas** faz merge quando ambos são pastas (copia + apaga origem); entre dispositivos vira cópia + exclusão sem progresso de bytes.
 - **Nomes com UTF-8 inválido** aparecem em vermelho e não podem ser manipulados.
 - **Pesquisa só por nome**: não indexa conteúdo.
-- **Sem 2FA**.
+- **Dispositivos confiáveis sem revogação individual**: desligar e religar o 2FA invalida todos de uma vez.
 - **Arrastar dentro da UI** só com mouse; no toque use recortar/colar.
 
 ## Próximos passos sugeridos (ordem de valor)
 
 1. Retomada automática no Chrome com File System Access API.
-2. 2FA TOTP para admins.
-3. Pesquisa por conteúdo (texto) sobre o índice.
-4. Retomar jobs interrompidos por reinício a partir do histórico.
+2. Pesquisa por conteúdo (texto) sobre o índice.
+3. Retomar jobs interrompidos por reinício a partir do histórico.
+4. Chaves de acesso (WebAuthn/passkeys) como alternativa ao TOTP; revogação individual de dispositivos confiáveis.
 
 ## Feito
 
-Lixeira com retenção, índice de nomes em SQLite, link de arquivo único e senha no link, arrastar e soltar interno, listagem paginada, interface em inglês, histórico de operações persistido, métricas Prometheus, cota de disco por usuário com limites de zips/jobs, link amarrado ao inode e bloqueio de login silencioso por (usuário, IP) (setembro de 2026).
+Lixeira com retenção, índice de nomes em SQLite, link de arquivo único e senha no link, arrastar e soltar interno, listagem paginada, interface em inglês, histórico de operações persistido, métricas Prometheus, cota de disco por usuário com limites de zips/jobs, link amarrado ao inode e bloqueio de login silencioso por (usuário, IP) e verificação em duas etapas TOTP com códigos de recuperação e dispositivo confiável (setembro de 2026).
 
 ## Ideias descartadas
 

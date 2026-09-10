@@ -32,15 +32,17 @@ web/src/
 | Rota | Página | Guarda |
 |---|---|---|
 | `/login` | Login | — |
-| `/change-password` | ChangePassword | sessão |
+| `/change-password` | ChangePassword (troca obrigatória) | sessão |
+| `/setup-2fa` | Setup2FA (cadastro obrigatório para admins com `require2fa`; fora do Shell) | sessão |
 | `/b/*` | Browser (`*` = caminho escopo-relativo, cada segmento `encodeURIComponent`) | sessão + senha em dia |
 | `/search?path=&q=` | Search (pesquisa recursiva por nome a partir de `path`; resultados levam a `/b/<pasta>?sel=<nome>`, que seleciona o item) | sessão + senha em dia |
 | `/trash` | Trash (itens excluídos: restaurar, excluir de vez, esvaziar) | idem |
+| `/account` | Account (trocar senha; 2FA: ativar com `TotpSetup`, desativar, novos códigos de recuperação) | idem |
 | `/jobs` | Jobs ("Operações": em andamento com progresso e cancelamento + histórico de 30 dias vindo de `/api/jobs/history`; polling de 1 s só enquanto há job rodando) | idem |
 | `/shares`, `/admin/users`, `/admin/audit` | idem | idem (admin para `/admin/*`; a API também valida) |
 | `/s/:token/*` | PublicShare | — |
 
-`Protected` redireciona para `/login` sem sessão e para `/change-password` quando `mustChangePassword`.
+`Protected` redireciona para `/login` sem sessão, para `/change-password` quando `mustChangePassword` e para `/setup-2fa` quando `totpRequired`. Login em duas etapas: `Api.login` pode devolver `{totpRequired, token}`; a tela troca para o campo de código (app ou recuperação) com "Confiar neste dispositivo por 30 dias" e chama `Api.loginTOTP`. `TotpSetup` gera o QR com a biblioteca `qrcode` como `data:` URL numa `<img>` (nada de SVG injetado).
 
 ## Estado
 

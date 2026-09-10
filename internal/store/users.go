@@ -17,7 +17,11 @@ type User struct {
 	FailedLogins       int
 	Lockouts           int
 	LockedUntil        *int64
-	Quota              int64 // bytes; 0 = sem limite (migração 007)
+	Quota              int64  // bytes; 0 = sem limite (migração 007)
+	TOTPSecret         string // cifrado (auth.Seal); vazio = 2FA desligado
+	TOTPEnabledAt      *int64
+	TOTPCounter        int64  // último intervalo TOTP aceito
+	TOTPRecovery       string // JSON com hashes dos códigos de recuperação restantes
 	CreatedAt          int64
 	UpdatedAt          int64
 }
@@ -25,17 +29,20 @@ type User struct {
 // IsAdmin reports whether the user has the admin role.
 func (u *User) IsAdmin() bool { return u.Role == "admin" }
 
-const userCols = `id, username, password_hash, role, scope, must_change_password, disabled, failed_logins, lockouts, locked_until, created_at, updated_at, COALESCE(quota,0)`
+const userCols = `id, username, password_hash, role, scope, must_change_password, disabled, failed_logins, lockouts, locked_until, created_at, updated_at, COALESCE(quota,0), COALESCE(totp_secret,''), totp_enabled_at, COALESCE(totp_counter,0), COALESCE(totp_recovery,'')`
 
 func scanUser(row interface{ Scan(...any) error }) (*User, error) {
 	var u User
-	var locked sql.NullInt64
-	err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.Scope, &u.MustChangePassword, &u.Disabled, &u.FailedLogins, &u.Lockouts, &locked, &u.CreatedAt, &u.UpdatedAt, &u.Quota)
+	var locked, totpAt sql.NullInt64
+	err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.Scope, &u.MustChangePassword, &u.Disabled, &u.FailedLogins, &u.Lockouts, &locked, &u.CreatedAt, &u.UpdatedAt, &u.Quota, &u.TOTPSecret, &totpAt, &u.TOTPCounter, &u.TOTPRecovery)
 	if err != nil {
 		return nil, mapErr(err)
 	}
 	if locked.Valid {
 		u.LockedUntil = &locked.Int64
+	}
+	if totpAt.Valid {
+		u.TOTPEnabledAt = &totpAt.Int64
 	}
 	return &u, nil
 }
@@ -123,5 +130,26 @@ func (db *DB) RecordLoginFailure(ctx context.Context, id int64) error {
 // RecordLoginSuccess clears failure counters.
 func (db *DB) RecordLoginSuccess(ctx context.Context, id int64) error {
 	_, err := db.w.ExecContext(ctx, `UPDATE users SET failed_logins=0, lockouts=0, locked_until=NULL WHERE id=?`, id)
+	return err
+}
+
+// TOTPEnabled reports whether two-factor authentication is active.
+func (u *User) TOTPEnabled() bool { return u.TOTPSecret != "" && u.TOTPEnabledAt != nil }
+
+// SetTOTP stores (or clears, with secret "") the encrypted secret, enabling time and recovery hashes.
+func (db *DB) SetTOTP(ctx context.Context, id int64, sealedSecret string, enabledAt *int64, recovery string) error {
+	_, err := db.w.ExecContext(ctx, `UPDATE users SET totp_secret=?, totp_enabled_at=?, totp_counter=0, totp_recovery=?, updated_at=? WHERE id=?`, sealedSecret, nullInt(enabledAt), recovery, db.now(), id)
+	return err
+}
+
+// SetTOTPCounter records the last accepted interval (anti-replay).
+func (db *DB) SetTOTPCounter(ctx context.Context, id, counter int64) error {
+	_, err := db.w.ExecContext(ctx, `UPDATE users SET totp_counter=? WHERE id=? AND totp_counter<?`, counter, id, counter)
+	return err
+}
+
+// SetTOTPRecovery replaces the remaining recovery-code hashes.
+func (db *DB) SetTOTPRecovery(ctx context.Context, id int64, recovery string) error {
+	_, err := db.w.ExecContext(ctx, `UPDATE users SET totp_recovery=? WHERE id=?`, recovery, id)
 	return err
 }

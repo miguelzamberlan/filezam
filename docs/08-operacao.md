@@ -28,6 +28,8 @@ Além das variáveis do README:
 | `FILEZAM_TRASH_RETENTION` | `720h` | Quanto tempo itens excluídos ficam na lixeira (`<escopo>/.filezam-trash`) antes de serem apagados; `0` desativa a lixeira (excluir apaga de vez) |
 | `FILEZAM_INDEX_INTERVAL` | `6h` | Intervalo da varredura completa do índice de nomes usado pela pesquisa; `0` desativa o índice (a pesquisa percorre o disco) |
 | `FILEZAM_METRICS_TOKEN` | vazio | Liga `GET /metrics` (Prometheus); o coletor envia `Authorization: Bearer <token>`. Vazio = desativado |
+| `FILEZAM_SECRET_KEY` | vazio | 64 caracteres hex (32 bytes) para cifrar segredos TOTP e assinar o cookie de dispositivo confiável. Vazio = usa `/config/secret.key`, criado no primeiro início |
+| `FILEZAM_REQUIRE_2FA_ADMINS` | `false` | `true` obriga administradores a cadastrar a verificação em duas etapas antes de usar o app |
 
 Ver tabela completa no [README](../README.md#variáveis-de-ambiente). Validações no startup: raiz não pode ser `/`; `FILEZAM_DATA_DIR` não pode estar dentro da raiz; chunk entre 1 MiB e 1 GiB; `FILEZAM_SECURE_COOKIES=auto` sem proxies confiáveis gera aviso (cookies não serão `Secure` atrás de proxy).
 
@@ -58,7 +60,7 @@ Com `FILEZAM_METRICS_TOKEN` definido, aponte o Prometheus para `/metrics` com `a
 
 ## Backup
 
-Parar o serviço, copiar `filezam.db`, `filezam.db-wal`, `filezam.db-shm` de `/config`. Os arquivos em `/data` são seus e devem ter backup próprio.
+Parar o serviço, copiar `filezam.db`, `filezam.db-wal`, `filezam.db-shm` **e `secret.key`** de `/config` (sem a chave os segredos de 2FA não abrem). Os arquivos em `/data` são seus e devem ter backup próprio.
 
 ## Diagnóstico
 
@@ -77,6 +79,8 @@ Parar o serviço, copiar `filezam.db`, `filezam.db-wal`, `filezam.db-shm` de `/c
 | Pasta `.filezam-trash` no disco | lixeira do Filezam; invisível na interface | Não apagar à mão: use Esvaziar lixeira |
 | Usuário diz que a senha certa não entra | bloqueio de 15 min+ por (usuário, IP) após 10 erros; a resposta é igual à de senha errada | Esperar, ou entrar de outro endereço; ver `login.locked` na auditoria |
 | 507 `quota_exceeded` | cota do usuário (Administração → Usuários) estourada | Aumentar a cota ou liberar espaço; a medição atualiza em até 30 s |
+| Usuário perdeu o celular e os códigos de recuperação | 2FA sem como validar | Administração → Usuários → editar → **Redefinir 2FA** (ou `FILEZAM_REQUIRE_2FA_ADMINS=false` temporariamente se for o único admin, e depois `reset-admin`) |
+| Código do app sempre inválido | relógio do servidor fora de hora (tolerância de ±30 s) | Sincronizar o host com NTP |
 | Operação sumiu depois de reiniciar | jobs não retomam; ficam como "interrompida por reinício" em **Operações** | Refazer a operação |
 | Preview de PDF em branco ou com ícone de bloqueio | build antigo (cabeçalho `X-Frame-Options: DENY` no conteúdo inline) | Reconstruir a imagem |
 | 429 `rate_limited` ao trocar a senha | mais de 5 tentativas/min com a senha atual errada | Aguardar um minuto |

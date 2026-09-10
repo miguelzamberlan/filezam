@@ -8,6 +8,8 @@ import Shares from './pages/Shares'
 import Search from './pages/Search'
 import Trash from './pages/Trash'
 import Jobs from './pages/Jobs'
+import Account from './pages/Account'
+import Setup2FA from './pages/Setup2FA'
 import AdminUsers from './pages/AdminUsers'
 import AdminAudit from './pages/AdminAudit'
 import PublicShare from './pages/PublicShare'
@@ -27,6 +29,7 @@ function Protected({ children }: { children: React.ReactNode }) {
   }
   if (!user) return <Navigate to="/login" replace state={{ from: loc.pathname }} />
   if (user.mustChangePassword && loc.pathname !== '/change-password') return <Navigate to="/change-password" replace />
+  if (user.totpRequired && loc.pathname !== '/setup-2fa') return <Navigate to="/setup-2fa" replace />
   return <>{children}</>
 }
 
@@ -50,6 +53,14 @@ export default function App() {
           }
         />
         <Route
+          path="/setup-2fa"
+          element={
+            <Protected>
+              <Setup2FA />
+            </Protected>
+          }
+        />
+        <Route
           path="/*"
           element={
             <Protected>
@@ -64,6 +75,7 @@ export default function App() {
           <Route path="shares" element={<Shares />} />
           <Route path="trash" element={<Trash />} />
           <Route path="jobs" element={<Jobs />} />
+          <Route path="account" element={<Account />} />
           <Route path="admin/users" element={<AdminUsers />} />
           <Route path="admin/audit" element={<AdminAudit />} />
           <Route path="*" element={<Navigate to="/b" replace />} />

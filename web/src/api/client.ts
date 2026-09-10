@@ -65,7 +65,13 @@ const q = (params: Record<string, string | number | boolean | undefined>) => {
 
 export const Api = {
   // auth
-  login: (username: string, password: string) => api<{ user: User }>('POST', '/api/auth/login', { username, password }),
+  login: (username: string, password: string) => api<{ user?: User; totpRequired?: boolean; token?: string }>('POST', '/api/auth/login', { username, password }),
+  loginTOTP: (token: string, code: string, trust: boolean) => api<{ user: User }>('POST', '/api/auth/totp', { token, code, trust }),
+  totpSetup: () => api<{ secret: string; uri: string }>('POST', '/api/auth/totp/setup'),
+  totpEnable: (code: string) => api<{ user: User; recoveryCodes: string[] }>('POST', '/api/auth/totp/enable', { code }),
+  totpDisable: (password: string, code: string) => api<{ user: User }>('POST', '/api/auth/totp/disable', { password, code }),
+  totpRecovery: (password: string, code: string) => api<{ recoveryCodes: string[] }>('POST', '/api/auth/totp/recovery', { password, code }),
+  adminTOTPReset: (id: number) => api<{ ok: true }>('POST', `/api/admin/users/${id}/totp/reset`),
   logout: () => api<{ ok: true }>('POST', '/api/auth/logout'),
   me: () => api<{ user: User }>('GET', '/api/auth/me'),
   changePassword: (current: string, next: string) => api<{ user: User }>('POST', '/api/auth/password', { current, new: next }),

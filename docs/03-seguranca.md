@@ -10,7 +10,8 @@
 | Quem envia arquivos | Executar script no navegador de quem visualiza | Nunca servir `text/html`; CSP `sandbox` em previews; `nosniff` |
 | Site malicioso aberto no mesmo navegador | CSRF | Cookie `SameSite=Strict` + header customizado + `Sec-Fetch-Site` |
 | Quem obtém o banco | Reutilizar sessões e tokens | Sessões só como hash SHA-256; senhas em Argon2id; tokens de link público ficam em claro (ver "Links públicos") |
-| Quem rouba um cookie de sessão | Trocar a senha e tomar a conta | Troca de senha exige a senha atual, com os mesmos limites de taxa do login |
+| Quem rouba um cookie de sessão | Trocar a senha e tomar a conta | Troca de senha exige a senha atual, com os mesmos limites de taxa do login; desligar o 2FA exige senha e código |
+| Quem descobre a senha | Entrar na conta | Verificação em duas etapas opcional (obrigatória para admins com `FILEZAM_REQUIRE_2FA_ADMINS`) |
 
 Fora do escopo: proteção contra um administrador do host, ataques ao proxy reverso, e sigilo de arquivos frente a quem tem acesso legítimo ao escopo. **Recursos por usuário**: o admin pode definir uma cota de disco (`users.quota`, bytes no escopo; uploads, lote, sessões chunked e cópias são recusados com `507 quota_exceeded` quando estourariam), há no máximo 2 zips e 4 jobs em andamento por usuário (`429 busy`), e um upload chunked pré-aloca o tamanho declarado dentro da cota e do espaço livre. O uso é medido pelo índice de nomes (ou varredura limitada) com cache de 30 s ajustado a cada escrita aceita, então pequenas ultrapassagens transitórias são possíveis; lixeira e partes de upload não contam. O escopo de um admin é uma conveniência de navegação, **não uma fronteira de confidencialidade**: a tela Compartilhados e o diálogo de propriedades mostram a um admin todos os links (com token) de todos os usuários, inclusive de pastas fora do escopo dele.
 
@@ -35,7 +36,17 @@ Fora do escopo: proteção contra um administrador do host, ataques ao proxy rev
 - Limites de login: 10/min por IP, 5/min por usuário, 4 verificações Argon2 simultâneas. **A troca de senha (`POST /api/auth/password`) passa pelos mesmos limites e semáforo**, com evento `password.ratelimited` na auditoria: quem roubou um cookie não consegue forçar a senha atual.
 - Sessão: token de 32 bytes aleatórios em cookie `filezam_session` (`HttpOnly`, `SameSite=Strict`, `Path=/`, `Secure` conforme `FILEZAM_SECURE_COOKIES`). O banco guarda só o SHA-256. Validade deslizante `FILEZAM_SESSION_TTL` (renovada no máximo a cada 5 min; valores acima de 30 dias são reduzidos a 30 dias na carga da configuração), teto absoluto de 30 dias a partir da criação.
 - Revogação: troca de senha (própria ou pelo admin), mudança de escopo, de perfil ou desativação apagam as demais sessões do usuário. Exclusão de usuário cascateia. As alterações de usuários pelo admin são serializadas por um mutex no processo, para que a checagem de "último admin" não corra com outra requisição.
-- Troca obrigatória: `must_change_password` bloqueia toda a API com `403 password_change_required`, exceto `me`, `password`, `logout` e `config`.
+- Troca obrigatória: `must_change_password` bloqueia toda a API com `403 password_change_required`, exceto `me`, `password`, `logout`, `config` e os endpoints de 2FA; a exigência de 2FA para admins usa o mesmo mecanismo (`403 totp_required`).
+
+## Verificação em duas etapas (TOTP)
+
+- Algoritmo: TOTP (RFC 6238) sobre HOTP SHA-1, 6 dígitos, 30 s, tolerância de ±1 intervalo; tudo com a biblioteca padrão (`internal/auth/totp.go`). O último intervalo aceito fica em `users.totp_counter` e um código nunca é aceito duas vezes.
+- Segredo: 20 bytes aleatórios em base32, gravados **cifrados** (AES-256-GCM, `auth.Seal`) com a chave do servidor: `FILEZAM_SECRET_KEY` (64 hex) ou, na ausência, `<FILEZAM_DATA_DIR>/secret.key` gerado no primeiro início com modo 0600. Um dump do banco sozinho não entrega os segredos; a chave e o banco precisam ser copiados juntos no backup.
+- Cadastro: `setup` gera um segredo pendente em memória (10 min) e devolve a URI `otpauth://`; `enable` só grava depois de um código válido, gera 10 códigos de recuperação (mostrados uma vez, guardados como SHA-256) e derruba as outras sessões.
+- Login: senha certa em conta com 2FA devolve `{totpRequired, token}` (token de 24 bytes, 5 min, preso ao IP, uso único) em vez da sessão; `POST /api/auth/totp` recebe token + código (6 dígitos ou código de recuperação) e cria a sessão. Erros passam pelo limitador por usuário e por um bloqueio próprio por (usuário, IP) (`totp|user|ip`), sempre `401 bad_totp`.
+- Dispositivo confiável: com `trust: true` o servidor grava `fz_trust` = `uid.exp.HMAC-SHA256(chave, uid|exp|totp_enabled_at)`, `HttpOnly`, `SameSite=Strict`, 30 dias, sem tabela. Desligar ou recadastrar o 2FA muda `totp_enabled_at` e invalida todos os dispositivos de uma vez; não há revogação individual (limitação aceita).
+- Desativar ou gerar novos códigos exige senha atual e um código. O admin pode zerar o 2FA de qualquer usuário (`totp.reset`, sessões derrubadas). `FILEZAM_REQUIRE_2FA_ADMINS=true` bloqueia a API para admins sem 2FA (`403 totp_required`) até o cadastro, como a troca de senha obrigatória.
+- Auditoria: `login.totp_pending`, `totp.fail`, `totp.recovery`, `totp.enable`, `totp.disable`, `totp.recovery_reset`, `totp.reset`.
 
 ## CSRF
 
@@ -88,7 +99,7 @@ Na SPA: `Content-Security-Policy: default-src 'self'; script-src 'self'; style-s
 
 ## Auditoria
 
-Tabela `audit_log` com `login.ok`, `login.fail`, `login.locked`, `login.ratelimited`, `logout`, `password.change`, `password.fail`, `password.ratelimited`, `user.create`, `user.update`, `user.delete`, `share.create`, `share.revoke`, `share.unlock.fail`, `trash.restore`, `trash.delete`, `trash.empty`, `index.rebuild`. Retenção: 180 dias. Visível em Administração → Auditoria.
+Tabela `audit_log` com `login.ok`, `login.fail`, `login.locked`, `login.ratelimited`, `logout`, `password.change`, `password.fail`, `password.ratelimited`, `user.create`, `user.update`, `user.delete`, `share.create`, `share.revoke`, `share.unlock.fail`, `trash.restore`, `trash.delete`, `trash.empty`, `index.rebuild`, `login.totp_pending`, `totp.fail`, `totp.recovery`, `totp.enable`, `totp.disable`, `totp.recovery_reset`, `totp.reset`. Retenção: 180 dias. Visível em Administração → Auditoria.
 
 ## Container e dependências
 

@@ -44,6 +44,8 @@ type Server struct {
 	shareUnlock *auth.Limiter        // tentativas de senha por link
 	lockout     *auth.Lockout        // bloqueio por (usuário, IP) após falhas seguidas
 	zipSem      *auth.KeyedSemaphore // zips autenticados simultâneos por usuário
+	secretKey   []byte               // cifra dos segredos TOTP e HMAC do cookie de dispositivo confiável
+	pending     pendingState         // logins à espera do código TOTP e cadastros em andamento
 	quota       quotaCache
 	adminMu     sync.Mutex // serializa alterações de usuários: a checagem de "último admin" não é atômica no banco
 
@@ -72,6 +74,13 @@ func New(cfg *config.Config, db *store.DB, base *vfs.Root, log *slog.Logger, ver
 		quota:       quotaCache{m: map[int64]usageEntry{}},
 		bg:          bg, cancel: cancel,
 	}
+	key, err := loadSecretKey(cfg)
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	s.secretKey = key
+	s.pending = newPendingState()
 	if cfg.IndexInterval > 0 {
 		s.indexer = index.New(db, base, log, cfg.IndexInterval)
 	}
@@ -222,6 +231,11 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.Handle("POST /api/auth/logout", authed(s.handleLogout))
 	mux.Handle("GET /api/auth/me", authed(s.handleMe))
 	mux.Handle("POST /api/auth/password", authed(s.handleChangePassword))
+	mux.Handle("POST /api/auth/totp", chain(s.h(s.handleLoginTOTP), s.csrf))
+	mux.Handle("POST /api/auth/totp/setup", authed(s.handleTOTPSetup))
+	mux.Handle("POST /api/auth/totp/enable", authed(s.handleTOTPEnable))
+	mux.Handle("POST /api/auth/totp/disable", authed(s.handleTOTPDisable))
+	mux.Handle("POST /api/auth/totp/recovery", authed(s.handleTOTPRecovery))
 
 	mux.Handle("GET /api/files", user(s.handleList))
 	mux.Handle("GET /api/files/stat", user(s.handleStat))
@@ -273,6 +287,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.Handle("POST /api/admin/users", admin(s.handleAdminUserCreate))
 	mux.Handle("PATCH /api/admin/users/{id}", admin(s.handleAdminUserUpdate))
 	mux.Handle("DELETE /api/admin/users/{id}", admin(s.handleAdminUserDelete))
+	mux.Handle("POST /api/admin/users/{id}/totp/reset", admin(s.handleAdminTOTPReset))
 	mux.Handle("GET /api/admin/dirs", admin(s.handleAdminDirs))
 	mux.Handle("GET /api/admin/audit", admin(s.handleAdminAudit))
 	mux.Handle("GET /api/admin/index", admin(s.handleAdminIndex))
@@ -307,6 +322,7 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) error {
 		"shareMaxTtl":    int64(s.cfg.ShareMaxTTL.Seconds()),
 		"publicUrl":      s.cfg.PublicURL,
 		"trashRetention": int64(s.cfg.TrashRetention.Seconds()),
+		"require2fa":     s.cfg.Require2FA,
 		"previewMaxText": 1 << 20,
 		"version":        s.version,
 	})

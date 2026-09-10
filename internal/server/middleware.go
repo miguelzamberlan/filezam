@@ -220,6 +220,10 @@ func (s *Server) requirePasswordOK(next http.Handler) http.Handler {
 			writeError(w, r, errorf(http.StatusForbidden, "password_change_required", "you must change your password first"))
 			return
 		}
+		if u := userFrom(r); u != nil && s.cfg.Require2FA && u.IsAdmin() && !u.TOTPEnabled() {
+			writeError(w, r, errTOTPRequired)
+			return
+		}
 		next.ServeHTTP(w, r)
 	})
 }

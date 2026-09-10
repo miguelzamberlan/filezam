@@ -24,10 +24,13 @@ type userView struct {
 	Role               string `json:"role"`
 	Restricted         bool   `json:"restricted"`
 	MustChangePassword bool   `json:"mustChangePassword"`
+	TOTPEnabled        bool   `json:"totpEnabled"`
+	TOTPRequired       bool   `json:"totpRequired"` // admin obrigado a cadastrar antes de usar o app
 }
 
-func viewUser(u *store.User) userView {
-	return userView{ID: u.ID, Username: u.Username, Role: u.Role, Restricted: u.Scope != "", MustChangePassword: u.MustChangePassword}
+func (s *Server) viewUser(u *store.User) userView {
+	return userView{ID: u.ID, Username: u.Username, Role: u.Role, Restricted: u.Scope != "", MustChangePassword: u.MustChangePassword,
+		TOTPEnabled: u.TOTPEnabled(), TOTPRequired: s.cfg.Require2FA && u.IsAdmin() && !u.TOTPEnabled()}
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) error {
@@ -90,6 +93,17 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) error {
 	}
 	s.lockout.Reset(lockKey)
 	_ = s.db.RecordLoginSuccess(ctx, u.ID)
+	// Segunda etapa: com 2FA ativo e sem cookie de dispositivo confiável, devolve um token
+	// temporário em vez da sessão; /api/auth/totp troca token + código pela sessão.
+	if u.TOTPEnabled() && !s.trustedDevice(r, u) {
+		ptok, err := s.pending.newLogin(u.ID, ip)
+		if err != nil {
+			return err
+		}
+		s.audit(r, u, "login.totp_pending", nil)
+		writeJSON(w, r, 200, map[string]any{"totpRequired": true, "token": ptok})
+		return nil
+	}
 	tok, exp, err := s.createSession(ctx, r, u)
 	if err != nil {
 		return err
@@ -97,7 +111,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) error {
 	s.setSessionCookie(w, r, tok, exp)
 	s.audit(r, u, "login.ok", nil)
 	s.metrics.Inc("filezam_logins_total", `result="ok"`, 1)
-	writeJSON(w, r, 200, map[string]any{"user": viewUser(u)})
+	writeJSON(w, r, 200, map[string]any{"user": s.viewUser(u)})
 	return nil
 }
 
@@ -112,7 +126,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) error {
-	writeJSON(w, r, 200, map[string]any{"user": viewUser(userFrom(r))})
+	writeJSON(w, r, 200, map[string]any{"user": s.viewUser(userFrom(r))})
 	return nil
 }
 
@@ -158,6 +172,6 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) er
 		_ = s.db.DeleteUserSessions(r.Context(), u.ID, sess.ID)
 	}
 	s.audit(r, u, "password.change", nil)
-	writeJSON(w, r, 200, map[string]any{"user": viewUser(u)})
+	writeJSON(w, r, 200, map[string]any{"user": s.viewUser(u)})
 	return nil
 }

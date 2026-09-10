@@ -107,7 +107,7 @@ export default function Shell() {
         <div className="truncate px-2.5 text-sm font-medium">{user?.username}</div>
         <div className="px-2.5 text-xs text-neutral-500">{user?.role === 'admin' ? S.roleAdmin : S.roleUser}{user?.restricted ? ' · ' + S.scope.toLowerCase() : ''}</div>
         <div className="mt-2 flex gap-1">
-          <NavLink to="/change-password" className="btn-ghost flex-1 text-xs" title={S.changePassword}><IKey size={14} /> {S.password}</NavLink>
+          <NavLink to="/account" className="btn-ghost flex-1 text-xs" title={S.accountHint}><IKey size={14} /> {S.account}</NavLink>
           <button className="btn-ghost text-xs" onClick={() => setSettings(true)} title={S.settings}><ISettings size={14} /></button>
           <button className="btn-ghost text-xs" onClick={logout} title={S.logout}><ILogout size={14} /> {S.logout}</button>
         </div>

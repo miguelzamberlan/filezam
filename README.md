@@ -50,7 +50,8 @@ Três prioridades guiam cada decisão, nesta ordem:
 - **Uploads sérios**: arquivos de vários GB em blocos paralelos com retomada, pastas inteiras por arrastar e soltar, milhares de arquivos pequenos em lote, tudo com painel de progresso, pausa e repetição de falhas.
 - **Links públicos**: compartilhe uma pasta ou um arquivo por link somente leitura com prazo de validade, senha opcional, contagem de acessos e revogação imediata.
 - **Interface**: em português ou inglês, tema claro/escuro/sistema, cores personalizáveis, zoom da listagem, ícones por tipo de arquivo, arrastar e soltar para mover, listagem paginada para pastas enormes, atalhos de teclado e uso confortável no celular.
-- **Administração**: gestão de usuários com cota de disco, auditoria de logins e alterações, bloqueio progressivo contra força bruta, histórico de operações e métricas Prometheus.
+- **Verificação em duas etapas** (TOTP) com códigos de recuperação e "confiar neste dispositivo por 30 dias"; opcionalmente obrigatória para administradores.
+- **Administração**: gestão de usuários com cota de disco e redefinição de 2FA, auditoria de logins e alterações, bloqueio progressivo contra força bruta, histórico de operações e métricas Prometheus.
 - **Operação**: binário estático, imagem `distroless` sem shell, rootfs somente leitura, SQLite embutido (sem CGO), migrações automáticas, healthcheck.
 
 <p align="center">
@@ -102,6 +103,8 @@ Discos NTFS/exFAT montados com `uid=`/`gid=` funcionam normalmente: basta que o 
 | `FILEZAM_TRASH_RETENTION` | `720h` | Tempo na lixeira antes de apagar de vez; `0` desativa a lixeira |
 | `FILEZAM_INDEX_INTERVAL` | `6h` | Varredura completa do índice de nomes da pesquisa; `0` desativa o índice |
 | `FILEZAM_METRICS_TOKEN` | vazio | Liga `GET /metrics` (Prometheus) com `Authorization: Bearer` |
+| `FILEZAM_SECRET_KEY` | vazio | Chave (64 hex) que cifra os segredos de 2FA; vazio = `/config/secret.key` gerado no primeiro início |
+| `FILEZAM_REQUIRE_2FA_ADMINS` | `false` | Obriga administradores a ativar a verificação em duas etapas |
 | `FILEZAM_FSYNC` | `true` | `fsync` antes de finalizar cada upload |
 | `FILEZAM_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
 
@@ -170,6 +173,7 @@ Arquivos são gravados em `.filezam-upload-*.part` no diretório de destino e re
 - **Lixeira** (menu lateral): o que você exclui fica lá pelo prazo de `FILEZAM_TRASH_RETENTION` e pode ser restaurado para o local original. Arquivos alterados por fora do Filezam (Samba, SSH) aparecem na pesquisa após a próxima varredura do índice, ou ao clicar em **Reconstruir índice** (admin).
 - **Operações** (menu lateral): cópias, movimentações e exclusões em andamento, com cancelamento, e o histórico dos últimos 30 dias, que sobrevive a reinícios.
 - **Arrastar e soltar**: arraste itens da listagem para uma pasta ou para um nível da trilha de navegação para movê-los.
+- **Conta** (rodapé do menu): trocar senha e ativar a verificação em duas etapas escaneando o QR code no app autenticador; guarde os 10 códigos de recuperação. No login, marque "Confiar neste dispositivo por 30 dias" para não digitar o código a cada vez naquele navegador.
 - **Celular**: menu vira gaveta (☰), a barra de ações encolhe para o essencial mais **⋯**, um toque abre, toque longo abre o menu e seleciona (depois cada toque marca/desmarca).
 
 ### Atalhos de teclado
@@ -182,7 +186,7 @@ Resumo do que o projeto garante (modelo de ameaças, controles e limitações ac
 
 - **Sandbox de caminhos**: todo acesso ao disco passa por `os.Root`; `..`, symlinks para fora e nomes internos (`.filezam-*`) são recusados na entrada, inclusive em leitura. Nomes novos não aceitam caracteres de controle.
 - **Conteúdo enviado por usuários nunca vira página**: HTML/JS/SVG-como-texto saem como `text/plain`, o resto vai como download; previews inline levam CSP `sandbox` e `nosniff`.
-- **Sessões**: cookie `HttpOnly` + `SameSite=Strict`, só o hash no banco, validade deslizante com teto de 30 dias; senhas em Argon2id; bloqueio progressivo e rate limit no login **e na troca de senha**.
+- **Sessões**: cookie `HttpOnly` + `SameSite=Strict`, só o hash no banco, validade deslizante com teto de 30 dias; senhas em Argon2id; bloqueio progressivo e rate limit no login **e na troca de senha**; 2FA TOTP com segredo cifrado no banco e anti-replay.
 - **CSRF**: header `X-Filezam: 1` obrigatório em toda requisição mutante, mais `Sec-Fetch-Site`/`Origin`.
 - **Cabeçalhos**: CSP estrita na SPA, `X-Frame-Options`, `Referrer-Policy: same-origin`, HSTS atrás de proxy HTTPS confiável; tokens de link nunca vão para os logs.
 - **Container**: distroless sem shell, sem root, rootfs somente leitura, `cap_drop ALL`, `no-new-privileges`. Versão do Go fixada em `go.mod`/`Dockerfile`; `govulncheck` faz parte do checklist de versão.
@@ -242,7 +246,7 @@ Issues e pull requests são bem-vindos. Leia [`CONTRIBUTING.md`](CONTRIBUTING.md
 
 ## Roadmap e limitações
 
-O que já se sabe que falta (2FA, pesquisa por conteúdo, retomada de jobs) e o que foi descartado de propósito está em [`docs/10-roadmap.md`](docs/10-roadmap.md). Sugestões passam por issue antes de virar código.
+O que já se sabe que falta (pesquisa por conteúdo, retomada de jobs, passkeys) e o que foi descartado de propósito está em [`docs/10-roadmap.md`](docs/10-roadmap.md). Sugestões passam por issue antes de virar código.
 
 ## Autor
 
