@@ -92,6 +92,7 @@ func (s *Server) handleUploadComplete(w http.ResponseWriter, r *http.Request) er
 		return err
 	}
 	defer root.Close()
+	info, _ := s.uploads.Get(r.Context(), u.ID, u.Scope, r.PathValue("id"))
 	e, missing, err := s.uploads.Complete(r.Context(), root, u.Scope, u.ID, r.PathValue("id"))
 	if err != nil {
 		if errors.Is(err, uploads.ErrIncomplete) {
@@ -100,6 +101,9 @@ func (s *Server) handleUploadComplete(w http.ResponseWriter, r *http.Request) er
 			return ae
 		}
 		return err
+	}
+	if info != nil {
+		s.indexTouch(indexAncestors(u.Scope, vfs.Join(u.Scope, info.Dir, info.Name))...)
 	}
 	writeJSON(w, r, 200, map[string]any{"entry": e})
 	return nil

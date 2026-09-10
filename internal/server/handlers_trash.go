@@ -40,6 +40,7 @@ func (s *Server) trashOne(ctx context.Context, root *vfs.Root, u *store.User, p 
 		_ = root.RestoreFromTrash(ctx, vfs.TrashDirName, id, item.Name, p)
 		return err
 	}
+	s.indexRemove(item.Path)
 	return nil
 }
 
@@ -147,6 +148,7 @@ func (s *Server) handleTrashRestore(w http.ResponseWriter, r *http.Request) erro
 			continue
 		}
 		_ = s.db.DeleteTrash(r.Context(), it.ID)
+		s.indexTree(dst)
 		rel, _ := scopeRel(u.Scope, dst)
 		restored = append(restored, res{ID: it.ID, Path: rel})
 		dirs[dir] = true

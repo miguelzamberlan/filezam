@@ -14,6 +14,7 @@ import (
 
 	"github.com/zamberlan/filezam/internal/auth"
 	"github.com/zamberlan/filezam/internal/config"
+	"github.com/zamberlan/filezam/internal/index"
 	"github.com/zamberlan/filezam/internal/jobs"
 	"github.com/zamberlan/filezam/internal/store"
 	"github.com/zamberlan/filezam/internal/uploads"
@@ -27,6 +28,7 @@ type Server struct {
 	base    *vfs.Root
 	uploads *uploads.Service
 	jobs    *jobs.Manager
+	indexer *index.Indexer // nil quando FILEZAM_INDEX_INTERVAL=0
 	log     *slog.Logger
 	version string
 
@@ -60,6 +62,9 @@ func New(cfg *config.Config, db *store.DB, base *vfs.Root, log *slog.Logger, ver
 		searchSem:   auth.NewKeyedSemaphore(2),
 		shareUnlock: auth.NewLimiter(5, 5),
 		bg:          bg, cancel: cancel,
+	}
+	if cfg.IndexInterval > 0 {
+		s.indexer = index.New(db, base, log, cfg.IndexInterval)
 	}
 	if err := s.ensureAdmin(bg); err != nil {
 		cancel()
@@ -122,6 +127,26 @@ func (s *Server) StartBackground() {
 			s.log.Warn("prune audit", "err", err)
 		}
 		s.sweepTrash(ctx)
+	}
+	if s.indexer != nil {
+		go func() {
+			scan := func() {
+				if _, err := s.indexer.FullScan(s.bg); err != nil {
+					s.log.Warn("index scan", "err", err)
+				}
+			}
+			scan()
+			t := time.NewTicker(s.indexer.Interval)
+			defer t.Stop()
+			for {
+				select {
+				case <-s.bg.Done():
+					return
+				case <-t.C:
+					scan()
+				}
+			}
+		}()
 	}
 	go func() {
 		run()
@@ -222,6 +247,8 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.Handle("DELETE /api/admin/users/{id}", admin(s.handleAdminUserDelete))
 	mux.Handle("GET /api/admin/dirs", admin(s.handleAdminDirs))
 	mux.Handle("GET /api/admin/audit", admin(s.handleAdminAudit))
+	mux.Handle("GET /api/admin/index", admin(s.handleAdminIndex))
+	mux.Handle("POST /api/admin/reindex", admin(s.handleAdminReindex))
 
 	mux.Handle("/api/", s.h(func(w http.ResponseWriter, r *http.Request) error {
 		return errorf(http.StatusNotFound, "not_found", "unknown API route")

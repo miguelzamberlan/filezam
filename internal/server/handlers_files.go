@@ -432,6 +432,7 @@ func (s *Server) handlePutContent(w http.ResponseWriter, r *http.Request) error 
 	if err != nil {
 		return err
 	}
+	s.indexTouch(indexAncestors(userFrom(r).Scope, vfs.Join(userFrom(r).Scope, p))...)
 	writeJSON(w, r, 201, map[string]any{"entry": e, "path": p})
 	return nil
 }
@@ -531,6 +532,15 @@ func (s *Server) handleBatch(w http.ResponseWriter, r *http.Request) error {
 			results[i].Code, results[i].Error = "missing", "file part missing"
 		}
 	}
+	var stored []string
+	for _, res := range results {
+		if res.OK {
+			stored = append(stored, indexAncestors(userFrom(r).Scope, vfs.Join(userFrom(r).Scope, dir, res.Path))...)
+		}
+	}
+	if len(stored) > 0 {
+		s.indexTouch(stored...)
+	}
 	writeJSON(w, r, 200, map[string]any{"dir": dir, "results": results})
 	return nil
 }
@@ -564,6 +574,7 @@ func (s *Server) handleMkdir(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
+	s.indexTouch(indexAncestors(userFrom(r).Scope, vfs.Join(userFrom(r).Scope, p))...)
 	writeJSON(w, r, 201, map[string]any{"path": p, "entry": e})
 	return nil
 }
@@ -594,6 +605,8 @@ func (s *Server) handleRename(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
+	s.indexRemove(vfs.Join(userFrom(r).Scope, p))
+	s.indexTree(vfs.Join(userFrom(r).Scope, dst))
 	writeJSON(w, r, 200, map[string]any{"path": dst, "entry": e})
 	return nil
 }
@@ -706,6 +719,7 @@ func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) error {
 				return err
 			}
 			_ = s.db.DeleteFavoriteByPath(context.Background(), u.ID, vfs.Join(u.Scope, p))
+			s.indexRemove(vfs.Join(u.Scope, p))
 			j.Add(1, 0)
 		}
 		return nil
@@ -793,6 +807,7 @@ func (s *Server) handleCopy(w http.ResponseWriter, r *http.Request) error {
 			if err := root.CopyTree(ctx, src, dst, policy, prog); err != nil {
 				return err
 			}
+			s.indexTree(vfs.Join(u.Scope, dst))
 		}
 		return nil
 	})
@@ -830,6 +845,8 @@ func (s *Server) handleMove(w http.ResponseWriter, r *http.Request) error {
 				return err
 			}
 			_ = s.db.DeleteFavoriteByPath(context.Background(), u.ID, vfs.Join(u.Scope, src))
+			s.indexRemove(vfs.Join(u.Scope, src))
+			s.indexTree(vfs.Join(u.Scope, dst))
 			j.Add(1, 0)
 		}
 		return nil
@@ -902,10 +919,44 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) error {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), searchTimeout)
 	defer cancel()
+	if s.indexer != nil && s.indexer.Ready() {
+		hits, partial, indexedAt, err := s.searchIndex(ctx, root, u.Scope, p, q, limit)
+		if err != nil {
+			return err
+		}
+		writeJSON(w, r, 200, map[string]any{"path": p, "q": q, "results": hits, "partial": partial, "source": "index", "indexedAt": indexedAt})
+		return nil
+	}
 	hits, partial, err := root.Find(ctx, p, q, vfs.SearchLimits{MaxScan: searchScanLimit, MaxResults: limit})
 	if err != nil {
 		return err
 	}
-	writeJSON(w, r, 200, map[string]any{"path": p, "q": q, "results": hits, "partial": partial})
+	writeJSON(w, r, 200, map[string]any{"path": p, "q": q, "results": hits, "partial": partial, "source": "walk", "indexedAt": nil})
 	return nil
+}
+
+// searchIndex answers from the name index and drops ghosts (rows whose file vanished since
+// the last scan) by re-checking each hit through the scope root.
+func (s *Server) searchIndex(ctx context.Context, root *vfs.Root, scope, p, q string, limit int) ([]vfs.Found, bool, *int64, error) {
+	rows, more, err := s.indexer.Search(ctx, vfs.Join(scope, p), q, limit)
+	if err != nil {
+		return nil, false, nil, err
+	}
+	hits := []vfs.Found{}
+	for _, row := range rows {
+		rel, ok := scopeRel(scope, row.Path)
+		if !ok || rel == "" {
+			continue
+		}
+		e, err := root.Stat(rel)
+		if err != nil {
+			continue // fantasma: sumiu desde a última varredura
+		}
+		hits = append(hits, vfs.Found{Dir: vfs.Dir(rel), Entry: *e})
+	}
+	var indexedAt *int64
+	if st := s.indexer.Status(ctx); st.LastFullAt != nil {
+		indexedAt = st.LastFullAt
+	}
+	return hits, more, indexedAt, nil
 }

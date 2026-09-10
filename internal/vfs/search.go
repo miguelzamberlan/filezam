@@ -55,3 +55,15 @@ func (r *Root) Find(ctx context.Context, p, q string, lim SearchLimits) (hits []
 	}
 	return hits, false, err
 }
+
+// WalkEntries calls fn for p itself (unless p is the root) and every descendant, as Entry
+// values with root-relative paths. Lstat only: symlinks are reported but never followed;
+// reserved names are skipped. Meant for background indexing (no limits besides ctx).
+func (r *Root) WalkEntries(ctx context.Context, p string, fn func(path string, e Entry) error) error {
+	return r.walk(ctx, p, func(path string, fi fs.FileInfo) error {
+		if path == "" {
+			return nil
+		}
+		return fn(path, entryFromInfo(r, Dir(path), fi))
+	})
+}

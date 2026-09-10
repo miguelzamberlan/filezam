@@ -40,7 +40,7 @@ func newEnv(t *testing.T) (*client, *Server, string) {
 	os.WriteFile(filepath.Join(root, "teamB", "secret.txt"), []byte("secret"), 0o644)
 	cfg := &config.Config{Root: root, DataDir: filepath.Join(dir, "cfg"), AdminUser: "admin", AdminPassword: "admin",
 		SessionTTL: time.Hour, SessionMaxTTL: 24 * time.Hour, ChunkSize: 1 << 20, BatchMaxFiles: 200, BatchMaxBytes: 32 << 20,
-		MaxParallel: 4, ShareMaxTTL: 720 * time.Hour, Fsync: false, SecureCookies: config.SecureOff, UploadStaleAge: time.Hour}
+		MaxParallel: 4, ShareMaxTTL: 720 * time.Hour, Fsync: false, SecureCookies: config.SecureOff, UploadStaleAge: time.Hour, IndexInterval: time.Hour}
 	os.MkdirAll(cfg.DataDir, 0o755)
 	db, err := store.Open(cfg.DBPath())
 	if err != nil {
@@ -904,4 +904,96 @@ func TestTrash(t *testing.T) {
 	if o = bob.expect("GET", "/api/trash", nil, 200); len(o["items"].([]any)) != 0 {
 		t.Fatalf("disabled trash still collects: %v", o)
 	}
+}
+
+// waitFor polls cond for up to 3 s (index hooks run in goroutines).
+func waitFor(t *testing.T, what string, cond func() bool) {
+	t.Helper()
+	for i := 0; i < 60; i++ {
+		if cond() {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("timeout waiting for %s", what)
+}
+
+func TestSearchIndex(t *testing.T) {
+	admin, s, root := newEnv(t)
+	admin.login("admin", "admin")
+	admin.expect("POST", "/api/auth/password", map[string]string{"current": "admin", "new": "correct horse battery"}, 200)
+	admin.expect("POST", "/api/admin/users", map[string]any{"username": "bob", "password": "bobpassword1", "scope": "teamA"}, 201)
+	bobJar, _ := cookiejar.New(nil)
+	bob := &client{t: t, srv: admin.srv, c: &http.Client{Jar: bobJar}}
+	bob.login("bob", "bobpassword1")
+	os.WriteFile(filepath.Join(root, "teamA", "pub", "rel_2026%.xlsx"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(root, "teamA", "pub", "relx2026a.xlsx"), []byte("x"), 0o644)
+
+	// sem varredura ainda: cai no walk
+	o := bob.expect("GET", "/api/files/search?path=&q=doc", nil, 200)
+	if o["source"] != "walk" {
+		t.Fatalf("expected walk before first scan: %v", o)
+	}
+	o = admin.expect("GET", "/api/admin/index", nil, 200)
+	if o["enabled"] != true || o["ready"] != false {
+		t.Fatalf("index status: %v", o)
+	}
+	if ok, err := s.indexer.FullScan(context.Background()); !ok || err != nil {
+		t.Fatal(ok, err)
+	}
+	o = admin.expect("GET", "/api/admin/index", nil, 200)
+	if o["ready"] != true || o["entries"].(float64) < 5 || o["lastFullAt"] == nil {
+		t.Fatalf("index status after scan: %v", o)
+	}
+	// respostas do índice, confinadas ao escopo, sem curingas do LIKE
+	o = bob.expect("GET", "/api/files/search?path=&q=doc", nil, 200)
+	if o["source"] != "index" || len(o["results"].([]any)) != 1 || o["indexedAt"] == nil {
+		t.Fatalf("index search: %v", o)
+	}
+	if o = bob.expect("GET", "/api/files/search?path=&q=secret", nil, 200); len(o["results"].([]any)) != 0 {
+		t.Fatalf("scope leak via index: %v", o)
+	}
+	if o = bob.expect("GET", "/api/files/search?path=&q=_2026%25", nil, 200); len(o["results"].([]any)) != 1 || o["results"].([]any)[0].(map[string]any)["entry"].(map[string]any)["name"] != "rel_2026%.xlsx" {
+		t.Fatalf("LIKE escaping: %v", o)
+	}
+	if o = admin.expect("GET", "/api/files/search?path=teamB&q=secret", nil, 200); len(o["results"].([]any)) != 1 || o["results"].([]any)[0].(map[string]any)["dir"] != "teamB" {
+		t.Fatalf("admin subfolder search: %v", o)
+	}
+	// fantasma: apagado fora do app some da resposta sem nova varredura
+	os.Remove(filepath.Join(root, "teamA", "pub", "relx2026a.xlsx"))
+	if o = bob.expect("GET", "/api/files/search?path=&q=relx", nil, 200); len(o["results"].([]any)) != 0 {
+		t.Fatalf("ghost returned: %v", o)
+	}
+	// ganchos: mkdir, rename, upload pequeno, delete
+	bob.expect("POST", "/api/files/mkdir", map[string]string{"path": "pub/Novidades 2026"}, 201)
+	waitFor(t, "mkdir indexed", func() bool {
+		o := bob.expect("GET", "/api/files/search?path=&q=novidades", nil, 200)
+		return len(o["results"].([]any)) == 1
+	})
+	bob.expect("POST", "/api/files/rename", map[string]string{"path": "pub/Novidades 2026", "newName": "Antigas"}, 200)
+	waitFor(t, "rename indexed", func() bool {
+		a := bob.expect("GET", "/api/files/search?path=&q=novidades", nil, 200)
+		b := bob.expect("GET", "/api/files/search?path=&q=antigas", nil, 200)
+		return len(a["results"].([]any)) == 0 && len(b["results"].([]any)) == 1
+	})
+	resp, _ := bob.do("PUT", "/api/files/content?path=pub/Antigas/subpasta/nota.txt", nil, map[string]string{"Content-Type": "application/octet-stream"})
+	io.ReadAll(resp.Body)
+	if resp.StatusCode != 201 {
+		t.Fatalf("put: %d", resp.StatusCode)
+	}
+	waitFor(t, "upload indexed", func() bool {
+		o := bob.expect("GET", "/api/files/search?path=&q=nota.txt", nil, 200)
+		p := bob.expect("GET", "/api/files/search?path=&q=subpasta", nil, 200)
+		return len(o["results"].([]any)) == 1 && len(p["results"].([]any)) == 1
+	})
+	bob.expect("POST", "/api/files/delete", map[string]any{"paths": []string{"pub/Antigas"}, "permanent": true}, 200)
+	waitFor(t, "delete unindexed", func() bool {
+		o := bob.expect("GET", "/api/files/search?path=&q=nota.txt", nil, 200)
+		return len(o["results"].([]any)) == 0
+	})
+	// reindex manual
+	if o = admin.expect("POST", "/api/admin/reindex", nil, 200); o["started"] != true {
+		t.Fatalf("reindex: %v", o)
+	}
+	bob.expect("POST", "/api/admin/reindex", nil, 403)
 }

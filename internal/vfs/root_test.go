@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -378,6 +379,26 @@ func TestTrashIsInvisibleToTreeOps(t *testing.T) {
 	}
 	if err := r.MoveToTrash(ctx, "", TrashDirName, "x"); err == nil {
 		t.Fatal("root moved to trash")
+	}
+	checkCanary(t, outside)
+}
+
+func TestWalkEntriesStaysInsideRoot(t *testing.T) {
+	r, _, outside := fixture(t)
+	seen := map[string]string{}
+	if err := r.WalkEntries(context.Background(), "", func(p string, e Entry) error {
+		seen[p] = e.Type
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if seen["a/sub/deep.txt"] != "file" || seen["a"] != "dir" || seen["link-etc"] == "" {
+		t.Fatalf("walk: %v", seen)
+	}
+	for p := range seen {
+		if strings.Contains(p, "canary") || strings.Contains(p, "passwd") || strings.HasPrefix(p, "link-etc/") {
+			t.Fatalf("escaped: %s", p)
+		}
 	}
 	checkCanary(t, outside)
 }
