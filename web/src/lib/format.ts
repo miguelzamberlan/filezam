@@ -1,3 +1,5 @@
+import { S } from '../strings'
+
 const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
 
 export function formatBytes(n: number, digits = 1): string {
@@ -43,7 +45,7 @@ export function formatRelative(sec: number): string {
   const diff = sec - Math.floor(Date.now() / 1000)
   const abs = Math.abs(diff)
   const s = abs < 3600 ? Math.round(abs / 60) + ' min' : abs < 86400 ? Math.round(abs / 3600) + ' h' : Math.round(abs / 86400) + ' d'
-  return diff < 0 ? 'há ' + s : 'em ' + s
+  return diff < 0 ? S.relAgo(s) : S.relIn(s)
 }
 
 export function extOf(name: string): string {

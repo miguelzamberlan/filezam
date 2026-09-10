@@ -689,3 +689,40 @@ func TestSearch(t *testing.T) {
 		t.Fatalf("admin search: %v", o)
 	}
 }
+
+func TestListPaging(t *testing.T) {
+	admin, _, root := newEnv(t)
+	admin.login("admin", "admin")
+	admin.expect("POST", "/api/auth/password", map[string]string{"current": "admin", "new": "correct horse battery"}, 200)
+	dir := filepath.Join(root, "teamA", "many")
+	os.MkdirAll(filepath.Join(dir, "zdir"), 0o755)
+	for i := 1; i <= 25; i++ {
+		os.WriteFile(filepath.Join(dir, fmt.Sprintf("f%d.txt", i)), []byte(strings.Repeat("x", i)), 0o644)
+	}
+	os.WriteFile(filepath.Join(dir, ".hidden"), []byte("h"), 0o644)
+	// sem limit: comportamento antigo, tudo de uma vez (inclusive ocultos)
+	o := admin.expect("GET", "/api/files?path=teamA/many", nil, 200)
+	if len(o["entries"].([]any)) != 27 || o["total"] != nil {
+		t.Fatalf("full listing: %d", len(o["entries"].([]any)))
+	}
+	o = admin.expect("GET", "/api/files?path=teamA/many&limit=10", nil, 200)
+	es := o["entries"].([]any)
+	if len(es) != 10 || o["total"].(float64) != 26 || o["hidden"].(float64) != 1 || o["offset"].(float64) != 0 {
+		t.Fatalf("page 1: %v", o)
+	}
+	if es[0].(map[string]any)["name"] != "zdir" || es[1].(map[string]any)["name"] != "f1.txt" || es[2].(map[string]any)["name"] != "f2.txt" {
+		t.Fatalf("order (dirs first, natural): %v %v %v", es[0], es[1], es[2])
+	}
+	o = admin.expect("GET", "/api/files?path=teamA/many&limit=10&offset=20", nil, 200)
+	if es = o["entries"].([]any); len(es) != 6 || es[5].(map[string]any)["name"] != "f25.txt" {
+		t.Fatalf("last page: %v", o)
+	}
+	o = admin.expect("GET", "/api/files?path=teamA/many&limit=3&sort=size&dir=desc&hidden=1", nil, 200)
+	if es = o["entries"].([]any); o["total"].(float64) != 27 || es[0].(map[string]any)["name"] != "zdir" || es[1].(map[string]any)["name"] != "f25.txt" {
+		t.Fatalf("size desc with hidden: %v", o)
+	}
+	o = admin.expect("GET", "/api/files?path=teamA/many&limit=10&offset=999", nil, 200)
+	if len(o["entries"].([]any)) != 0 {
+		t.Fatalf("offset past end: %v", o)
+	}
+}

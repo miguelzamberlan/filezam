@@ -11,7 +11,7 @@ import { useJobs } from '../store/jobs'
 import { S, errorMessage } from '../strings'
 import { uploadManager } from '../upload/manager'
 import { collectFromDataTransfer, collectFromFileList, type PickedFile } from '../upload/walk'
-import FileList from '../components/FileList'
+import FileList, { DRAG_MIME, setDragging } from '../components/FileList'
 import Breadcrumb from '../components/Breadcrumb'
 import ContextMenu, { type MenuItem } from '../components/ContextMenu'
 import Preview, { previewKind } from '../components/Preview'
@@ -41,13 +41,13 @@ export default function Browser() {
   const [searchParams, setSearchParams] = useSearchParams()
   const qc = useQueryClient()
   const { user } = useAuth()
-  const listing = useListing(path)
+  const ui = useUI()
+  const listing = useListing(path, ui.sort, ui.prefs.showHidden)
   const invalidate = useInvalidateDirs()
   const favs = useFavorites()
   const track = useJobs((s) => s.track)
   const uploads = useUploads()
   const cfg = useQuery({ queryKey: ['config'], queryFn: () => Api.config(), staleTime: Infinity }).data
-  const ui = useUI()
   const [menu, setMenu] = useState<{ x: number; y: number; entry: Entry | null } | null>(null)
   const [preview, setPreview] = useState<number | null>(null)
   const [share, setShare] = useState<string | null>(null)
@@ -59,14 +59,18 @@ export default function Browser() {
   const dirInput = useRef<HTMLInputElement>(null)
   const typeahead = useRef({ buf: '', t: 0 })
 
+  // O servidor já filtrou ocultos e ordenou. Com tudo carregado, reordena com o Intl.Collator
+  // do navegador (mais fiel ao idioma); com páginas ainda por vir, mantém a ordem do servidor
+  // para as páginas não se embaralharem ao chegar.
+  const paged = !!listing.data && listing.data.entries.length < listing.data.total
   const entries = useMemo(() => {
     const all = listing.data?.entries ?? []
     const f = ui.filter.trim().toLowerCase()
-    let filtered = ui.prefs.showHidden ? all : all.filter((e) => !e.name.startsWith('.'))
-    if (f) filtered = filtered.filter((e) => e.name.toLowerCase().includes(f))
-    return sortEntries(filtered, ui.sort)
-  }, [listing.data, ui.filter, ui.sort, ui.prefs.showHidden])
-  const hiddenCount = useMemo(() => (ui.prefs.showHidden ? 0 : (listing.data?.entries ?? []).filter((e) => e.name.startsWith('.')).length), [listing.data, ui.prefs.showHidden])
+    const filtered = f ? all.filter((e) => e.name.toLowerCase().includes(f)) : all
+    return paged ? filtered : sortEntries(filtered, ui.sort)
+  }, [listing.data, ui.filter, ui.sort, paged])
+  const hiddenCount = listing.data?.hidden ?? 0
+  const total = listing.data?.total ?? 0
 
   const byName = useMemo(() => new Map(entries.map((e) => [e.name, e])), [entries])
   const selectedEntries = useMemo(() => entries.filter((e) => ui.selection.has(e.name)), [entries, ui.selection])
@@ -201,6 +205,36 @@ export default function Browser() {
       const { job } = c.op === 'copy' ? await Api.copy(sources, destDir, policy) : await Api.move(sources, destDir, policy)
       track(job)
       if (c.op === 'cut') ui.setClipboard(null)
+    } catch (e) {
+      fail(e)
+    }
+  }
+
+  // ---- arrastar e soltar interno (mover para uma pasta da listagem ou da trilha) ----
+  const dragStart = (e: Entry, ev: DragEvent) => {
+    const names = ui.selection.has(e.name) ? [...ui.selection] : [e.name]
+    if (!ui.selection.has(e.name)) ui.setSelection(new Set([e.name]), e.name, e.name)
+    ev.dataTransfer.setData(DRAG_MIME, JSON.stringify(names))
+    ev.dataTransfer.effectAllowed = 'move'
+    setDragging(names)
+  }
+  const moveInto = async (destDir: string, names: string[]) => {
+    names = names.filter((n) => byName.has(n))
+    if (names.length === 0 || destDir === path) return
+    if (names.some((n) => destDir === join(path, n) || destDir.startsWith(join(path, n) + '/'))) return toast(S.errorCodes.nested, 'error')
+    let policy: Conflict = 'rename'
+    try {
+      const dest = await Api.list(destDir)
+      const taken = new Set(dest.entries.map((e) => e.name))
+      const clash = names.find((n) => taken.has(n))
+      if (clash) {
+        const ans = await dialogs.conflict(clash)
+        if (ans.choice === 'cancel') return
+        policy = ans.choice
+      }
+      const { job } = await Api.move(names.map((n) => join(path, n)), destDir, policy)
+      track(job)
+      ui.clearSelection()
     } catch (e) {
       fail(e)
     }
@@ -412,7 +446,7 @@ export default function Browser() {
       <div className="flex items-center gap-1 border-b border-neutral-200 px-2 py-2 sm:px-3 dark:border-neutral-800">
         <MenuButton />
         <button className="btn-ghost !px-1.5" onClick={() => go(dirname(path))} disabled={!path} title={S.goUp}><IArrowUp size={16} /></button>
-        <div className="min-w-0 flex-1"><Breadcrumb path={path} base="/b" rootLabel={S.home} /></div>
+        <div className="min-w-0 flex-1"><Breadcrumb path={path} base="/b" rootLabel={S.home} onDropNames={moveInto} /></div>
         <div className="flex shrink-0 items-center gap-1">
           <input className="input hidden !w-40 !py-1 text-sm sm:block" placeholder={S.search} value={ui.filter} onChange={(e) => ui.setFilter(e.target.value)} onKeyDown={(e) => e.key === 'Escape' && (ui.setFilter(''), listRef.current?.focus())} />
           <button className="btn-ghost !px-1.5" onClick={() => navigate('/search?path=' + encodeURIComponent(path))} title={S.searchHere}><ISearch size={16} /></button>
@@ -454,7 +488,8 @@ export default function Browser() {
         <button className="btn-ghost" onClick={() => toggleFavorite()} title={isFav ? S.removeFavorite : S.addFavorite}><IStar size={16} filled={!!isFav} className={isFav ? 'text-amber-500' : ''} /></button>
         <button className="btn-ghost" onClick={() => setInfo(one ? join(path, one.name) : path)} disabled={selectedEntries.length > 1} title={S.properties}><IInfo size={16} /></button>
         <span className="ml-auto text-xs text-neutral-500">
-          {selectedEntries.length > 0 ? S.selected(selectedEntries.length) : S.items(entries.length)}
+          {selectedEntries.length > 0 ? S.selected(selectedEntries.length) : ui.filter ? `${entries.length} / ${S.items(total)}` : S.items(total)}
+          {paged && <span> · {S.loadedOf(listing.data!.entries.length, total)}</span>}
           {hiddenCount > 0 && <span title={S.prefShowHidden}> · {hiddenCount} ocultos</span>}
         </span>
       </div>
@@ -492,6 +527,9 @@ export default function Browser() {
             onContextMenu={onContextMenu}
             onBackgroundClick={() => ui.clearSelection()}
             onDropOnEntry={(e, ev) => onDrop(ev, join(path, e.name))}
+            onDragStartEntry={dragStart}
+            onEndReached={() => listing.hasNextPage && !listing.isFetchingNextPage && listing.fetchNextPage()}
+            onDropEntries={(target, names) => moveInto(join(path, target.name), names)}
             dragOverName={dragOverName}
             onDragOverEntry={setDragOverName}
             emptyMessage={ui.filter ? S.notFound : S.emptyFolder}

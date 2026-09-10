@@ -95,3 +95,37 @@ func TestPathHelpers(t *testing.T) {
 		t.Error("SplitExt dotfile")
 	}
 }
+
+func TestSortEntries(t *testing.T) {
+	if NaturalCompare("img2.jpg", "img10.jpg") >= 0 || NaturalCompare("B", "a") <= 0 || NaturalCompare("x", "x") != 0 {
+		t.Fatal("natural compare")
+	}
+	es := []Entry{{Name: "b.txt", Type: "file", Size: 5, Mtime: 3}, {Name: "Z", Type: "dir"}, {Name: "a10", Type: "file", Size: 1, Mtime: 9}, {Name: "a9", Type: "file", Size: 1, Mtime: 1}, {Name: "c", Type: "dir"}}
+	SortEntries(es, "name", false)
+	if got := names(es); got != "c Z a9 a10 b.txt" {
+		t.Fatalf("name asc: %s", got)
+	}
+	SortEntries(es, "name", true)
+	if got := names(es); got != "Z c b.txt a10 a9" {
+		t.Fatalf("name desc: %s", got)
+	}
+	SortEntries(es, "size", true)
+	if got := names(es); got != "c Z b.txt a9 a10" {
+		t.Fatalf("size desc: %s", got)
+	}
+	SortEntries(es, "mtime", false)
+	if got := names(es); got != "c Z a9 b.txt a10" {
+		t.Fatalf("mtime asc: %s", got)
+	}
+}
+
+func names(es []Entry) string {
+	out := ""
+	for i, e := range es {
+		if i > 0 {
+			out += " "
+		}
+		out += e.Name
+	}
+	return out
+}

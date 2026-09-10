@@ -24,7 +24,16 @@ export interface FileListProps {
   emptyMessage?: string
   readOnly?: boolean
   zoom?: number // CSS zoom da listagem (1 = padrão); o virtualizador trabalha nas coordenadas já ampliadas
+  // Arrastar e soltar interno: as linhas ficam arrastáveis e pastas aceitam entradas soltas (mover).
+  onDragStartEntry?: (e: Entry, ev: React.DragEvent) => void
+  onDropEntries?: (target: Entry, names: string[]) => void
+  onEndReached?: () => void // rolagem chegou perto do fim (listagem paginada pede a próxima página)
 }
+
+// Tipo MIME do arraste interno; o payload é um JSON com os nomes arrastados.
+export const DRAG_MIME = 'application/x-filezam'
+let dragging: string[] = [] // nomes em arraste nesta aba (dataTransfer não é legível durante o dragover)
+export const setDragging = (names: string[]) => { dragging = names }
 
 const ROW = 34
 
@@ -51,6 +60,14 @@ export default function FileList(props: FileListProps) {
     estimateSize: () => (view === 'grid' ? 130 : ROW),
     overscan: 12,
   })
+
+  // perto do fim da lista virtual → pede mais (quando paginado)
+  const vItems = virt.getVirtualItems()
+  const lastIdx = vItems.length ? vItems[vItems.length - 1].index : -1
+  useEffect(() => {
+    if (props.onEndReached && rows > 0 && lastIdx >= rows - 20) props.onEndReached()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastIdx, rows])
 
   // keep focused row visible
   useEffect(() => {
@@ -128,24 +145,47 @@ export default function FileList(props: FileListProps) {
     [selection, focused, cutNames, props.dragOverName],
   )
 
-  const dragProps = (e: Entry) =>
-    e.type === 'dir' && props.onDropOnEntry
-      ? {
-          onDragOver: (ev: React.DragEvent) => {
-            if (!ev.dataTransfer.types.includes('Files')) return
-            ev.preventDefault()
-            ev.stopPropagation()
-            props.onDragOverEntry?.(e.name)
-          },
-          onDragLeave: () => props.onDragOverEntry?.(null),
-          onDrop: (ev: React.DragEvent) => {
-            ev.preventDefault()
-            ev.stopPropagation()
-            props.onDragOverEntry?.(null)
-            props.onDropOnEntry?.(e, ev)
-          },
-        }
-      : {}
+  const dragProps = (e: Entry) => {
+    const out: Record<string, unknown> = {}
+    if (props.onDragStartEntry) {
+      out.draggable = true
+      out.onDragStart = (ev: React.DragEvent) => props.onDragStartEntry?.(e, ev)
+      out.onDragEnd = () => {
+        setDragging([])
+        props.onDragOverEntry?.(null)
+      }
+    }
+    if (e.type === 'dir' && (props.onDropOnEntry || props.onDropEntries)) {
+      const accepts = (ev: React.DragEvent) => {
+        const t = ev.dataTransfer.types
+        if (t.includes('Files')) return !!props.onDropOnEntry
+        if (t.includes(DRAG_MIME)) return !!props.onDropEntries && !dragging.includes(e.name)
+        return false
+      }
+      out.onDragOver = (ev: React.DragEvent) => {
+        if (!accepts(ev)) return
+        ev.preventDefault()
+        ev.stopPropagation()
+        ev.dataTransfer.dropEffect = ev.dataTransfer.types.includes(DRAG_MIME) ? 'move' : 'copy'
+        props.onDragOverEntry?.(e.name)
+      }
+      out.onDragLeave = () => props.onDragOverEntry?.(null)
+      out.onDrop = (ev: React.DragEvent) => {
+        if (!accepts(ev)) return
+        ev.preventDefault()
+        ev.stopPropagation()
+        props.onDragOverEntry?.(null)
+        if (ev.dataTransfer.types.includes(DRAG_MIME)) {
+          try {
+            props.onDropEntries?.(e, JSON.parse(ev.dataTransfer.getData(DRAG_MIME)) as string[])
+          } catch {
+            /* payload inválido: ignora */
+          }
+        } else props.onDropOnEntry?.(e, ev)
+      }
+    }
+    return out
+  }
 
   if (entries.length === 0) {
     return (

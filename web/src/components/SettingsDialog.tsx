@@ -1,6 +1,6 @@
 import { useUI, ZOOM_STEPS } from '../store/ui'
 import { COLOR_PRESETS, DEFAULT_COLORS, type ColorKey } from '../lib/theme'
-import { S } from '../strings'
+import { S, LOCALE_NAMES, type LangPref } from '../strings'
 import { Modal } from './dialogs'
 
 export default function SettingsDialog({ onClose }: { onClose: () => void }) {
@@ -45,6 +45,14 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
             </select>
           </label>
         </div>
+
+        <Section title={S.language}>
+          {/* textos são lidos no render, mas constantes de módulo não: recarrega para aplicar em tudo */}
+          <select className="input !w-auto !py-1" value={prefs.lang} onChange={(e) => { setPrefs({ lang: e.target.value as LangPref }); setTimeout(() => location.reload(), 50) }}>
+            <option value="auto">{S.languageAuto}</option>
+            {(Object.keys(LOCALE_NAMES) as (keyof typeof LOCALE_NAMES)[]).map((l) => <option key={l} value={l}>{LOCALE_NAMES[l]}</option>)}
+          </select>
+        </Section>
 
         <Section title={S.theme}>
           <div className="flex gap-1">

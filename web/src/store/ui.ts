@@ -13,6 +13,7 @@ export interface Prefs {
   confirmDelete: boolean
   zoom: number // fator aplicado à listagem (CSS zoom); 1 = padrão
   theme: 'system' | 'light' | 'dark'
+  lang: 'auto' | 'pt-BR' | 'en' // ver strings.ts; trocar exige recarregar a página
   accent: string // cores em hex (#rrggbb); ver lib/theme.ts
   selection: string
   focus: string
@@ -22,7 +23,7 @@ export const ZOOM_STEPS = [0.85, 1, 1.15, 1.3, 1.5, 1.75, 2]
 
 const defaultPrefs: Prefs = {
   showHidden: false, showHints: true, confirmDelete: true, zoom: 1,
-  theme: 'system', accent: '#2563eb', selection: '#3b82f6', focus: '#3b82f6',
+  theme: 'system', lang: 'auto', accent: '#2563eb', selection: '#3b82f6', focus: '#3b82f6',
 }
 
 interface UIState {

@@ -57,9 +57,53 @@ func (s *Server) handleList(w http.ResponseWriter, r *http.Request) error {
 	if len(l.Parts) > 0 {
 		s.uploads.PruneOrphans(r.Context(), root, p, l.Parts)
 	}
-	writeJSON(w, r, 200, map[string]any{"path": p, "entries": l.Entries})
+	q := r.URL.Query()
+	if q.Get("limit") == "" {
+		writeJSON(w, r, 200, map[string]any{"path": p, "entries": l.Entries})
+		return nil
+	}
+	// Paginado: o servidor filtra ocultos, ordena como a interface e devolve uma fatia,
+	// para pastas enormes não gerarem um JSON de dezenas de MB de uma vez.
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	if limit <= 0 || limit > listPageMax {
+		limit = listPageMax
+	}
+	offset, _ := strconv.Atoi(q.Get("offset"))
+	if offset < 0 {
+		offset = 0
+	}
+	entries := l.Entries
+	hidden := 0
+	if q.Get("hidden") != "1" {
+		kept := entries[:0]
+		for _, e := range entries {
+			if strings.HasPrefix(e.Name, ".") {
+				hidden++
+				continue
+			}
+			kept = append(kept, e)
+		}
+		entries = kept
+	}
+	key := q.Get("sort")
+	if key != "size" && key != "mtime" && key != "type" {
+		key = "name"
+	}
+	vfs.SortEntries(entries, key, q.Get("dir") == "desc")
+	total := len(entries)
+	if offset > total {
+		offset = total
+	}
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+	writeJSON(w, r, 200, map[string]any{"path": p, "entries": entries[offset:end], "total": total, "offset": offset, "hidden": hidden})
 	return nil
 }
+
+// listPageMax bounds one page of a paginated listing.
+const listPageMax = 5000
 
 func (s *Server) handleStat(w http.ResponseWriter, r *http.Request) error {
 	root, _, err := s.userRoot(r)

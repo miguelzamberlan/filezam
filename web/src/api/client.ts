@@ -1,5 +1,5 @@
 import type {
-  AdminUser, AppConfig, AuditEntry, Conflict, DiskUsage, Entry, EntryInfo, Favorite, Job, Listing, SearchResult, Share, UploadSession, User,
+  AdminUser, AppConfig, AuditEntry, Conflict, DiskUsage, Entry, EntryInfo, Favorite, Job, ListPage, Listing, SearchResult, Share, UploadSession, User,
 } from './types'
 
 export class ApiError extends Error {
@@ -72,7 +72,8 @@ export const Api = {
   config: () => api<AppConfig>('GET', '/api/config'),
 
   // files
-  list: (path: string) => api<Listing>('GET', '/api/files' + q({ path })),
+  list: (path: string, page?: ListPage) =>
+    api<Listing>('GET', '/api/files' + q(page ? { path, offset: page.offset, limit: page.limit, sort: page.sort, dir: page.dir, hidden: page.hidden ? 1 : 0 } : { path })),
   stat: (path: string) => api<{ path: string; entry: Entry }>('GET', '/api/files/stat' + q({ path })),
   info: (path: string) => api<EntryInfo>('GET', '/api/files/info' + q({ path })),
   disk: () => api<DiskUsage>('GET', '/api/files/disk'),

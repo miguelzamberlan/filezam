@@ -12,6 +12,18 @@ export interface Entry {
 export interface Listing {
   path: string
   entries: Entry[]
+  // presentes só na listagem paginada (?limit=): total após o filtro de ocultos, offset desta página, ocultos excluídos
+  total?: number
+  offset?: number
+  hidden?: number
+}
+
+export interface ListPage {
+  offset: number
+  limit: number
+  sort: 'name' | 'size' | 'mtime' | 'type'
+  dir: 'asc' | 'desc'
+  hidden: boolean
 }
 
 export interface User {
