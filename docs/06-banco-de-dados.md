@@ -42,6 +42,9 @@ Migrações aplicadas depois de `001_init.sql`:
 | Versão | Arquivo | O que faz |
 |---|---|---|
 | 002 | `002_share_token.sql` | `shares.token` (texto, default `''`): guarda o token do link público para poder copiá-lo de novo |
+| 003 | `003_share_file_password.sql` | `shares.kind` (`dir`/`file`) e `shares.password_hash` (Argon2id, `''` = sem senha) |
+| 004 | `004_trash.sql` | Tabela `trash(id, user_id → users CASCADE, trash_dir, name, path, type, size, deleted_at)`: itens da lixeira com o caminho original base-relativo |
+| 005 | `005_file_index.sql` | `file_index(path PK, parent, name, name_lc, type, size, mtime, gen)` com índices em `name_lc` e `parent`, e `index_state(id=1, last_full_at, entries, gen)` |
 
 Todos os timestamps são segundos Unix, exceto `uploads.mtime` (ms, vindo do cliente).
 

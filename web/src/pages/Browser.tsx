@@ -170,14 +170,27 @@ export default function Browser() {
     }
   }
 
-  const remove = async (list = selectedEntries) => {
+  // Excluir vai para a lixeira quando o servidor a mantém (trashRetention > 0); permanent
+  // (Shift+Del ou o item do menu) apaga de vez. Com a lixeira ativa a confirmação é mais leve.
+  const trashOn = (cfg?.trashRetention ?? 0) > 0
+  const remove = async (list = selectedEntries, permanent = false) => {
     if (list.length === 0) return
-    if (ui.prefs.confirmDelete && !(await dialogs.confirm({ title: S.deleteConfirm(list.length), message: list.length === 1 ? list[0].name : S.deleteWarning, danger: true, okLabel: S.delete }))) return
+    const toTrash = trashOn && !permanent
+    if (toTrash ? ui.prefs.confirmDelete : true) {
+      const ok = await dialogs.confirm(
+        toTrash
+          ? { title: S.moveToTrashConfirm(list.length), message: (list.length === 1 ? list[0].name + ' — ' : '') + S.moveToTrashHint, okLabel: S.delete }
+          : { title: S.deleteConfirm(list.length), message: list.length === 1 ? list[0].name : S.deleteWarning, danger: true, okLabel: S.deleteForever },
+      )
+      if (!ok) return
+    }
     try {
-      const { job } = await Api.delete(list.map((e) => join(path, e.name)))
+      const { job } = await Api.delete(list.map((e) => join(path, e.name)), !toTrash)
       track(job)
       ui.clearSelection()
       qc.invalidateQueries({ queryKey: ['favorites'] })
+      qc.invalidateQueries({ queryKey: ['trash'] })
+      if (toTrash) toast(S.movedToTrash(list.length), 'success')
     } catch (e) {
       fail(e)
     }
@@ -351,7 +364,7 @@ export default function Browser() {
         void rename()
         break
       case 'Delete':
-        void remove()
+        void remove(selectedEntries, ev.shiftKey)
         break
       case ' ':
         if (idx >= 0) select(entries[idx], { shiftKey: false, ctrlKey: true, metaKey: false })
@@ -411,6 +424,7 @@ export default function Browser() {
       { label: S.cut, icon: <IScissors size={16} />, onClick: () => clip('cut', sel), shortcut: 'Ctrl+X' },
       { label: S.rename, icon: <IEdit size={16} />, onClick: () => rename(one!), disabled: !one, shortcut: 'F2' },
       { label: S.delete, icon: <ITrash size={16} />, onClick: () => remove(sel), danger: true, shortcut: 'Del' },
+      ...(trashOn ? [{ label: S.deleteForever, icon: <ITrash size={16} />, onClick: () => remove(sel, true), danger: true, shortcut: 'Shift+Del' } as MenuItem] : []),
       { separator: true, label: '' },
       { label: S.properties, icon: <IInfo size={16} />, onClick: () => one && setInfo(join(path, one.name)), disabled: !one },
     )
@@ -418,6 +432,8 @@ export default function Browser() {
       const p = join(path, one.name)
       const f = favs.data?.favorites.find((x) => x.path === p)
       items.push({ separator: true, label: '' }, { label: f ? S.removeFavorite : S.addFavorite, icon: <IStar size={16} filled={!!f} />, onClick: () => toggleFavorite(p) }, { label: S.share, icon: <IShare size={16} />, onClick: () => setShare(p) })
+    } else if (one?.type === 'file') {
+      items.push({ separator: true, label: '' }, { label: S.share, icon: <IShare size={16} />, onClick: () => setShare(join(path, one.name)) })
     }
     return items
   }
@@ -484,7 +500,7 @@ export default function Browser() {
         <button className="btn-ghost" onClick={() => rename()} disabled={!one}><IEdit size={16} /> {S.rename}</button>
         <button className="btn-ghost text-red-600" onClick={() => remove()} disabled={selectedEntries.length === 0}><ITrash size={16} /> {S.delete}</button>
         <span className="mx-1 h-5 border-l border-neutral-300 dark:border-neutral-700" />
-        <button className="btn-ghost" onClick={() => setShare(one?.type === 'dir' ? join(path, one.name) : path)} disabled={selectedEntries.length > 1 || (one !== null && one.type !== 'dir')}><IShare size={16} /> {S.share}</button>
+        <button className="btn-ghost" onClick={() => setShare(one ? join(path, one.name) : path)} disabled={selectedEntries.length > 1 || (one !== null && one.type === 'other')}><IShare size={16} /> {S.share}</button>
         <button className="btn-ghost" onClick={() => toggleFavorite()} title={isFav ? S.removeFavorite : S.addFavorite}><IStar size={16} filled={!!isFav} className={isFav ? 'text-amber-500' : ''} /></button>
         <button className="btn-ghost" onClick={() => setInfo(one ? join(path, one.name) : path)} disabled={selectedEntries.length > 1} title={S.properties}><IInfo size={16} /></button>
         <span className="ml-auto text-xs text-neutral-500">
@@ -553,7 +569,7 @@ export default function Browser() {
         <Preview entries={entries} index={preview} urlFor={(e, inline) => Api.contentUrl(join(path, e.name), inline)} maxText={cfg?.previewMaxText ?? 1 << 20} onClose={() => setPreview(null)} onIndex={setPreview} />
       )}
       {info !== null && <InfoDialog path={info} onClose={() => setInfo(null)} />}
-      {share !== null && <ShareDialog path={share} name={shareName} maxTtl={cfg?.shareMaxTtl ?? 30 * 86400} onClose={() => setShare(null)} onCreated={() => qc.invalidateQueries({ queryKey: ['shares'] })} />}
+      {share !== null && <ShareDialog path={share} name={shareName} kind={share !== path && byName.get(basename(share))?.type === 'file' ? 'file' : 'dir'} maxTtl={cfg?.shareMaxTtl ?? 30 * 86400} onClose={() => setShare(null)} onCreated={() => qc.invalidateQueries({ queryKey: ['shares'] })} />}
       {user === null && null}
     </div>
   )

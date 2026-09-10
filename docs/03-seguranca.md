@@ -24,7 +24,8 @@ Fora do escopo: proteção contra um administrador do host, ataques ao proxy rev
 6. **Symlinks na listagem**: entradas de link recebem `link: true`; o tipo é `dir`/`file` se a resolução fica dentro do root, senão `other` (não navegável). A UI nunca cria symlinks; cópia pula e reporta; exclusão remove só o link.
 7. **Raiz do escopo** (`""`) nunca pode ser renomeada, movida ou excluída (`ErrRootOp`).
 8. **Aninhamento**: mover/copiar `src` para dentro de si mesmo é recusado por comparação de strings normalizadas (`IsWithin`).
-9. **Pesquisa** (`Root.Find`): percorre com `Lstat`, nunca segue symlinks, pula nomes reservados e para nos limites de entradas/resultados/tempo; roda sobre o root do escopo, então nunca vê nada fora dele.
+9. **Pesquisa** (`Root.Find`): percorre com `Lstat`, nunca segue symlinks, pula nomes reservados e para nos limites de entradas/resultados/tempo; roda sobre o root do escopo, então nunca vê nada fora dele. O índice de nomes (`internal/index`, `Root.WalkEntries`) segue as mesmas regras na varredura e guarda só nome/tipo/tamanho/mtime; cada acerto vindo do índice é conferido com `Stat` no root do escopo antes de ser devolvido, então uma linha velha nunca revela nada fora do escopo.
+10. **Lixeira**: `.filezam-trash` no root do escopo tem o prefixo reservado, logo nunca aparece em listagem, pesquisa, cópia, zip ou contagem, e não é endereçável por `?path=`. `walk`/`copyDir` pulam qualquer nome reservado. Restaurar volta pelo root base com caminhos base-relativos e só de linhas visíveis (as próprias, ou todas dentro do escopo para admin).
 10. **Banco fora da raiz**: `config.Load` resolve symlinks (`EvalSymlinks`) de `FILEZAM_ROOT` e `FILEZAM_DATA_DIR` antes de verificar que o banco não está dentro da raiz.
 
 ## Autenticação e sessões
@@ -69,6 +70,8 @@ Na SPA: `Content-Security-Policy: default-src 'self'; script-src 'self'; style-s
 - Expiração no relógio do servidor; validade máxima `FILEZAM_SHARE_MAX_TTL`. Revogação apaga a linha.
 - **O link segue o dono**: usuário desativado → todos os links dele respondem 404 (voltam se ele for reativado); escopo estreitado pelo admin → links de pastas que ficaram fora do novo escopo são apagados na hora (`sharesRevoked` no evento `user.update`); usuário excluído → links apagados em cascata.
 - Público só pode: `info`, `list`, `content`, `zip`, sempre dentro de `base.Sub(share.Path)`. Não há escrita.
+- **Link de arquivo** (`kind = file`): o root aberto é a pasta pai e `content` serve sempre `Base(path)`, ignorando `?path=`; `list`/`zip` respondem 409. Um link de arquivo nunca alcança irmãos.
+- **Senha opcional**: Argon2id em `shares.password_hash`. `POST /api/public/{token}/unlock` verifica (5/min por link, semáforo do Argon2, auditoria `share.unlock.fail`) e grava o cookie `fz_s_<16 hex do hash do token>` = HMAC-SHA256(chave = hash da senha, mensagem = hash do token), `HttpOnly`, `SameSite=Strict`, 24 h. Sem cookie válido, `info` devolve só `locked: true` e nome; `list`/`content`/`zip` respondem 401 `share_locked`. Revogar o link ou criar outro invalida o cookie porque a chave muda.
 - Rate limit por IP e no máximo 2 downloads/zips simultâneos por IP.
 - Mesma resposta 404 para inexistente, expirado, revogado, dono desativado ou pasta removida.
 - **Shares são por caminho**: mover ou renomear a pasta invalida o link, mas se outra pasta ocupar o mesmo caminho antes de o link expirar ele volta a funcionar apontando para ela. Revogue links de pastas que você recria.
@@ -81,7 +84,7 @@ Na SPA: `Content-Security-Policy: default-src 'self'; script-src 'self'; style-s
 
 ## Auditoria
 
-Tabela `audit_log` com `login.ok`, `login.fail`, `login.locked`, `login.ratelimited`, `logout`, `password.change`, `password.fail`, `password.ratelimited`, `user.create`, `user.update`, `user.delete`, `share.create`, `share.revoke`. Retenção: 180 dias. Visível em Administração → Auditoria.
+Tabela `audit_log` com `login.ok`, `login.fail`, `login.locked`, `login.ratelimited`, `logout`, `password.change`, `password.fail`, `password.ratelimited`, `user.create`, `user.update`, `user.delete`, `share.create`, `share.revoke`, `share.unlock.fail`, `trash.restore`, `trash.delete`, `trash.empty`, `index.rebuild`. Retenção: 180 dias. Visível em Administração → Auditoria.
 
 ## Container e dependências
 

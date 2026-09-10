@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Filezam is a self-hosted web file manager: a Go 1.26 backend (single static binary, SQLite via `modernc.org/sqlite`, no CGO) that embeds a React 19 + TypeScript + Vite + Tailwind v4 frontend. It exposes one host folder (`FILEZAM_ROOT`) to authenticated users with per-user folder scopes, chunked/resumable uploads, background copy/move/delete jobs and expiring public read-only share links. UI strings are pt-BR (`web/src/strings.ts`); docs and README are pt-BR too.
+Filezam is a self-hosted web file manager: a Go 1.26 backend (single static binary, SQLite via `modernc.org/sqlite`, no CGO) that embeds a React 19 + TypeScript + Vite + Tailwind v4 frontend. It exposes one host folder (`FILEZAM_ROOT`) to authenticated users with per-user folder scopes, chunked/resumable uploads, background copy/move/delete jobs and expiring public read-only share links. UI strings live in `web/src/i18n/pt-BR.ts` (reference) and `web/src/i18n/en.ts` (must mirror every key; `S` in `strings.ts` is the active locale); docs and README are pt-BR.
 
 ## Specs: read before changing anything
 
@@ -44,7 +44,7 @@ Port 8080 is often taken on the dev machine; use `FILEZAM_LISTEN=127.0.0.1:8765`
 - **Paths in `?path=` or JSON, never in URL path segments.** Normalize with `vfs.Normalize` (read) or `vfs.NormalizeWritable` (write). Scope root via `s.userRoot(r)`; shares via `s.shareRoot(r)`.
 - **DB stores base-relative paths** (`vfs.Join(user.Scope, p)`); convert back with `scopeRel`/`relDir` and hide rows outside the scope.
 - **Never serve `text/html` from user content**; keep `detectType` allow-list and the `sandbox` CSP on inline responses.
-- **Stable error codes**: add new ones in `respond.go` *and* translate them in `web/src/strings.ts` (`S.errorCodes`) *and* list them in `docs/04-api.md`.
+- **Stable error codes**: add new ones in `respond.go` *and* translate them in `web/src/i18n/pt-BR.ts` and `en.ts` (`errorCodes`) *and* list them in `docs/04-api.md`.
 - **Schema changes = new migration file** `internal/store/migrations/NNN_*.sql`; never edit an applied one.
 - **Every mutating endpoint must be covered in `internal/server/server_test.go`.**
 - Tailwind 4: composite classes are `@utility` blocks in `web/src/index.css`; `@apply` of a custom class fails the build.

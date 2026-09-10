@@ -4,11 +4,11 @@ import { Api } from '../api/client'
 import { useConfigValue } from '../hooks'
 import { copyText } from '../lib/clipboard'
 import { formatDate, formatRelative } from '../lib/format'
-import { encodePath } from '../lib/paths'
+import { basename, dirname, encodePath } from '../lib/paths'
 import { shareLink } from '../lib/share'
 import { S } from '../strings'
 import { dialogs, toast } from '../components/dialogs'
-import { ICopy, ITrash, ISpinner } from '../components/Icons'
+import { ICopy, ITrash, ISpinner, IKey, iconFor } from '../components/Icons'
 import { MenuButton } from '../components/Shell'
 
 export default function Shares() {
@@ -46,8 +46,14 @@ export default function Shares() {
             <tbody>
               {q.data.shares.map((s) => (
                 <tr key={s.id} className="border-t border-neutral-200 dark:border-neutral-800">
-                  <td className="px-3 py-2 font-medium">{s.name}</td>
-                  <td className="max-w-xs truncate px-3 py-2"><Link className="text-accent hover:underline" to={'/b/' + encodePath(s.path)}>/{s.path}</Link></td>
+                  <td className="px-3 py-2 font-medium">
+                    <span className="flex items-center gap-2">
+                      <span className="shrink-0" title={s.kind === 'file' ? S.shareKindFile : S.shareKindDir}>{iconFor(s.name, s.kind === 'file' ? 'file' : 'dir')}</span>
+                      <span className="truncate">{s.name}</span>
+                      {s.hasPassword && <span className="shrink-0 text-neutral-500" title={S.shareProtected}><IKey size={14} /></span>}
+                    </span>
+                  </td>
+                  <td className="max-w-xs truncate px-3 py-2"><Link className="text-accent hover:underline" to={'/b/' + encodePath(s.kind === 'file' ? dirname(s.path) : s.path) + (s.kind === 'file' ? '?sel=' + encodeURIComponent(basename(s.path)) : '')}>/{s.path}</Link></td>
                   <td className="px-3 py-2">{s.expired ? <span className="text-red-600">{S.shareExpired}</span> : <span title={formatDate(s.expiresAt, true)}>{formatRelative(s.expiresAt)}</span>}</td>
                   <td className="hidden px-3 py-2 sm:table-cell">{s.accessCount}{s.lastAccessAt ? <span className="text-xs text-neutral-500"> · {formatRelative(s.lastAccessAt)}</span> : ''}</td>
                   <td className="hidden px-3 py-2 sm:table-cell">{s.createdBy}</td>

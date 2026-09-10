@@ -6,6 +6,9 @@ import type { SearchHit } from '../api/types'
 import { formatBytes, formatDate } from '../lib/format'
 import { encodePath, join, segments } from '../lib/paths'
 import { useUI } from '../store/ui'
+import { useAuth } from '../hooks'
+import { formatRelative } from '../lib/format'
+import { toast } from '../components/dialogs'
 import { S, errorMessage } from '../strings'
 import { iconFor, IDownload, ISearch, ISpinner, IClose } from '../components/Icons'
 import { MenuButton } from '../components/Shell'
@@ -25,11 +28,12 @@ export default function Search() {
     input.current?.focus()
   }, [q])
 
-  const res = useQuery<{ hits: SearchHit[]; partial: boolean }, ApiError>({
+  const { user } = useAuth()
+  const res = useQuery<{ hits: SearchHit[]; partial: boolean; source?: string; indexedAt?: number | null }, ApiError>({
     queryKey: ['search', path, q],
     queryFn: async () => {
       const r = await Api.search(path, q)
-      return { hits: r.results, partial: r.partial }
+      return { hits: r.results, partial: r.partial, source: r.source, indexedAt: r.indexedAt }
     },
     enabled: q.trim().length > 0,
     staleTime: 30_000,
@@ -62,7 +66,13 @@ export default function Search() {
       {res.error && <div className="text-sm text-red-600">{errorMessage(res.error.code, res.error.message)}</div>}
       {res.data && !res.isFetching && (
         <>
-          <div className="mb-2 text-xs text-neutral-500">{S.searchResults(hits.length)}</div>
+          <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-neutral-500">
+            <span>{S.searchResults(hits.length)}</span>
+            <span>· {res.data.source === 'index' ? S.searchIndexed(res.data.indexedAt ? formatRelative(res.data.indexedAt) : '—') : S.searchWalked}</span>
+            {user?.role === 'admin' && (
+              <button className="btn-ghost !px-1.5 !py-0.5 text-xs" onClick={async () => { try { const r = await Api.adminReindex(); toast(r.started ? S.reindexStarted : S.reindexRunning, 'info') } catch (e) { toast(e instanceof ApiError ? errorMessage(e.code, e.message) : String(e), 'error') } }}>{S.reindex}</button>
+            )}
+          </div>
           {res.data.partial && <div className="mb-2 rounded bg-amber-100 px-3 py-1.5 text-sm text-amber-900 dark:bg-amber-900/40 dark:text-amber-100">{S.searchPartial}</div>}
           {hits.length > 0 && (
             <div className="card overflow-x-auto">

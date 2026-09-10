@@ -54,6 +54,7 @@ export interface AppConfig {
   maxParallel: number
   shareMaxTtl: number
   publicUrl: string
+  trashRetention: number // segundos; 0 = lixeira desativada
   previewMaxText: number
   version: string
 }
@@ -84,6 +85,8 @@ export interface Favorite {
 export interface Share {
   id: number
   token: string
+  kind: 'dir' | 'file'
+  hasPassword: boolean
   path: string
   name: string
   createdBy: string
@@ -137,6 +140,38 @@ export interface SearchResult {
   q: string
   results: SearchHit[]
   partial: boolean
+  source?: 'index' | 'walk'
+  indexedAt?: number | null // unix s
+}
+
+export interface PublicInfo {
+  name: string
+  kind: 'dir' | 'file'
+  expiresAt: number
+  now: number
+  locked: boolean
+  size?: number
+  mtime?: number
+  fileName?: string
+}
+
+export interface TrashItem {
+  id: string
+  name: string
+  path: string // caminho original, relativo ao escopo
+  type: EntryType
+  size: number
+  deletedAt: number
+  by: string
+}
+
+export interface IndexStatus {
+  enabled: boolean
+  ready?: boolean
+  running?: boolean
+  entries?: number
+  lastFullAt?: number | null
+  interval?: number
 }
 
 export interface EntryInfo {

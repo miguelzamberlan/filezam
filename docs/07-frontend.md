@@ -9,7 +9,7 @@ web/src/
   main.tsx            QueryClientProvider + BrowserRouter
   App.tsx             Rotas e guarda de autenticação (Protected)
   hooks.ts            useAuth, useConfig, useListing, useInvalidateDirs, useFavorites
-  strings.ts          Todos os textos (pt-BR) e a tradução dos códigos de erro
+  strings.ts          Objeto S com os textos do idioma ativo; i18n/pt-BR.ts (referência) e i18n/en.ts
   index.css           Tailwind + utilitários próprios (@utility btn, input, card, menu…)
   api/client.ts       fetch tipado (X-Filezam, 401 → /login), ApiError, objeto Api
   api/types.ts        Tipos espelhando docs/04
@@ -35,6 +35,7 @@ web/src/
 | `/change-password` | ChangePassword | sessão |
 | `/b/*` | Browser (`*` = caminho escopo-relativo, cada segmento `encodeURIComponent`) | sessão + senha em dia |
 | `/search?path=&q=` | Search (pesquisa recursiva por nome a partir de `path`; resultados levam a `/b/<pasta>?sel=<nome>`, que seleciona o item) | sessão + senha em dia |
+| `/trash` | Trash (itens excluídos: restaurar, excluir de vez, esvaziar) | idem |
 | `/shares`, `/admin/users`, `/admin/audit` | idem | idem (admin para `/admin/*`; a API também valida) |
 | `/s/:token/*` | PublicShare | — |
 
@@ -57,6 +58,7 @@ Concentra as ações. Convenções:
 - Soltar arquivos: no fundo → pasta atual; sobre uma linha de pasta → dentro dela (destaque azul). Tipos sem `Files` são ignorados.
 - Arrastar e soltar interno: linhas são `draggable`; o `dataTransfer` leva `application/x-filezam` (JSON com os nomes; a seleção inteira se o item arrastado estiver nela). Pastas da listagem e os ancestrais da trilha aceitam o drop e chamam `moveInto(dest, names)`, que lista o destino, pergunta uma vez em caso de conflito (`dialogs.conflict`) e dispara `Api.move`. Soltar sobre um item da própria seleção ou dentro dele mesmo é recusado. No toque não há arraste: use recortar/colar.
 - Listagem paginada: o servidor filtra ocultos e ordena; a página seguinte é pedida quando a rolagem virtual chega a 20 linhas do fim (`onEndReached`). Enquanto faltam páginas a ordem do servidor é mantida (sem `sortEntries` no cliente) e o rodapé mostra "N de total carregados"; o filtro da pasta só peneira o que já foi carregado.
+- Excluir: com `config.trashRetention > 0` o item vai para a lixeira (confirmação leve, respeitando `confirmDelete`); `Shift+Del` ou "Excluir de vez" no menu apagam permanentemente (confirmação sempre). Compartilhar aceita pasta ou arquivo (`ShareDialog` recebe `kind`) e senha opcional.
 - Erros da API viram toast com `errorMessage(code)`.
 
 Atalhos: `↑ ↓ Home End PgUp PgDn` (com Shift estende), `→ ←` na grade, `Enter`, `Backspace`/`Alt+↑`, `Esc`, `F2`, `Delete`, `Espaço` alterna, `Ctrl+A/C/X/V`, `Ctrl+Shift+N`, digitação salta para o prefixo (buffer de 700 ms). O handler ignora eventos vindos de inputs e quando há menu/preview/diálogo aberto.
@@ -83,7 +85,11 @@ Virtualizada com `@tanstack/react-virtual` (34 px por linha; grade com colunas c
 
 ## Página Search (`pages/Search.tsx`)
 
-Estado na URL (`?path=&q=`), consulta `['search', path, q]` (staleTime 30 s). Filtra localmente itens ocultos (nome ou pasta iniciados por ponto) conforme `prefs.showHidden`. Aviso quando `partial`. O botão de lupa na barra do Browser abre a pesquisa já a partir da pasta atual.
+Estado na URL (`?path=&q=`), consulta `['search', path, q]` (staleTime 30 s). Mostra de onde veio a resposta (`source`: índice com data da última varredura, ou disco) e, para admin, o botão "Reconstruir índice" (`POST /api/admin/reindex`). Filtra localmente itens ocultos (nome ou pasta iniciados por ponto) conforme `prefs.showHidden`. Aviso quando `partial`. O botão de lupa na barra do Browser abre a pesquisa já a partir da pasta atual.
+
+## Página Trash (`pages/Trash.tsx`) e PublicShare
+
+Trash: consulta `['trash']`, seleção por checkbox, ações restaurar/excluir de vez/esvaziar (`dialogs.confirm` nas permanentes), invalida `['list']`, `['disk']` e `['trash']`. PublicShare: `info.locked` mostra o formulário de senha (`POST unlock` grava o cookie; depois invalida `['public', token]`); `kind: file` mostra um cartão com download e preview em vez da listagem.
 
 ## Diálogos e toasts (`components/dialogs.tsx`)
 

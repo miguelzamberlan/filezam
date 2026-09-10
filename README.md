@@ -44,11 +44,12 @@ Três prioridades guiam cada decisão, nesta ordem:
 
 - **Usuários e escopos**: login com usuário e senha, perfis administrador/usuário, cada conta com acesso à raiz inteira ou a uma subpasta que ela enxerga como se fosse a raiz.
 - **Gerenciamento completo**: navegar, criar pastas, renomear, copiar, recortar/colar (mover), excluir, baixar arquivo ou ZIP, favoritos, propriedades (tamanho calculado, quantidade de itens, links ativos) e espaço livre em disco.
-- **Pesquisa** por nome em todas as subpastas às quais o usuário tem acesso.
+- **Pesquisa** por nome em todas as subpastas às quais o usuário tem acesso, respondida por um índice em SQLite (varredura periódica) e conferida no disco.
+- **Lixeira**: excluir move para a lixeira com retenção configurável; restaurar devolve ao lugar. `Shift+Del` apaga de vez.
 - **Visualização** de imagens, vídeo, áudio, PDF e texto sem sair da página.
 - **Uploads sérios**: arquivos de vários GB em blocos paralelos com retomada, pastas inteiras por arrastar e soltar, milhares de arquivos pequenos em lote, tudo com painel de progresso, pausa e repetição de falhas.
-- **Links públicos**: compartilhe uma pasta por link somente leitura com prazo de validade, contagem de acessos e revogação imediata.
-- **Interface**: em português, tema claro/escuro/sistema, cores personalizáveis, zoom da listagem, ícones por tipo de arquivo, atalhos de teclado e uso confortável no celular.
+- **Links públicos**: compartilhe uma pasta ou um arquivo por link somente leitura com prazo de validade, senha opcional, contagem de acessos e revogação imediata.
+- **Interface**: em português ou inglês, tema claro/escuro/sistema, cores personalizáveis, zoom da listagem, ícones por tipo de arquivo, arrastar e soltar para mover, listagem paginada para pastas enormes, atalhos de teclado e uso confortável no celular.
 - **Administração**: gestão de usuários, auditoria de logins e alterações, bloqueio progressivo contra força bruta.
 - **Operação**: binário estático, imagem `distroless` sem shell, rootfs somente leitura, SQLite embutido (sem CGO), migrações automáticas, healthcheck.
 
@@ -98,6 +99,8 @@ Discos NTFS/exFAT montados com `uid=`/`gid=` funcionam normalmente: basta que o 
 | `FILEZAM_SESSION_TTL` | `168h` | Validade deslizante da sessão (teto absoluto: 30 dias) |
 | `FILEZAM_MAX_UPLOAD_CHUNK` | `16MiB` | Tamanho do bloco de upload (1 MiB–1 GiB) |
 | `FILEZAM_SHARE_MAX_TTL` | `720h` | Validade máxima de um link público |
+| `FILEZAM_TRASH_RETENTION` | `720h` | Tempo na lixeira antes de apagar de vez; `0` desativa a lixeira |
+| `FILEZAM_INDEX_INTERVAL` | `6h` | Varredura completa do índice de nomes da pesquisa; `0` desativa o índice |
 | `FILEZAM_FSYNC` | `true` | `fsync` antes de finalizar cada upload |
 | `FILEZAM_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
 
@@ -145,7 +148,7 @@ Contas são bloqueadas por 15 minutos (dobrando a cada repetição) após 10 fal
 
 ### Links públicos
 
-Selecione uma pasta, clique em **Compartilhar** e escolha a validade: o link (`/s/<token>`) é copiado na hora e pode ser copiado de novo em **Compartilhamentos** ou nas propriedades da pasta. Quem tiver o link pode listar, visualizar e baixar (arquivo ou ZIP), nada mais. O token tem 256 bits; a consulta pública é pelo hash, mas o token fica guardado no banco para permitir recopiar (quem tiver o arquivo do banco usa os links ativos). Revogar ou expirar invalida o link na hora; desativar o usuário ou tirar a pasta do escopo dele também. Mover ou renomear a pasta invalida o link (uma pasta nova no mesmo caminho o reativa, então revogue antes de recriar).
+Selecione uma pasta ou um arquivo, clique em **Compartilhar**, escolha a validade e, se quiser, uma senha (quem abrir o link precisa digitá-la): o link (`/s/<token>`) é copiado na hora e pode ser copiado de novo em **Compartilhamentos** ou nas propriedades da pasta. Quem tiver o link pode listar, visualizar e baixar (arquivo ou ZIP), nada mais. O token tem 256 bits; a consulta pública é pelo hash, mas o token fica guardado no banco para permitir recopiar (quem tiver o arquivo do banco usa os links ativos). Revogar ou expirar invalida o link na hora; desativar o usuário ou tirar a pasta do escopo dele também. Mover ou renomear a pasta invalida o link (uma pasta nova no mesmo caminho o reativa, então revogue antes de recriar).
 
 ### Uploads
 
@@ -163,6 +166,8 @@ Arquivos são gravados em `.filezam-upload-*.part` no diretório de destino e re
 - **Uploads** (menu lateral) não é uma tela: o envio acontece arrastando arquivos/pastas para a listagem ou pelos botões **Enviar arquivos**/**Enviar pasta**, e o progresso aparece num painel flutuante no canto inferior direito, com pausa, cancelamento e repetição de falhas. O item do menu mostra quantos envios estão em andamento e expande esse painel.
 - **Zoom**: botões −/+ ao lado do filtro (ou em Configurações) ampliam a listagem sem mexer no zoom do navegador.
 - **Tema e cores** (engrenagem no rodapé do menu): claro, escuro ou igual ao sistema; cores de destaque, seleção e foco com combinações prontas ou seletor livre. Tudo fica no navegador, por usuário.
+- **Lixeira** (menu lateral): o que você exclui fica lá pelo prazo de `FILEZAM_TRASH_RETENTION` e pode ser restaurado para o local original. Arquivos alterados por fora do Filezam (Samba, SSH) aparecem na pesquisa após a próxima varredura do índice, ou ao clicar em **Reconstruir índice** (admin).
+- **Arrastar e soltar**: arraste itens da listagem para uma pasta ou para um nível da trilha de navegação para movê-los.
 - **Celular**: menu vira gaveta (☰), a barra de ações encolhe para o essencial mais **⋯**, um toque abre, toque longo abre o menu e seleciona (depois cada toque marca/desmarca).
 
 ### Atalhos de teclado
@@ -235,7 +240,7 @@ Issues e pull requests são bem-vindos. Leia [`CONTRIBUTING.md`](CONTRIBUTING.md
 
 ## Roadmap e limitações
 
-O que já se sabe que falta (lixeira, cotas por usuário, busca indexada, 2FA, link de arquivo único, drag-and-drop interno) e o que foi descartado de propósito está em [`docs/10-roadmap.md`](docs/10-roadmap.md). Sugestões passam por issue antes de virar código.
+O que já se sabe que falta (cotas por usuário, 2FA, métricas, pesquisa por conteúdo) e o que foi descartado de propósito está em [`docs/10-roadmap.md`](docs/10-roadmap.md). Sugestões passam por issue antes de virar código.
 
 ## Autor
 

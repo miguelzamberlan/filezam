@@ -1,5 +1,5 @@
 import type {
-  AdminUser, AppConfig, AuditEntry, Conflict, DiskUsage, Entry, EntryInfo, Favorite, Job, ListPage, Listing, SearchResult, Share, UploadSession, User,
+  AdminUser, AppConfig, AuditEntry, Conflict, DiskUsage, Entry, EntryInfo, Favorite, IndexStatus, Job, ListPage, Listing, PublicInfo, SearchResult, Share, TrashItem, UploadSession, User,
 } from './types'
 
 export class ApiError extends Error {
@@ -87,7 +87,7 @@ export const Api = {
   },
   mkdir: (path: string) => api<{ path: string; entry: Entry }>('POST', '/api/files/mkdir', { path }),
   rename: (path: string, newName: string) => api<{ path: string; entry: Entry }>('POST', '/api/files/rename', { path, newName }),
-  delete: (paths: string[]) => api<{ job: Job }>('POST', '/api/files/delete', { paths }),
+  delete: (paths: string[], permanent = false) => api<{ job: Job }>('POST', '/api/files/delete', permanent ? { paths, permanent } : { paths }),
   copy: (sources: string[], destDir: string, onConflict: Conflict) =>
     api<{ job: Job }>('POST', '/api/files/copy', { sources, destDir, onConflict }),
   move: (sources: string[], destDir: string, onConflict: Conflict) =>
@@ -113,12 +113,23 @@ export const Api = {
 
   // shares
   shares: () => api<{ shares: Share[]; now: number }>('GET', '/api/shares'),
-  createShare: (path: string, expiresIn: number, name?: string) =>
-    api<{ share: Share; token: string; url: string }>('POST', '/api/shares', { path, expiresIn, name: name ?? '' }),
+  createShare: (path: string, expiresIn: number, name?: string, password?: string) =>
+    api<{ share: Share; token: string; url: string }>('POST', '/api/shares', { path, expiresIn, name: name ?? '', ...(password ? { password } : {}) }),
   deleteShare: (id: number) => api<{ ok: true }>('DELETE', '/api/shares/' + id),
 
+  // trash
+  trash: () => api<{ items: TrashItem[]; retention: number }>('GET', '/api/trash'),
+  trashRestore: (ids: string[]) => api<{ restored: { id: string; path: string }[]; failed: { id: string; code: string }[] }>('POST', '/api/trash/restore', { ids }),
+  trashDelete: (ids: string[]) => api<{ deleted: number }>('POST', '/api/trash/delete', { ids }),
+  trashEmpty: () => api<{ deleted: number }>('POST', '/api/trash/empty'),
+
+  // admin index
+  adminIndex: () => api<IndexStatus>('GET', '/api/admin/index'),
+  adminReindex: () => api<{ started: boolean }>('POST', '/api/admin/reindex'),
+
   // public
-  publicInfo: (token: string) => api<{ name: string; expiresAt: number; now: number }>('GET', '/api/public/' + token),
+  publicInfo: (token: string) => api<PublicInfo>('GET', '/api/public/' + token),
+  publicUnlock: (token: string, password: string) => api<{ ok: true }>('POST', `/api/public/${token}/unlock`, { password }),
   publicList: (token: string, path: string) => api<Listing>('GET', `/api/public/${token}/list` + q({ path })),
   publicContentUrl: (token: string, path: string, inline = false) =>
     `/api/public/${token}/content` + q({ path, inline: inline ? 1 : undefined }),

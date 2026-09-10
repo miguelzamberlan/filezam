@@ -20,6 +20,7 @@ Um único processo: servidor HTTP, workers de jobs e tarefas de manutenção. Se
 | `internal/server` | Roteamento, middlewares, handlers, sessões, SPA, auditoria | todos abaixo |
 | `internal/vfs` | **Núcleo de segurança**: normalização de caminhos, `Root`, listagem, pesquisa (`Find`), cópia, movimento, remoção, zip, arquivos `.part` | `os.Root`, `x/sys/unix` |
 | `internal/uploads` | Sessões chunked: bitset, escrita por offset, finalização, limpeza | store, vfs |
+| `internal/index` | Índice de nomes em SQLite: varredura completa periódica (`WalkEntries`) e ajustes pontuais chamados pelos handlers | store, vfs |
 | `internal/jobs` | Registro em memória de jobs com progresso e cancelamento | — |
 | `internal/auth` | Argon2id, tokens, hash de tokens, rate limiters e semáforos | `x/crypto` |
 | `internal/store` | Acesso ao SQLite, migrações embutidas, repositórios por tabela | `modernc.org/sqlite` |
@@ -90,6 +91,9 @@ Dockerfile docker-compose.yml .env.example Makefile README.md CLAUDE.md
 | Escrita no SQLite | 1 conexão | `store.DB.w` |
 | Contagem em `/api/files/info` | 200 000 entradas ou 15 s | `infoScanLimit` |
 | Tamanho de um upload chunked | 1 PiB (`uploads.MaxUploadSize`) e o espaço livre | `Service.Create` |
-| Pesquisa recursiva | 2 simultâneas por usuário; 200 000 entradas, 500 resultados ou 10 s por requisição | `searchSem`, `handleSearch` |
+| Pesquisa recursiva | 2 simultâneas por usuário; 200 000 entradas, 500 resultados ou 10 s por requisição (walk); 500 resultados (índice) | `searchSem`, `handleSearch` |
+| Senha de link público | 5 tentativas/min por link + `loginSem` | `shareUnlock` |
+| Listagem paginada | até 5000 por página (`listPageMax`); a UI pede 2000 | `handleList` |
+| Lixeira | restaurar/apagar até 1000 ids por requisição | `readIDs` |
 
 Sem limite (aceito, ver [10](10-roadmap.md)): zips/downloads autenticados simultâneos, jobs por usuário, cota de disco.
