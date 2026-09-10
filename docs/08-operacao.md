@@ -18,6 +18,7 @@ Copie o serviço `filezam` para o compose do stack e:
 - Monte a pasta de dados em `/data` e uma pasta de configuração **fora** da pasta de dados em `/config`.
 - Com Cloudflare Tunnel ou Traefik na mesma rede Docker, não publique porta: aponte o proxy para `http://filezam:8080` e coloque a sub-rede Docker em `FILEZAM_TRUSTED_PROXIES` (ex.: `172.16.0.0/12`).
 - Exemplo real em uso: stack `servidor` com Samba, Filebrowser, cloudflared e PiGallery2 compartilhando o mesmo HD; Filezam em `/data`, banco em `/home/<user>/config_filezam`.
+- Num compose sem `env_file`, declare também as variáveis novas no bloco `environment` (`FILEZAM_TRASH_RETENTION`, `FILEZAM_INDEX_INTERVAL`, `FILEZAM_REQUIRE_2FA_ADMINS`, e opcionalmente `FILEZAM_METRICS_TOKEN`, `FILEZAM_SECRET_KEY`, `FILEZAM_PUBLIC_URL`); sem elas valem os padrões da tabela abaixo. O `/config` passa a guardar também o `secret.key` do 2FA: inclua a pasta inteira no backup.
 
 ## Variáveis de ambiente
 
