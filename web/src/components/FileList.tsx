@@ -68,13 +68,63 @@ export default function FileList(props: FileListProps) {
     </button>
   )
 
+  // Toque longo (≈600 ms sem mover) abre o menu de contexto onde o navegador não dispara
+  // `contextmenu` no toque (iOS). Onde dispara (Android), o evento nativo cancela o timer.
+  const press = useRef<{ t: number; x: number; y: number } | null>(null)
+  const fired = useRef(false) // o toque longo já abriu o menu: o "click" que vem ao soltar deve ser ignorado
+  const swallowClick = useRef(false)
+  const cancelPress = () => {
+    if (press.current) window.clearTimeout(press.current.t)
+    press.current = null
+  }
+  const release = () => {
+    cancelPress()
+    if (fired.current) {
+      fired.current = false
+      swallowClick.current = true
+      window.setTimeout(() => (swallowClick.current = false), 400)
+    }
+  }
+  const pressProps = (e: Entry) => ({
+    onPointerDown: (ev: React.PointerEvent) => {
+      if (ev.pointerType !== 'touch') return
+      cancelPress()
+      fired.current = false
+      const { clientX, clientY } = ev
+      press.current = {
+        x: clientX, y: clientY,
+        t: window.setTimeout(() => {
+          press.current = null
+          fired.current = true
+          props.onContextMenu(e, { preventDefault() {}, clientX, clientY } as unknown as MouseEvent)
+        }, 600),
+      }
+    },
+    onPointerMove: (ev: React.PointerEvent) => {
+      if (press.current && (Math.abs(ev.clientX - press.current.x) > 10 || Math.abs(ev.clientY - press.current.y) > 10)) cancelPress()
+    },
+    onPointerUp: release,
+    onPointerCancel: release,
+    onClickCapture: (ev: React.MouseEvent) => {
+      if (swallowClick.current) {
+        swallowClick.current = false
+        ev.stopPropagation()
+        ev.preventDefault()
+      }
+    },
+  })
+  const contextMenu = (e: Entry, ev: MouseEvent) => {
+    cancelPress()
+    props.onContextMenu(e, ev)
+  }
+
   const rowCls = useCallback(
     (e: Entry) =>
-      'group flex select-none items-center rounded-sm ' +
+      'group flex select-none no-callout items-center rounded-sm ' +
       (selection.has(e.name) ? 'row-selected ' : 'hover:bg-neutral-100 dark:hover:bg-neutral-800/60 ') +
       (focused === e.name ? 'row-focused ' : '') +
       (cutNames?.has(e.name) ? 'opacity-50 ' : '') +
-      (props.dragOverName === e.name && e.type === 'dir' ? 'ring-2 ring-blue-500 ' : ''),
+      (props.dragOverName === e.name && e.type === 'dir' ? 'ring-2 ring-accent ' : ''),
     [selection, focused, cutNames, props.dragOverName],
   )
 
@@ -117,9 +167,10 @@ export default function FileList(props: FileListProps) {
                   className={rowCls(e) + ' flex-col justify-center gap-1 p-2 text-center'}
                   onClick={(ev) => props.onRowClick(e, ev)}
                   onDoubleClick={() => props.onOpen(e)}
-                  onContextMenu={(ev) => props.onContextMenu(e, ev)}
+                  onContextMenu={(ev) => contextMenu(e, ev)}
                   title={e.name}
                   {...dragProps(e)}
+                  {...pressProps(e)}
                 >
                   <div className="flex h-14 items-center justify-center">{iconFor(e.name, e.type, 40)}</div>
                   <div className="w-full truncate text-xs">{e.name}</div>
@@ -152,8 +203,9 @@ export default function FileList(props: FileListProps) {
                 style={{ top: v.start, height: v.size }}
                 onClick={(ev) => props.onRowClick(e, ev)}
                 onDoubleClick={() => props.onOpen(e)}
-                onContextMenu={(ev) => props.onContextMenu(e, ev)}
+                onContextMenu={(ev) => contextMenu(e, ev)}
                 {...dragProps(e)}
+                {...pressProps(e)}
               >
                 <div className="flex w-8 shrink-0 items-center justify-center">{iconFor(e.name, e.type)}</div>
                 <div className={'min-w-0 flex-1 truncate px-2 text-sm ' + (e.nameInvalid ? 'text-red-500' : '')} title={e.name}>

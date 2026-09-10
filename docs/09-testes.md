@@ -34,4 +34,5 @@ Os testes de integração criam raiz e banco temporários; nada toca o sistema r
 9. Usuário com escopo não vê o pai; admin muda o escopo → sessão cai.
 10. Atrás do proxy real: cookie `Secure`, IP real na auditoria, upload de 200 MB completa.
 11. Preview de PDF abre dentro da interface (Chrome e Firefox).
+11b. No celular (ou DevTools em modo touch, 390 px): toque abre, toque longo abre o menu e seleciona, "⋯" mostra as ações, tabelas cabem na largura; tema claro/escuro e cores em Configurações refletem na hora.
 12. `go run golang.org/x/vuln/cmd/govulncheck@latest ./...` sem vulnerabilidades alcançáveis e `cd web && npm audit --omit=dev` limpo; se o Go tiver correção nova, subir `go.mod` e `Dockerfile`.

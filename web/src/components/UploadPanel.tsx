@@ -61,7 +61,7 @@ export default function UploadPanel() {
       </div>
       <div className="px-3 py-2">
         <div className="h-1.5 w-full overflow-hidden rounded bg-neutral-200 dark:bg-neutral-800">
-          <div className={'h-full transition-[width] ' + (snap.paused ? 'bg-amber-500' : 'bg-blue-600')} style={{ width: pct + '%' }} />
+          <div className={'h-full transition-[width] ' + (snap.paused ? 'bg-amber-500' : 'bg-accent')} style={{ width: pct + '%' }} />
         </div>
         <div className="mt-1 flex justify-between text-xs text-neutral-500">
           <span className="tabular-nums">{formatBytes(snap.bytesDone)} / {formatBytes(snap.bytesTotal)}</span>

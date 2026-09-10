@@ -44,7 +44,7 @@ web/src/
 
 - **Servidor** (TanStack Query): `['me']`, `['config']` (staleTime ∞), `['list', path]` (staleTime 10 s), `['favorites']`, `['shares']`, `['admin-users']`, `['admin-dirs', path]`, `['job', id]` (refetch 500 ms enquanto `running`), `['public', token, ...]`. Mutações invalidam as chaves afetadas; `useInvalidateDirs(dirs)` é o ponto único para listagens.
 - **UI** (zustand `useUI`): `selection: Set<string>` de nomes na pasta atual, `anchor`/`focused` para Shift/teclado, `clipboard {op: copy|cut, dir, names}`, `sort`, `view`, `filter` e `prefs` (persistidos em `localStorage`: `sort`, `view`, `prefs`).
-- **Preferências** (`prefs`, editadas em `SettingsDialog` pela engrenagem do rodapé): `showHidden` (arquivos iniciados por ponto; o servidor sempre os lista, o filtro é no cliente e o rodapé mostra "N ocultos"), `showHints` (dicas de atalhos), `confirmDelete`, `zoom` (fator da listagem, passos em `ZOOM_STEPS`; botões −/%/+ na barra do Browser e seleção em Configurações). `uploadPanelOpen` (não persistido) controla se a lista do painel de envios está expandida; o item **Uploads** do menu lateral expande o painel ou, sem envios, explica como enviar. Novas preferências: adicionar em `Prefs`/`defaultPrefs` em `store/ui.ts`, uma linha no `SettingsDialog` e o texto em `strings.ts`.
+- **Preferências** (`prefs`, editadas em `SettingsDialog` pela engrenagem do rodapé): `showHidden` (arquivos iniciados por ponto; o servidor sempre os lista, o filtro é no cliente e o rodapé mostra "N ocultos"), `showHints` (dicas de atalhos), `confirmDelete`, `zoom` (fator da listagem, passos em `ZOOM_STEPS`; botões −/%/+ na barra do Browser e seleção em Configurações). `theme` (`system`/`light`/`dark`: `lib/theme.ts` põe a classe `.dark` no `<html>` e `color-scheme`; o Tailwind usa `@custom-variant dark (&:where(.dark, .dark *))`, nunca a media query direto) e `accent`/`selection`/`focus` (hex; viram as variáveis `--accent`/`--selection`/`--focus` no `<html>`, expostas como `bg-accent`, `text-accent`, `ring-focus` etc. via `@theme inline`; `row-selected`, `nav-active` e `btn-primary` derivam tons com `color-mix`, então uma cor serve para os dois temas). `uploadPanelOpen` e `sidebarOpen` (não persistidos) controlam a lista do painel de envios e o menu lateral em telas estreitas; o item **Uploads** do menu lateral expande o painel ou, sem envios, explica como enviar. Novas preferências: adicionar em `Prefs`/`defaultPrefs` em `store/ui.ts`, uma linha no `SettingsDialog` e o texto em `strings.ts`.
 - **Uploads**: fora do React; `useUploads()` lê o snapshot via `useSyncExternalStore`.
 
 ## Página Browser (`pages/Browser.tsx`)
@@ -58,6 +58,14 @@ Concentra as ações. Convenções:
 - Erros da API viram toast com `errorMessage(code)`.
 
 Atalhos: `↑ ↓ Home End PgUp PgDn` (com Shift estende), `→ ←` na grade, `Enter`, `Backspace`/`Alt+↑`, `Esc`, `F2`, `Delete`, `Espaço` alterna, `Ctrl+A/C/X/V`, `Ctrl+Shift+N`, digitação salta para o prefixo (buffer de 700 ms). O handler ignora eventos vindos de inputs e quando há menu/preview/diálogo aberto.
+
+## Celular e toque
+
+- Menu lateral vira gaveta abaixo de `lg`; cada página coloca `<MenuButton />` (de `Shell.tsx`) na sua primeira linha em vez de gastar uma linha só com o botão.
+- Browser: a barra de ações completa só aparece a partir de `sm`; abaixo disso há uma linha compacta (nova pasta, enviar, filtro, colar quando há área de transferência e **⋯** que abre o mesmo menu de contexto da pasta ou da seleção). Zoom só na barra ≥ `sm` e em Configurações.
+- Toque (`pointerType === 'touch'` no `click`): um toque **abre** pasta/arquivo; toque longo (~600 ms sem mover, implementado em `FileList` com pointer events, para o iOS que não dispara `contextmenu`; no Android o evento nativo cancela o timer) abre o menu de contexto e seleciona o item; com uma seleção ativa, toques alternam itens e a linha compacta mostra "N selecionados ✕" para limpar. Mouse mantém clique = selecionar, duplo clique = abrir.
+- Tabelas (Pesquisar, Compartilhamentos, Usuários, Auditoria) escondem colunas secundárias abaixo de `sm`/`md` e os botões ficam só com ícone.
+- `height: 100dvh` quando suportado e `touch-action: manipulation` nos botões.
 
 ## FileList
 

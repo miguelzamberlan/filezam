@@ -49,6 +49,7 @@ export const ISettings = (p: P) => base(p, <><circle cx="12" cy="12" r="3" /><pa
 export const IInfo = (p: P) => base(p, <><circle cx="12" cy="12" r="9" /><path d="M12 16v-4m0-4h.01" /></>)
 export const ILog = (p: P) => base(p, <><path d="M4 4h16v16H4z" /><path d="M8 9h8M8 13h8M8 17h5" /></>)
 
+export const IMore = (p: P) => base(p, <><circle cx="5" cy="12" r="1.6" fill="currentColor" /><circle cx="12" cy="12" r="1.6" fill="currentColor" /><circle cx="19" cy="12" r="1.6" fill="currentColor" /></>)
 export const ISearch = (p: P) => base(p, <><circle cx="11" cy="11" r="7" /><path d="m20 20-4.3-4.3" /></>)
 export const IZoomIn = (p: P) => base(p, <><circle cx="11" cy="11" r="7" /><path d="m20 20-4.3-4.3M11 8v6M8 11h6" /></>)
 export const IZoomOut = (p: P) => base(p, <><circle cx="11" cy="11" r="7" /><path d="m20 20-4.3-4.3M8 11h6" /></>)

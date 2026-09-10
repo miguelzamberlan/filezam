@@ -106,6 +106,8 @@ Arquivos são gravados em `.filezam-upload-*.part` no diretório de destino e re
 - **Arquivos** (menu lateral): a navegação em si. O filtro no alto da lista só peneira a pasta atual; **Pesquisar** procura pelo nome em todas as subpastas (a lupa ao lado do filtro já parte da pasta aberta). O resultado leva à pasta com o item selecionado.
 - **Uploads** (menu lateral) não é uma tela: o envio acontece arrastando arquivos/pastas para a listagem ou pelos botões **Enviar arquivos**/**Enviar pasta**, e o progresso aparece num painel flutuante no canto inferior direito, com pausa, cancelamento e repetição de falhas. O item do menu mostra quantos envios estão em andamento e expande esse painel.
 - **Zoom**: botões −/+ ao lado do filtro (ou em Configurações) ampliam a listagem sem mexer no zoom do navegador; fica salvo no navegador.
+- **Tema e cores** (engrenagem no rodapé do menu): claro, escuro ou igual ao sistema; cores de destaque, seleção e foco com combinações prontas ou seletor livre. Tudo fica no navegador, por usuário.
+- **Celular**: menu vira gaveta (☰), a barra de ações encolhe para o essencial mais **⋯**, um toque abre, toque longo abre o menu e seleciona (depois cada toque marca/desmarca).
 
 ## Atalhos de teclado
 

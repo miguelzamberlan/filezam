@@ -55,7 +55,7 @@ function JobToast({ job }: { job: Job }) {
       {job.state === 'running' && (
         <>
           <div className="mt-2 h-1.5 w-full overflow-hidden rounded bg-neutral-200 dark:bg-neutral-800">
-            <div className="h-full bg-blue-600 transition-[width]" style={{ width: pct + '%' }} />
+            <div className="h-full bg-accent transition-[width]" style={{ width: pct + '%' }} />
           </div>
           <div className="mt-1 truncate text-xs text-neutral-500">
             {job.done}/{job.total} {job.bytesTotal > 0 && `· ${formatBytes(job.bytesDone)} / ${formatBytes(job.bytesTotal)}`} {job.current && `· ${job.current}`}

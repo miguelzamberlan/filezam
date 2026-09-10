@@ -19,8 +19,9 @@ import ShareDialog from '../components/ShareDialog'
 import InfoDialog from '../components/InfoDialog'
 import { dialogs, toast } from '../components/dialogs'
 import { useUploads } from '../components/UploadPanel'
+import { MenuButton } from '../components/Shell'
 import {
-  IArrowUp, ICopy, IDownload, IEdit, IFolderPlus, IGrid, IList, IPaste, IRefresh, IScissors, IShare, IStar, ITrash, IUpload, ISpinner, IEye, IInfo, ISearch, IZoomIn, IZoomOut,
+  IArrowUp, ICopy, IDownload, IEdit, IFolderPlus, IGrid, IList, IPaste, IRefresh, IScissors, IShare, IStar, ITrash, IUpload, ISpinner, IEye, IInfo, ISearch, IZoomIn, IZoomOut, IMore, IClose,
 } from '../components/Icons'
 
 function triggerDownload(url: string) {
@@ -117,6 +118,15 @@ export default function Browser() {
     } else {
       ui.setSelection(new Set([e.name]), e.name, e.name)
     }
+  }
+
+  // No toque: um toque abre (pasta ou arquivo); com uma seleção ativa (iniciada por toque
+  // longo), o toque alterna a seleção. Com mouse: clique seleciona, duplo clique abre.
+  const rowClick = (e: Entry, ev: MouseEvent) => {
+    const touch = (ev.nativeEvent as PointerEvent).pointerType === 'touch'
+    if (!touch) return select(e, ev)
+    if (ui.selection.size === 0) return open(e)
+    select(e, { shiftKey: false, ctrlKey: true, metaKey: false })
   }
 
   const open = (e: Entry) => {
@@ -398,22 +408,37 @@ export default function Browser() {
       onDragLeave={(ev) => ev.currentTarget === ev.target && setDragOver(false)}
       onDrop={(ev) => onDrop(ev)}
     >
-      {/* toolbar */}
-      <div className="flex flex-wrap items-center gap-1 border-b border-neutral-200 px-3 py-2 dark:border-neutral-800">
+      {/* toolbar: linha 1 = navegação; linha 2 = ações (completa em telas ≥ sm, compacta com "mais" no celular) */}
+      <div className="flex items-center gap-1 border-b border-neutral-200 px-2 py-2 sm:px-3 dark:border-neutral-800">
+        <MenuButton />
         <button className="btn-ghost !px-1.5" onClick={() => go(dirname(path))} disabled={!path} title={S.goUp}><IArrowUp size={16} /></button>
-        <Breadcrumb path={path} base="/b" rootLabel={S.home} />
-        <div className="ml-auto flex items-center gap-1">
-          <input className="input !w-40 !py-1 text-sm" placeholder={S.search} value={ui.filter} onChange={(e) => ui.setFilter(e.target.value)} onKeyDown={(e) => e.key === 'Escape' && (ui.setFilter(''), listRef.current?.focus())} />
+        <div className="min-w-0 flex-1"><Breadcrumb path={path} base="/b" rootLabel={S.home} /></div>
+        <div className="flex shrink-0 items-center gap-1">
+          <input className="input hidden !w-40 !py-1 text-sm sm:block" placeholder={S.search} value={ui.filter} onChange={(e) => ui.setFilter(e.target.value)} onKeyDown={(e) => e.key === 'Escape' && (ui.setFilter(''), listRef.current?.focus())} />
           <button className="btn-ghost !px-1.5" onClick={() => navigate('/search?path=' + encodeURIComponent(path))} title={S.searchHere}><ISearch size={16} /></button>
-          <span className="mx-1 h-5 border-l border-neutral-300 dark:border-neutral-700" />
-          <button className="btn-ghost !px-1.5" onClick={() => zoomStep(-1)} disabled={ui.prefs.zoom <= ZOOM_STEPS[0]} title={S.zoomOut}><IZoomOut size={16} /></button>
-          <button className="btn-ghost !px-1 text-xs tabular-nums" onClick={() => ui.setPrefs({ zoom: 1 })} title={S.zoomReset}>{Math.round(ui.prefs.zoom * 100)}%</button>
-          <button className="btn-ghost !px-1.5" onClick={() => zoomStep(1)} disabled={ui.prefs.zoom >= ZOOM_STEPS[ZOOM_STEPS.length - 1]} title={S.zoomIn}><IZoomIn size={16} /></button>
+          <span className="mx-1 hidden h-5 border-l border-neutral-300 sm:block dark:border-neutral-700" />
+          <button className="btn-ghost hidden !px-1.5 sm:inline-flex" onClick={() => zoomStep(-1)} disabled={ui.prefs.zoom <= ZOOM_STEPS[0]} title={S.zoomOut}><IZoomOut size={16} /></button>
+          <button className="btn-ghost hidden !px-1 text-xs tabular-nums sm:inline-flex" onClick={() => ui.setPrefs({ zoom: 1 })} title={S.zoomReset}>{Math.round(ui.prefs.zoom * 100)}%</button>
+          <button className="btn-ghost hidden !px-1.5 sm:inline-flex" onClick={() => zoomStep(1)} disabled={ui.prefs.zoom >= ZOOM_STEPS[ZOOM_STEPS.length - 1]} title={S.zoomIn}><IZoomIn size={16} /></button>
           <button className="btn-ghost !px-1.5" onClick={() => ui.setView(ui.view === 'list' ? 'grid' : 'list')} title={S.view}>{ui.view === 'list' ? <IGrid size={16} /> : <IList size={16} />}</button>
-          <button className="btn-ghost !px-1.5" onClick={refresh} title={S.refresh}>{listing.isFetching ? <ISpinner size={16} /> : <IRefresh size={16} />}</button>
+          <button className="btn-ghost hidden !px-1.5 sm:inline-flex" onClick={refresh} title={S.refresh}>{listing.isFetching ? <ISpinner size={16} /> : <IRefresh size={16} />}</button>
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-1 border-b border-neutral-200 px-3 py-1.5 dark:border-neutral-800">
+      {/* celular: filtro + ações principais + "mais" (o resto vai para o menu de contexto) */}
+      <div className="flex items-center gap-1 border-b border-neutral-200 px-2 py-1.5 sm:hidden dark:border-neutral-800">
+        {selectedEntries.length > 0 ? (
+          <button className="btn-ghost !px-1.5 text-xs" onClick={() => ui.clearSelection()} title={S.clearSelection}><IClose size={14} /> {S.selected(selectedEntries.length)}</button>
+        ) : (
+          <>
+            <button className="btn-ghost !px-1.5" onClick={newFolder} title={S.newFolder}><IFolderPlus size={18} /></button>
+            <button className="btn-ghost !px-1.5" onClick={() => fileInput.current?.click()} title={S.uploadFiles}><IUpload size={18} /></button>
+          </>
+        )}
+        <input className="input min-w-0 flex-1 !py-1 text-sm" placeholder={S.search} value={ui.filter} onChange={(e) => ui.setFilter(e.target.value)} />
+        {ui.clipboard && selectedEntries.length === 0 && <button className="btn-ghost !px-1.5" onClick={() => paste()} title={S.paste}><IPaste size={18} /></button>}
+        <button className="btn-ghost !px-1.5" title={S.more} onClick={(ev) => { const r = ev.currentTarget.getBoundingClientRect(); setMenu({ x: r.right - 220, y: r.bottom + 4, entry: selectedEntries[0] ?? null }) }}><IMore size={18} /></button>
+      </div>
+      <div className="hidden flex-wrap items-center gap-1 border-b border-neutral-200 px-3 py-1.5 sm:flex dark:border-neutral-800">
         <button className="btn-ghost" onClick={newFolder}><IFolderPlus size={16} /> {S.newFolder}</button>
         <button className="btn-ghost" onClick={() => fileInput.current?.click()}><IUpload size={16} /> {S.uploadFiles}</button>
         <button className="btn-ghost" onClick={() => dirInput.current?.click()}><IUpload size={16} /> {S.uploadFolder}</button>
@@ -462,7 +487,7 @@ export default function Browser() {
             view={ui.view}
             sort={ui.sort}
             onSort={ui.setSort}
-            onRowClick={select}
+            onRowClick={rowClick}
             onOpen={open}
             onContextMenu={onContextMenu}
             onBackgroundClick={() => ui.clearSelection()}
@@ -477,7 +502,7 @@ export default function Browser() {
       {ui.prefs.showHints && <div className="hidden border-t border-neutral-200 px-3 py-1 text-[11px] text-neutral-400 dark:border-neutral-800 md:block">{S.keyboardHint}</div>}
 
       {dragOver && (
-        <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center border-4 border-dashed border-blue-500 bg-blue-500/10 text-lg font-medium text-blue-700 dark:text-blue-200">
+        <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center border-4 border-dashed border-accent bg-accent/10 text-lg font-medium text-accent">
           {S.dropHere}
         </div>
       )}

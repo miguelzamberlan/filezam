@@ -8,6 +8,7 @@ import { encodePath, join, segments } from '../lib/paths'
 import { useUI } from '../store/ui'
 import { S, errorMessage } from '../strings'
 import { iconFor, IDownload, ISearch, ISpinner, IClose } from '../components/Icons'
+import { MenuButton } from '../components/Shell'
 
 // Pesquisa recursiva por nome a partir de uma pasta (?path=), dentro do escopo do usuário.
 // O estado fica na URL (?path=&q=) para o botão "voltar" do navegador funcionar.
@@ -45,10 +46,10 @@ export default function Search() {
 
   return (
     <div className="flex h-full flex-col overflow-auto p-4">
-      <h1 className="mb-1 text-lg font-semibold">{S.searchTitle}</h1>
+      <div className="mb-1 flex items-center gap-2"><MenuButton /><h1 className="text-lg font-semibold">{S.searchTitle}</h1></div>
       <p className="mb-3 text-sm text-neutral-500">{S.searchHint}</p>
       <form className="mb-3 flex flex-wrap items-center gap-2" onSubmit={submit}>
-        <input ref={input} className="input !w-80 max-w-full" placeholder={S.searchPlaceholder} value={text} onChange={(e) => setText(e.target.value)} />
+        <input ref={input} className="input w-full sm:!w-80" placeholder={S.searchPlaceholder} value={text} onChange={(e) => setText(e.target.value)} />
         <span className="flex items-center gap-1 text-sm text-neutral-600 dark:text-neutral-300">
           {S.searchIn}
           <Link className="rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-xs hover:underline dark:bg-neutral-800" to={folderLink(path)} title={S.openFolder}>{path ? '/' + path : '/ (' + S.searchAllFolders + ')'}</Link>
@@ -69,7 +70,7 @@ export default function Search() {
                 <thead className="text-left text-xs uppercase text-neutral-500">
                   <tr>
                     <th className="px-3 py-2">{S.name}</th>
-                    <th className="px-3 py-2">{S.searchFolder}</th>
+                    <th className="hidden px-3 py-2 sm:table-cell">{S.searchFolder}</th>
                     <th className="px-3 py-2 text-right">{S.size}</th>
                     <th className="hidden px-3 py-2 sm:table-cell">{S.modified}</th>
                     <th className="px-3 py-2"></th>
@@ -83,8 +84,9 @@ export default function Search() {
                           {iconFor(h.entry.name, h.entry.type)}
                           <span className="truncate">{h.entry.name}</span>
                         </button>
+                        <Link className="block truncate text-xs text-accent sm:hidden" to={folderLink(h.dir)}>/{h.dir}</Link>
                       </td>
-                      <td className="max-w-xs truncate px-3 py-1.5"><Link className="text-blue-600 hover:underline" to={folderLink(h.dir)} title={S.openFolder}>/{h.dir}</Link></td>
+                      <td className="hidden max-w-xs truncate px-3 py-1.5 sm:table-cell"><Link className="text-accent hover:underline" to={folderLink(h.dir)} title={S.openFolder}>/{h.dir}</Link></td>
                       <td className="px-3 py-1.5 text-right tabular-nums text-neutral-500">{h.entry.type === 'dir' ? '—' : formatBytes(h.entry.size)}</td>
                       <td className="hidden px-3 py-1.5 tabular-nums text-neutral-500 sm:table-cell">{formatDate(h.entry.mtime)}</td>
                       <td className="px-3 py-1.5 text-right">

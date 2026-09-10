@@ -6,6 +6,7 @@ import { formatDate } from '../lib/format'
 import { S, errorMessage } from '../strings'
 import { Modal, dialogs, toast } from '../components/dialogs'
 import { IChevronRight, IFolder, ISpinner, ITrash, IEdit, IUsers } from '../components/Icons'
+import { MenuButton } from '../components/Shell'
 
 function ScopePicker({ value, onChange, onClose }: { value: string; onChange: (v: string) => void; onClose: () => void }) {
   const q = useQuery({ queryKey: ['admin-dirs', value], queryFn: () => Api.adminDirs(value) })
@@ -87,7 +88,7 @@ function UserForm({ user, onClose }: { user: AdminUser | null; onClose: () => vo
         </select>
         <label className="mt-3 block text-sm">{S.scope}</label>
         <div className="mt-1 flex items-center gap-2">
-          <span className={'input flex-1 truncate ' + (scope ? 'text-blue-700 dark:text-blue-300' : '')}>{scope === '' ? S.scopeRoot : '/' + scope}</span>
+          <span className={'input flex-1 truncate ' + (scope ? 'text-accent' : '')}>{scope === '' ? S.scopeRoot : '/' + scope}</span>
           <button type="button" className="btn-ghost" onClick={() => setPick((p) => !p)}>{S.scopePick}</button>
         </div>
         {pick && <ScopePicker value={scope} onChange={setScope} onClose={() => setPick(false)} />}
@@ -120,6 +121,7 @@ export default function AdminUsers() {
   return (
     <div className="flex h-full flex-col overflow-auto p-4">
       <div className="mb-4 flex items-center gap-2">
+        <MenuButton />
         <h1 className="text-lg font-semibold">{S.users}</h1>
         <button className="btn-primary ml-auto" onClick={() => setEdit('new')}><IUsers size={16} /> {S.userNew}</button>
       </div>
@@ -132,7 +134,7 @@ export default function AdminUsers() {
                 <th className="px-3 py-2">{S.username}</th>
                 <th className="px-3 py-2">{S.role}</th>
                 <th className="px-3 py-2">{S.scope}</th>
-                <th className="px-3 py-2">{S.created}</th>
+                <th className="hidden px-3 py-2 md:table-cell">{S.created}</th>
                 <th className="px-3 py-2"></th>
               </tr>
             </thead>
@@ -147,7 +149,7 @@ export default function AdminUsers() {
                   </td>
                   <td className="px-3 py-2">{u.role === 'admin' ? S.roleAdmin : S.roleUser}</td>
                   <td className="max-w-xs truncate px-3 py-2">{u.scope === '' ? S.scopeRoot : '/' + u.scope}</td>
-                  <td className="px-3 py-2">{formatDate(u.createdAt, true)}</td>
+                  <td className="hidden px-3 py-2 md:table-cell">{formatDate(u.createdAt, true)}</td>
                   <td className="px-3 py-2 text-right">
                     <button className="btn-ghost" onClick={() => setEdit(u)}><IEdit size={16} /></button>
                     <button className="btn-ghost text-red-600" onClick={() => del(u)}><ITrash size={16} /></button>

@@ -3,6 +3,7 @@ import { Api } from '../api/client'
 import { formatDate } from '../lib/format'
 import { S } from '../strings'
 import { ISpinner } from '../components/Icons'
+import { MenuButton } from '../components/Shell'
 
 export default function AdminAudit() {
   const q = useInfiniteQuery({
@@ -14,7 +15,7 @@ export default function AdminAudit() {
   const entries = q.data?.pages.flatMap((p) => p.entries) ?? []
   return (
     <div className="flex h-full flex-col overflow-auto p-4">
-      <h1 className="mb-4 text-lg font-semibold">{S.audit}</h1>
+      <div className="mb-4 flex items-center gap-2"><MenuButton /><h1 className="text-lg font-semibold">{S.audit}</h1></div>
       {q.isLoading && <ISpinner />}
       {entries.length > 0 && (
         <div className="card overflow-x-auto">
@@ -23,7 +24,7 @@ export default function AdminAudit() {
               <tr>
                 <th className="px-3 py-2">{S.when}</th>
                 <th className="px-3 py-2">{S.username}</th>
-                <th className="px-3 py-2">{S.ip}</th>
+                <th className="hidden px-3 py-2 sm:table-cell">{S.ip}</th>
                 <th className="px-3 py-2">{S.action}</th>
                 <th className="px-3 py-2">{S.details}</th>
               </tr>
@@ -33,7 +34,7 @@ export default function AdminAudit() {
                 <tr key={e.id} className="border-t border-neutral-200 dark:border-neutral-800">
                   <td className="whitespace-nowrap px-3 py-1.5 tabular-nums">{formatDate(e.ts, true)}</td>
                   <td className="px-3 py-1.5">{e.username}</td>
-                  <td className="px-3 py-1.5 font-mono text-xs">{e.ip}</td>
+                  <td className="hidden px-3 py-1.5 font-mono text-xs sm:table-cell">{e.ip}</td>
                   <td className={'px-3 py-1.5 font-mono text-xs ' + (e.action.includes('fail') || e.action.includes('locked') ? 'text-red-600' : '')}>{e.action}</td>
                   <td className="max-w-md truncate px-3 py-1.5 font-mono text-xs text-neutral-500" title={e.detail}>{e.detail}</td>
                 </tr>

@@ -14,6 +14,13 @@ import { useUI } from '../store/ui'
 import DiskBar from './DiskBar'
 import SettingsDialog from './SettingsDialog'
 
+// MenuButton abre o menu lateral em telas estreitas; cada página o coloca na sua própria
+// primeira linha, para não gastar uma linha inteira só com o botão.
+export function MenuButton() {
+  const setOpen = useUI((s) => s.setSidebarOpen)
+  return <button className="btn-ghost !px-1.5 lg:hidden" onClick={() => setOpen(true)} aria-label={S.menu} title={S.menu}><IMenu size={18} /></button>
+}
+
 export default function Shell() {
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -21,7 +28,8 @@ export default function Shell() {
   const favs = useFavorites()
   const invalidate = useInvalidateDirs()
   const uploads = useUploads()
-  const [menuOpen, setMenuOpen] = useState(false)
+  const menuOpen = useUI((s) => s.sidebarOpen)
+  const setMenuOpen = useUI((s) => s.setSidebarOpen)
   const [settings, setSettings] = useState(false)
   const setUploadPanelOpen = useUI((s) => s.setUploadPanelOpen)
 
@@ -38,7 +46,7 @@ export default function Shell() {
   }
 
   const linkCls = ({ isActive }: { isActive: boolean }) =>
-    'flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm ' + (isActive ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-100' : 'hover:bg-neutral-200 dark:hover:bg-neutral-800')
+    'flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm ' + (isActive ? 'nav-active' : 'hover:bg-neutral-200 dark:hover:bg-neutral-800')
 
   const activeUploads = uploads.items.filter((i) => i.state === 'queued' || i.state === 'uploading').length
   // O item "Uploads" do menu é um atalho para o painel flutuante (canto inferior direito):
@@ -79,7 +87,7 @@ export default function Shell() {
         <button className={linkCls({ isActive: false }) + ' text-left'} onClick={showUploads} title={S.uploadsShow}>
           <IUpload size={16} /> {S.uploads}
           {activeUploads > 0 ? (
-            <span className="ml-auto rounded-full bg-blue-600 px-1.5 text-xs text-white">{activeUploads}</span>
+            <span className="ml-auto rounded-full bg-accent px-1.5 text-xs text-white">{activeUploads}</span>
           ) : uploads.items.length > 0 ? (
             <span className="ml-auto text-xs text-neutral-500">{S.uploadsStatus(uploads.filesDone, uploads.filesTotal)}</span>
           ) : null}
@@ -115,7 +123,6 @@ export default function Shell() {
         </div>
       )}
       <div className="flex min-w-0 flex-1 flex-col">
-        <button className="btn-ghost m-2 self-start lg:hidden" onClick={() => setMenuOpen(true)} aria-label="menu"><IMenu /></button>
         <Outlet />
       </div>
       <UploadPanel />

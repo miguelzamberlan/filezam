@@ -12,11 +12,18 @@ export interface Prefs {
   showHints: boolean
   confirmDelete: boolean
   zoom: number // fator aplicado à listagem (CSS zoom); 1 = padrão
+  theme: 'system' | 'light' | 'dark'
+  accent: string // cores em hex (#rrggbb); ver lib/theme.ts
+  selection: string
+  focus: string
 }
 
 export const ZOOM_STEPS = [0.85, 1, 1.15, 1.3, 1.5, 1.75, 2]
 
-const defaultPrefs: Prefs = { showHidden: false, showHints: true, confirmDelete: true, zoom: 1 }
+const defaultPrefs: Prefs = {
+  showHidden: false, showHints: true, confirmDelete: true, zoom: 1,
+  theme: 'system', accent: '#2563eb', selection: '#3b82f6', focus: '#3b82f6',
+}
 
 interface UIState {
   prefs: Prefs
@@ -30,6 +37,8 @@ interface UIState {
   filter: string
   uploadPanelOpen: boolean // lista do painel de envios expandida
   setUploadPanelOpen: (v: boolean) => void
+  sidebarOpen: boolean // menu lateral aberto (só em telas estreitas)
+  setSidebarOpen: (v: boolean) => void
   setSelection: (s: Set<string>, anchor?: string | null, focused?: string | null) => void
   clearSelection: () => void
   setFocused: (name: string | null) => void
@@ -73,6 +82,8 @@ export const useUI = create<UIState>((set) => ({
   filter: '',
   uploadPanelOpen: true,
   setUploadPanelOpen: (uploadPanelOpen) => set({ uploadPanelOpen }),
+  sidebarOpen: false,
+  setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
   setSelection: (selection, anchor, focused) =>
     set((st) => ({ selection, anchor: anchor === undefined ? st.anchor : anchor, focused: focused === undefined ? st.focused : focused })),
   clearSelection: () => set({ selection: new Set(), anchor: null }),
