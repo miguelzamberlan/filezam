@@ -1,0 +1,121 @@
+@import "tailwindcss";
+
+/* Tema escuro por classe no <html> (definida em lib/theme.ts a partir das preferências),
+   não pela media query: assim "claro"/"escuro"/"sistema" funcionam independentemente do SO. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Cores personalizáveis (Configurações → Cores). Os valores padrão são os azuis do Tailwind;
+   theme.ts sobrescreve as variáveis no <html>. As utilities derivam tons com color-mix, então
+   uma cor só serve para os dois temas. */
+:root {
+  --accent: #2563eb;    /* botões principais, item ativo do menu, barras de progresso, links */
+  --selection: #3b82f6; /* fundo das linhas selecionadas */
+  --focus: #3b82f6;     /* contorno da linha focada e dos campos */
+}
+
+@theme inline {
+  --color-accent: var(--accent);
+  --color-selection: var(--selection);
+  --color-focus: var(--focus);
+}
+
+html, body, #root {
+  height: 100%;
+}
+/* celulares: 100% pode incluir a barra de endereço; dvh acompanha a área visível de fato */
+@supports (height: 100dvh) {
+  html, body, #root { height: 100dvh; }
+}
+
+body {
+  @apply bg-neutral-50 text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100 antialiased overflow-hidden;
+}
+
+button, [role="button"] {
+  cursor: pointer;
+  touch-action: manipulation; /* sem atraso de duplo toque */
+}
+/* linhas da listagem: sem o balão "copiar/abrir" do iOS no toque longo */
+@utility no-callout {
+  -webkit-touch-callout: none;
+}
+
+@utility btn {
+  @apply inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition
+    disabled:opacity-40 disabled:cursor-not-allowed select-none whitespace-nowrap;
+}
+@utility btn-primary {
+  @apply inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition
+    disabled:opacity-40 disabled:cursor-not-allowed select-none whitespace-nowrap
+    bg-accent text-white focus:outline-none focus-visible:ring-2 ring-focus;
+  &:hover { background-color: color-mix(in srgb, var(--accent) 85%, black); }
+}
+@utility btn-ghost {
+  @apply inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition
+    disabled:opacity-40 disabled:cursor-not-allowed select-none whitespace-nowrap
+    hover:bg-neutral-200 dark:hover:bg-neutral-800 text-neutral-800 dark:text-neutral-200;
+}
+@utility btn-danger {
+  @apply inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition
+    disabled:opacity-40 disabled:cursor-not-allowed select-none whitespace-nowrap
+    bg-red-600 text-white hover:bg-red-700;
+}
+@utility input {
+  @apply w-full rounded-md border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900
+    px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-focus focus:border-transparent;
+}
+@utility card {
+  @apply rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-sm;
+}
+@utility row-selected {
+  background-color: color-mix(in srgb, var(--selection) 24%, transparent);
+  .dark & { background-color: color-mix(in srgb, var(--selection) 38%, transparent); }
+}
+@utility row-focused {
+  @apply outline outline-1 -outline-offset-1 outline-focus;
+}
+/* item ativo do menu lateral */
+@utility nav-active {
+  background-color: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: color-mix(in srgb, var(--accent) 75%, black);
+  .dark & { color: color-mix(in srgb, var(--accent) 55%, white); }
+}
+@utility menu {
+  @apply rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-lg py-1 min-w-48 text-sm z-50;
+}
+@utility menu-item {
+  @apply flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-neutral-100 dark:hover:bg-neutral-800
+    disabled:opacity-40 disabled:hover:bg-transparent;
+}
+/* Markdown formatado no preview (components/Markdown.tsx); sem @tailwindcss/typography para não crescer o CSS */
+@utility markdown {
+  @apply text-[0.95rem] leading-relaxed break-words;
+  & > * + * { @apply mt-4; }
+  & h1, & h2, & h3, & h4, & h5, & h6 { @apply font-semibold leading-snug mt-7 first:mt-0; }
+  & h1 { @apply text-2xl border-b border-neutral-200 dark:border-neutral-800 pb-2; }
+  & h2 { @apply text-xl border-b border-neutral-200 dark:border-neutral-800 pb-1.5; }
+  & h3 { @apply text-lg; }
+  & h4, & h5, & h6 { @apply text-base; }
+  & a { @apply text-accent underline underline-offset-2; }
+  & ul { @apply list-disc pl-6; }
+  & ol { @apply list-decimal pl-6; }
+  & li + li, & li > ul, & li > ol { @apply mt-1; }
+  /* listas de tarefas (classes do remark-gfm): sem marcador; sub-listas alinham com o texto depois da caixa */
+  & ul.contains-task-list { @apply list-none pl-1; }
+  & .task-list-item > ul, & .task-list-item > ol { @apply pl-11; }
+  & .task-list-item > ul.contains-task-list { @apply pl-6; }
+  & input[type="checkbox"] { @apply mr-1.5 align-middle; }
+  & blockquote { @apply border-l-4 border-neutral-300 dark:border-neutral-700 pl-4 text-neutral-600 dark:text-neutral-400; }
+  & code { @apply rounded bg-neutral-100 dark:bg-neutral-800 px-1 py-0.5 font-mono text-[0.85em]; }
+  & pre { @apply overflow-x-auto rounded-md bg-neutral-100 dark:bg-neutral-800 p-3 text-xs leading-normal; }
+  & pre code { @apply bg-transparent p-0 text-[inherit]; }
+  & hr { @apply border-neutral-200 dark:border-neutral-800; }
+  & img { @apply inline max-w-full; }
+  & table { @apply border-collapse text-sm; }
+  & th, & td { @apply border border-neutral-300 dark:border-neutral-700 px-3 py-1.5 text-left; }
+  & th { @apply bg-neutral-100 dark:bg-neutral-800 font-semibold; }
+}

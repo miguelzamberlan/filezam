@@ -1,0 +1,83 @@
+# Publica uma versão quando uma tag vX.Y.Z é enviada: confere que a tag bate com o
+# CHANGELOG e o web/package.json, roda a CI inteira, publica a imagem multi-arch no
+# GitHub Container Registry (X.Y.Z, X.Y e latest) e cria o release com as notas do CHANGELOG.
+# Processo completo em CONTRIBUTING.md, "Versões e lançamentos".
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Tag, CHANGELOG e package.json conferem
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Conferir versão
+        run: |
+          ver="${GITHUB_REF_NAME#v}"
+          echo "$ver" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "::error::tag $GITHUB_REF_NAME não é vX.Y.Z"; exit 1; }
+          pkg=$(node -p "require('./web/package.json').version")
+          [ "$pkg" = "$ver" ] || { echo "::error::web/package.json está em $pkg, a tag é $ver"; exit 1; }
+          grep -q "^## \[$ver\] - " CHANGELOG.md || { echo "::error::CHANGELOG.md não tem a seção [$ver]"; exit 1; }
+
+  ci:
+    needs: check
+    uses: ./.github/workflows/ci.yml
+
+  image:
+    name: Imagem em ghcr.io
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: VERSION=${{ github.ref_name }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  release:
+    name: Release no GitHub
+    needs: image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Criar release com as notas do CHANGELOG
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ver="${GITHUB_REF_NAME#v}"
+          awk -v v="$ver" 'index($0, "## [" v "]") == 1 {f=1; next} f && (/^## \[/ || /^\[[^]]+\]: /) {exit} f' CHANGELOG.md > notes.md
+          # shellcheck disable=SC2016 # crases literais (Markdown)
+          printf '\n**Imagem:** `docker pull ghcr.io/%s:%s`\n' "$GITHUB_REPOSITORY" "$ver" >> notes.md
+          gh release create "$GITHUB_REF_NAME" --title "Filezam $ver" --notes-file notes.md --verify-tag

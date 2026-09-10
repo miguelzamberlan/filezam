@@ -1,0 +1,175 @@
+package store
+
+import (
+	"context"
+	"database/sql"
+
+	"github.com/miguelzamberlan/filezam/internal/vfs"
+)
+
+// Share is a public read-only link to a folder.
+type Share struct {
+	ID            int64
+	TokenHash     string
+	Token         string // token em claro; vazio nos links criados antes da migração 002
+	Kind          string // "dir" | "file" (migração 003)
+	PasswordHash  string // Argon2id; vazio = sem senha
+	Dev, Ino      uint64 // identidade do item no momento da criação (migração 006); 0 = desconhecida
+	Path          string
+	Name          string
+	CreatedBy     int64
+	CreatedByName string
+	CreatedAt     int64
+	ExpiresAt     int64
+	RevokedAt     *int64
+	AccessCount   int64
+	LastAccessAt  *int64
+}
+
+const shareCols = `s.id, s.token_hash, COALESCE(s.token,''), COALESCE(s.kind,'dir'), COALESCE(s.password_hash,''), COALESCE(s.dev,0), COALESCE(s.ino,0), s.path, s.name, s.created_by, COALESCE(u.username,''), s.created_at, s.expires_at, s.revoked_at, s.access_count, s.last_access_at`
+
+func scanShare(row interface{ Scan(...any) error }) (*Share, error) {
+	var s Share
+	var rev, last sql.NullInt64
+	if err := row.Scan(&s.ID, &s.TokenHash, &s.Token, &s.Kind, &s.PasswordHash, &s.Dev, &s.Ino, &s.Path, &s.Name, &s.CreatedBy, &s.CreatedByName, &s.CreatedAt, &s.ExpiresAt, &rev, &s.AccessCount, &last); err != nil {
+		return nil, mapErr(err)
+	}
+	if rev.Valid {
+		s.RevokedAt = &rev.Int64
+	}
+	if last.Valid {
+		s.LastAccessAt = &last.Int64
+	}
+	return &s, nil
+}
+
+// CreateShare inserts a share.
+func (db *DB) CreateShare(ctx context.Context, s *Share) (*Share, error) {
+	if s.Kind == "" {
+		s.Kind = "dir"
+	}
+	res, err := db.w.ExecContext(ctx, `INSERT INTO shares(token_hash, token, kind, password_hash, dev, ino, path, name, created_by, created_at, expires_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+		s.TokenHash, s.Token, s.Kind, s.PasswordHash, int64(s.Dev), int64(s.Ino), s.Path, s.Name, s.CreatedBy, s.CreatedAt, s.ExpiresAt)
+	if err != nil {
+		return nil, mapErr(err)
+	}
+	id, _ := res.LastInsertId()
+	return db.GetShare(ctx, id)
+}
+
+// GetShare fetches by id.
+func (db *DB) GetShare(ctx context.Context, id int64) (*Share, error) {
+	return scanShare(db.r.QueryRowContext(ctx, `SELECT `+shareCols+` FROM shares s LEFT JOIN users u ON u.id=s.created_by WHERE s.id=?`, id))
+}
+
+// GetActiveShareByToken fetches a live (not expired, not revoked) share by token hash.
+func (db *DB) GetActiveShareByToken(ctx context.Context, hash string) (*Share, error) {
+	// Um usuário desativado leva os links dele junto (voltam se ele for reativado).
+	return scanShare(db.r.QueryRowContext(ctx, `SELECT `+shareCols+` FROM shares s LEFT JOIN users u ON u.id=s.created_by WHERE s.token_hash=? AND s.revoked_at IS NULL AND s.expires_at>? AND COALESCE(u.disabled,1)=0`, hash, db.now()))
+}
+
+// DeleteSharesOutside removes the user's shares whose path is not within scope.
+// scope "" keeps everything. Returns how many rows were deleted.
+func (db *DB) DeleteSharesOutside(ctx context.Context, userID int64, scope string) (int, error) {
+	shares, err := db.ListShares(ctx, userID)
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, sh := range shares {
+		if scope == "" || sh.Path == scope || vfs.IsWithin(scope, sh.Path) {
+			continue
+		}
+		if err := db.DeleteShare(ctx, sh.ID); err != nil {
+			return n, err
+		}
+		n++
+	}
+	return n, nil
+}
+
+// DeleteSharesUnder removes every share (any owner) of the base-relative path p or of
+// anything below it. Comparação por bytes (substr), não LIKE: LIKE ignora maiúsculas.
+func (db *DB) DeleteSharesUnder(ctx context.Context, p string) (int, error) {
+	if p == "" {
+		return 0, nil
+	}
+	res, err := db.w.ExecContext(ctx, `DELETE FROM shares WHERE path=?1 OR substr(path, 1, length(?2)) = ?2`, p, p+"/")
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return int(n), nil
+}
+
+// ListShares lists shares; userID<=0 lists all.
+func (db *DB) ListShares(ctx context.Context, userID int64) ([]*Share, error) {
+	q := `SELECT ` + shareCols + ` FROM shares s LEFT JOIN users u ON u.id=s.created_by`
+	var args []any
+	if userID > 0 {
+		q += ` WHERE s.created_by=?`
+		args = append(args, userID)
+	}
+	q += ` ORDER BY s.created_at DESC`
+	rows, err := db.r.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []*Share{}
+	for rows.Next() {
+		s, err := scanShare(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
+// ListSharesByPath returns live shares for an exact base-relative path (userID<=0: any owner).
+func (db *DB) ListSharesByPath(ctx context.Context, path string, userID int64) ([]*Share, error) {
+	q := `SELECT ` + shareCols + ` FROM shares s LEFT JOIN users u ON u.id=s.created_by WHERE s.path=? AND s.revoked_at IS NULL AND s.expires_at>?`
+	args := []any{path, db.now()}
+	if userID > 0 {
+		q += ` AND s.created_by=?`
+		args = append(args, userID)
+	}
+	rows, err := db.r.QueryContext(ctx, q+` ORDER BY s.created_at DESC`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []*Share{}
+	for rows.Next() {
+		sh, err := scanShare(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, sh)
+	}
+	return out, rows.Err()
+}
+
+// RevokeShare marks a share revoked.
+func (db *DB) RevokeShare(ctx context.Context, id int64) error {
+	res, err := db.w.ExecContext(ctx, `UPDATE shares SET revoked_at=? WHERE id=? AND revoked_at IS NULL`, db.now(), id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// DeleteShare removes a share row.
+func (db *DB) DeleteShare(ctx context.Context, id int64) error {
+	_, err := db.w.ExecContext(ctx, `DELETE FROM shares WHERE id=?`, id)
+	return err
+}
+
+// TouchShare records an access. Best effort.
+func (db *DB) TouchShare(ctx context.Context, id int64) {
+	_, _ = db.w.ExecContext(ctx, `UPDATE shares SET access_count=access_count+1, last_access_at=? WHERE id=?`, db.now(), id)
+}

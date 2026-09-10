@@ -1,0 +1,52 @@
+name: Bug
+description: Algo não funciona como documentado (pode escrever em português ou inglês)
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: O que aconteceu
+      description: O que você fez, o que esperava e o que viu. Mensagens de erro da interface ou do log (`docker compose logs filezam`) ajudam muito.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Como reproduzir
+      placeholder: |
+        1. Entrar como usuário com escopo `Clientes/A`
+        2. Enviar uma pasta com 3 mil arquivos
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Versão do Filezam
+      description: Saída de `filezam version`, o campo `version` de `GET /api/health`, ou o commit.
+    validations:
+      required: true
+  - type: dropdown
+    id: deploy
+    attributes:
+      label: Como está rodando
+      options:
+        - Docker Compose do repositório
+        - Docker em outro orquestrador (Easypanel, Portainer, Kubernetes...)
+        - Binário direto (systemd, terminal)
+        - Ambiente de desenvolvimento (make run / make dev)
+    validations:
+      required: true
+  - type: input
+    id: proxy
+    attributes:
+      label: Proxy reverso e navegador
+      placeholder: "nginx 1.26 + Cloudflare Tunnel; Chrome 140 no Android"
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Antes de abrir
+      options:
+        - label: Li a tabela de diagnóstico em `docs/08-operacao.md` e o problema não está lá.
+        - label: Não é uma falha de segurança (essas vão por Security Advisory, veja `SECURITY.md`).
+          required: true

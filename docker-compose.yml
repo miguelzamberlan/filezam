@@ -1,0 +1,87 @@
+services:
+  # One-shot helper: Docker creates missing bind-mount folders as root, which
+  # would make /config unwritable for the non-root app user. This fixes /config
+  # (the folder itself and the files Filezam keeps there, never recursively, so a
+  # wrong FILEZAM_HOST_CONFIG cannot re-own a whole host tree) and only touches
+  # /data when it is empty (freshly created). It refuses a /config that contains
+  # subfolders: that is not a Filezam config folder.
+  init:
+    image: alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
+    user: "0:0"
+    command: >
+      sh -c '
+        mkdir -p /config /data &&
+        if [ -n "$$(find /config -mindepth 1 -maxdepth 1 -type d | head -n 1)" ]; then
+          echo "init: /config contains subfolders; refusing to chown. Check FILEZAM_HOST_CONFIG." >&2; exit 1;
+        fi &&
+        chown ${PUID:-1000}:${PGID:-1000} /config &&
+        find /config -maxdepth 1 -type f \( -name "filezam.db*" -o -name "secret.key" \) -exec chown ${PUID:-1000}:${PGID:-1000} {} + &&
+        { [ -n "$$(ls -A /data 2>/dev/null)" ] || chown ${PUID:-1000}:${PGID:-1000} /data 2>/dev/null || true; }'
+    volumes:
+      - ${FILEZAM_HOST_ROOT:-./data}:/data
+      - ${FILEZAM_HOST_CONFIG:-./config}:/config
+    restart: "no"
+
+  filezam:
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    build:
+      context: .
+      args:
+        VERSION: ${FILEZAM_VERSION:-dev}
+    image: filezam:latest
+    container_name: filezam
+    restart: unless-stopped
+    # Run as your host user so files created in the data folder belong to you.
+    user: "${PUID:-1000}:${PGID:-1000}"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      FILEZAM_ROOT: /data
+      FILEZAM_DATA_DIR: /config
+      FILEZAM_LISTEN: ":8080"
+      # Everything else comes from .env (see .env.example). Uncomment here to override:
+      # FILEZAM_TRASH_RETENTION: 720h        # trash retention; 0 disables the trash
+      # FILEZAM_INDEX_INTERVAL: 6h           # search name index full rescan; 0 disables the index
+      # FILEZAM_REQUIRE_2FA_ADMINS: "false"  # force administrators to enable 2FA
+      # FILEZAM_METRICS_TOKEN: ""            # enables GET /metrics (Prometheus, Bearer token)
+      # FILEZAM_SECRET_KEY: ""               # 64 hex; empty = /config/secret.key (back it up with the DB)
+    volumes:
+      # Root folder exposed by the file manager. Mount more host folders as
+      # subfolders of /data to expose several locations (e.g. /mnt/media:/data/media).
+      - ${FILEZAM_HOST_ROOT:-./data}:/data
+      # Database, name index and secret.key (2FA key); never served to users. Back up the whole folder.
+      - ${FILEZAM_HOST_CONFIG:-./config}:/config
+    ports:
+      # Bound to localhost by default: put your reverse proxy in front of it. For direct access
+      # from your LAN use FILEZAM_BIND=0.0.0.0 (LAN clients keep their real IP). Remove this block
+      # if the proxy reaches the container through a shared Docker network.
+      - "${FILEZAM_BIND:-127.0.0.1}:${FILEZAM_PORT:-8080}:8080"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    # --- Reverse proxy on a shared Docker network (e.g. Traefik) ---
+    # networks: [proxy]
+    # labels:
+    #   traefik.enable: "true"
+    #   traefik.http.routers.filezam.rule: "Host(`files.example.com`)"
+    #   traefik.http.routers.filezam.entrypoints: "websecure"
+    #   traefik.http.routers.filezam.tls.certresolver: "letsencrypt"
+    #   traefik.http.services.filezam.loadbalancer.server.port: "8080"
+
+networks:
+  # Fixed subnet: connections from the host itself (a reverse proxy on the host, curl) reach the
+  # app from this network's gateway (.1), so FILEZAM_TRUSTED_PROXIES can trust exactly that address
+  # instead of every Docker network. Change it only if it collides with a network you already use.
+  default:
+    ipam:
+      config:
+        - subnet: ${FILEZAM_SUBNET:-172.31.250.0/24}
+  # proxy:
+  #   external: true

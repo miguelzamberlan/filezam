@@ -1,0 +1,48 @@
+# 09 · Testes
+
+## Automatizados
+
+| Suíte | Onde | Cobre | Comando |
+|---|---|---|---|
+| Normalização de caminhos | `internal/vfs/pathutil_test.go` | ~30 entradas maliciosas/válidas, `ValidName`, helpers | `go test ./internal/vfs/` |
+| Sandbox | `internal/vfs/root_test.go` | symlinks para `/etc`, `../outside`, loop e irmão interno; canário fora do root; escopo aninhado; rename/move/copy/remove; cancelamento; partes e `Finalize`; `TestFindStaysInsideRoot` (pesquisa não segue symlinks, não vê o canário, pula partes, respeita limites); `TestTrashIsInvisibleToTreeOps`; `TestWalkEntriesStaysInsideRoot`; `TestWalkDepthCapAndUnreadableDirs` (varredura para em `WalkMaxDepth` e pula pasta ilegível; `TestNormalizeDepth` em `pathutil_test.go`); `TestCopyIntoItselfThroughSymlink` (destino via symlink para dentro da origem termina sem recursão); `TestSortEntries` | idem |
+| Integração HTTP | `internal/server/server_test.go` | fluxo completo: admin inicial → troca forçada → CSRF → usuário com escopo → traversal → mkdir/PUT/lote/chunked (fora de ordem, idempotente, incompleto) → rename/copy/move/delete jobs → zip → favoritos → shares públicos e revogação → mudança de escopo derruba sessão → desativar/excluir usuário → auditoria; expiração de share com relógio falso; rate limit de login; cabeçalhos da SPA; `TestSecurityHardening` (cabeçalhos do conteúdo inline, nomes com caracteres de controle, leitura de partes de upload recusada, links de usuário desativado/escopo estreitado, rate limit da troca de senha); `TestLogPath`; `TestSearch` (escopo, symlink, limite, erros); `TestListPaging`; `TestFileShareAndPassword`; `TestPublicDownloadWaitsForSlot` (acima de 2 downloads públicos por IP a requisição espera o slot e só dá 429 após o teto; teto global de zips públicos); `TestTrash` (lixeira, restauração com conflito, escopo, permanente, varredura); `TestSearchIndex` (índice, escape do LIKE, fantasmas, ganchos, reindex); `TestLockoutIsSilentAndPerIP`; `TestShareBoundToInode`; `TestSharesFollowAppChanges` (excluir/mover/renomear pelo app revoga os links do item e dos filhos, sem pegar o vizinho de mesmo prefixo, e restaurar não os traz de volta); `TestTrashCrashSafety` (linha fantasma some ao restaurar; movimento recusado não deixa linha nem pasta de id); `TestUploadSessionsPerUserAndReserve` (sessão exclusiva por usuário, quem finaliza primeiro grava, teto de reserva por usuário); `TestQuotaAndJobCap`; `TestJobHistoryAndMetrics`; `TestTOTPFlow` (cadastro com senha, recusa de recadastro com 2FA ativo, segunda etapa, anti-replay, dispositivo confiável, recuperação, desativar, exigência para admins, reset pelo admin, `secret.key` 0600); `TestPublicationHardening` (caminhos reservados em zip/link/favorito/dirs do admin, `X-Forwarded-For` em várias linhas, limitador por (usuário, IP), validade assinada do cookie de senha do link); carência de 15 min para partes órfãs | `go test ./internal/server/` |
+| TOTP e limites | `internal/auth/totp_test.go`, `ratelimit_test.go` | vetores do RFC 4226, janela ±1, anti-replay, códigos de recuperação de uso único, AES-GCM; `KeyedSemaphore.Acquire` espera o slot da própria chave e desiste no prazo | `go test ./internal/auth/` |
+| Configuração | `internal/config/config_test.go` | padrões, parsing (tamanhos, durações, proxies), valores inválidos recusados, banco dentro da raiz recusado inclusive via symlink | `go test ./internal/config/` |
+| Índice de nomes | `internal/index/indexer_test.go` | varredura completa sem lixeira nem partes, pesquisa (nome sem caixa, prefixo exato, `%` literal), linhas velhas removidas por varredura/reindexação/`Touch`, uma varredura por vez | `go test ./internal/index/` |
+| Migrações e índice | `internal/store/migrations_test.go` | banco só com `001` + linhas antigas → `Open` aplica as migrações seguintes sem perder dados; `TestIndexLikeEscape` (`%`/`_` literais na pesquisa) | `go test ./internal/store/` |
+| Frontend puro | `web/src/**/*.test.ts` | `scheduler` (classify, pickBatch, backoff, chunkRange), `paths`, `naturalSort` | `cd web && npx vitest run` |
+| Tipos | — | `tsc --noEmit` | `cd web && npm run typecheck` |
+
+`make test` roda tudo. Um único teste Go: `go test ./internal/vfs/ -run TestEscapeAttemptsAreRefused -v`. Sem Go instalado: `docker run --rm -v "$PWD":/src -w /src -e GOFLAGS=-buildvcs=false golang:1.26-alpine go test ./...`.
+
+A CI do GitHub (`.github/workflows/ci.yml`) roda em cada push e PR: `tsc`, vitest, build do Vite, `npm audit --omit=dev`, `go vet`, `go test ./...`, build do binário, `govulncheck` e o build da imagem Docker. `TestShareBoundToInode` depende de o sistema de arquivos temporário **não** reutilizar o número de inode de uma pasta recém-apagada: passa em ext4 e tmpfs, falha em overlayfs (Docker sem `--tmpfs /tmp:exec`).
+
+Os testes de integração criam raiz e banco temporários; nada toca o sistema real. `db.Now` é injetável para testar expirações.
+
+## O que não está coberto automaticamente
+
+- Interação real do navegador (drag-and-drop, teclado, virtualização). Verificado manualmente com Chrome headless via DevTools Protocol (scripts em `scratchpad` na sessão de desenvolvimento; não versionados).
+- Comportamento atrás de proxies reais, no Cloudflare e no Easypanel.
+- Sistemas de arquivos específicos (foi validado em ext4 e ntfs3).
+
+## Checklist manual antes de uma versão
+
+1. `docker compose up` limpo → `admin/admin` → troca obrigatória → senha antiga recusada.
+2. Upload de arquivo de vários GB: memória do container estável (`docker stats`), recarregar no meio e retomar soltando o mesmo arquivo, `sha256sum` igual.
+3. Pasta com 10 mil arquivos pequenos: UI responsiva, contagem correta.
+4. Copiar/mover/excluir árvore grande com progresso e cancelamento.
+5. ZIP de pasta grande abre com `unzip`.
+6. Link de 1 hora em janela anônima; revogar → 404.
+7. `curl '.../api/files?path=../../etc/passwd'` → 400; symlink em `/data` para `/config` não abre.
+8. `evil.svg` com `<script>` e `evil.html`: sem alerta, HTML só como texto/download.
+9. Usuário com escopo não vê o pai; admin muda o escopo → sessão cai.
+10. Atrás do proxy real: cookie `Secure`, IP real na auditoria, upload de 200 MB completa.
+11. Preview de PDF abre dentro da interface (Chrome e Firefox). No celular (Android e iPhone) aparece "Abrir em nova aba"/"Baixar" e a nova aba mostra o PDF inteiro.
+11a. `.md` com tabela, lista de tarefas, imagem relativa (`img/x.png`), `<script>`/`<img onerror>` e `[x](javascript:alert(1))`: abre formatado, imagem aparece, nenhum alerta, o HTML some e o link perigoso vira texto; "Texto" mostra o fonte. Também pelo link público de pasta, com várias imagens: todas aparecem (nenhum 429 na aba Rede).
+11c. Painel de upload: cancelar itens e cancelar tudo não cria barra de rolagem horizontal na lista (status "Cancelado" é mais largo que a porcentagem).
+11b. No celular (ou DevTools em modo touch, 390 px): toque abre, toque longo abre o menu e seleciona, "⋯" mostra as ações, tabelas cabem na largura; tema claro/escuro e cores em Configurações refletem na hora.
+12. `go run golang.org/x/vuln/cmd/govulncheck@latest ./...` sem vulnerabilidades alcançáveis e `cd web && npm audit --omit=dev` limpo; se o Go tiver correção nova, subir `go.mod` e `Dockerfile`.
+13. Com `FILEZAM_METRICS_TOKEN`: `curl -H 'Authorization: Bearer …' /metrics` responde e o Prometheus consegue coletar; sem token → 404.
+15. Ativar 2FA com um app real (Aegis/Google Authenticator), sair, entrar com código, marcar "confiar", sair e entrar sem código; usar um código de recuperação; desativar.
+14. Reiniciar o container no meio de uma cópia grande: a operação aparece em **Operações** como interrompida e nada fica pela metade fora de `.filezam-*`.
