@@ -180,7 +180,7 @@ export default function Browser() {
       const ok = await dialogs.confirm(
         toTrash
           ? { title: S.moveToTrashConfirm(list.length), message: (list.length === 1 ? list[0].name + ' — ' : '') + S.moveToTrashHint, okLabel: S.delete }
-          : { title: S.deleteConfirm(list.length), message: list.length === 1 ? list[0].name : S.deleteWarning, danger: true, okLabel: S.deleteForever },
+          : { title: S.deleteConfirm(list.length), message: list.length === 1 ? list[0].name : S.deleteWarning, danger: true, okLabel: S.deleteForever, requireCheck: S.confirmIrreversible },
       )
       if (!ok) return
     }

@@ -216,6 +216,7 @@ export const ptBR = {
   moveToTrashConfirm: (n: number) => (n === 1 ? 'Mover 1 item para a lixeira?' : `Mover ${n} itens para a lixeira?`),
   moveToTrashHint: 'Você pode restaurar pela Lixeira no menu. Shift+Del exclui de vez.',
   deleteForever: 'Excluir de vez',
+  confirmIrreversible: 'Entendo que isso não pode ser desfeito',
   movedToTrash: (n: number) => (n === 1 ? '1 item movido para a lixeira' : `${n} itens movidos para a lixeira`),
   shareFileTitle: 'Compartilhar arquivo',
   sharePassword: 'Senha (opcional)',

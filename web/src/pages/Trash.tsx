@@ -49,7 +49,7 @@ export default function Trash() {
   }
   const purge = async (list = selected) => {
     if (list.length === 0) return
-    if (!(await dialogs.confirm({ title: S.trashDeleteForever, message: S.trashDeleteConfirm(list.length), danger: true, okLabel: S.trashDeleteForever }))) return
+    if (!(await dialogs.confirm({ title: S.trashDeleteForever, message: S.trashDeleteConfirm(list.length), danger: true, okLabel: S.trashDeleteForever, requireCheck: S.confirmIrreversible }))) return
     setBusy(true)
     try {
       await Api.trashDelete(list.map((i) => i.id))
@@ -62,7 +62,7 @@ export default function Trash() {
   }
   const empty = async () => {
     if (items.length === 0) return
-    if (!(await dialogs.confirm({ title: S.trashEmptyAction, message: S.trashEmptyConfirm(items.length), danger: true, okLabel: S.trashEmptyAction }))) return
+    if (!(await dialogs.confirm({ title: S.trashEmptyAction, message: S.trashEmptyConfirm(items.length), danger: true, okLabel: S.trashEmptyAction, requireCheck: S.confirmIrreversible }))) return
     setBusy(true)
     try {
       await Api.trashEmpty()

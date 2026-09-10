@@ -218,6 +218,7 @@ export const en: Strings = {
   moveToTrashConfirm: (n: number) => (n === 1 ? 'Move 1 item to the trash?' : `Move ${n} items to the trash?`),
   moveToTrashHint: 'You can restore it from Trash in the menu. Shift+Del deletes permanently.',
   deleteForever: 'Delete forever',
+  confirmIrreversible: 'I understand this cannot be undone',
   movedToTrash: (n: number) => (n === 1 ? '1 item moved to the trash' : `${n} items moved to the trash`),
   shareFileTitle: 'Share file',
   sharePassword: 'Password (optional)',

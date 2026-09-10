@@ -6,7 +6,7 @@ import { IAlert } from './Icons'
 
 type Dialog =
   | { kind: 'prompt'; title: string; label?: string; initial?: string; selectExt?: boolean; validate?: (v: string) => string | null; resolve: (v: string | null) => void }
-  | { kind: 'confirm'; title: string; message?: string; danger?: boolean; okLabel?: string; resolve: (ok: boolean) => void }
+  | { kind: 'confirm'; title: string; message?: string; danger?: boolean; okLabel?: string; requireCheck?: string; resolve: (ok: boolean) => void }
   | { kind: 'conflict'; name: string; resolve: (a: ConflictAnswer) => void }
   | { kind: 'custom'; render: (close: () => void) => ReactNode; resolve: () => void }
 
@@ -26,7 +26,8 @@ export const dialogs = {
   prompt(opts: { title: string; label?: string; initial?: string; selectExt?: boolean; validate?: (v: string) => string | null }) {
     return new Promise<string | null>((resolve) => useDialogs.getState().push({ kind: 'prompt', ...opts, resolve }))
   },
-  confirm(opts: { title: string; message?: string; danger?: boolean; okLabel?: string }) {
+  // requireCheck: texto de uma caixa que começa desmarcada e precisa ser marcada para liberar o botão (ações irreversíveis).
+  confirm(opts: { title: string; message?: string; danger?: boolean; okLabel?: string; requireCheck?: string }) {
     return new Promise<boolean>((resolve) => useDialogs.getState().push({ kind: 'confirm', ...opts, resolve }))
   },
   conflict(name: string) {
@@ -95,19 +96,28 @@ function PromptDialog({ d, close }: { d: Extract<Dialog, { kind: 'prompt' }>; cl
 
 function ConfirmDialog({ d, close }: { d: Extract<Dialog, { kind: 'confirm' }>; close: () => void }) {
   const ref = useRef<HTMLButtonElement>(null)
+  const [checked, setChecked] = useState(false)
+  const ready = !d.requireCheck || checked
+  // com caixa obrigatória o foco vai para "Cancelar": Enter não pode confirmar sem querer
   useEffect(() => ref.current?.focus(), [])
   return (
     <Modal onClose={() => (d.resolve(false), close())}>
       <div className="flex gap-3">
         {d.danger && <IAlert className="shrink-0 text-red-500" size={28} />}
-        <div>
+        <div className="min-w-0 flex-1">
           <h2 className="text-base font-semibold">{d.title}</h2>
-          {d.message && <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">{d.message}</p>}
+          {d.message && <p className="mt-1 break-words text-sm text-neutral-600 dark:text-neutral-400">{d.message}</p>}
+          {d.requireCheck && (
+            <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm">
+              <input type="checkbox" className="h-4 w-4 accent-red-600" checked={checked} onChange={(e) => setChecked(e.target.checked)} autoFocus />
+              <span>{d.requireCheck}</span>
+            </label>
+          )}
         </div>
       </div>
       <div className="mt-4 flex justify-end gap-2">
-        <button className="btn-ghost" onClick={() => (d.resolve(false), close())}>{S.cancel}</button>
-        <button ref={ref} className={d.danger ? 'btn-danger' : 'btn-primary'} onClick={() => (d.resolve(true), close())}>{d.okLabel ?? S.confirm}</button>
+        <button ref={d.requireCheck ? ref : undefined} className="btn-ghost" onClick={() => (d.resolve(false), close())}>{S.cancel}</button>
+        <button ref={d.requireCheck ? undefined : ref} className={d.danger ? 'btn-danger' : 'btn-primary'} disabled={!ready} onClick={() => (d.resolve(true), close())}>{d.okLabel ?? S.confirm}</button>
       </div>
     </Modal>
   )
