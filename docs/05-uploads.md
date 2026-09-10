@@ -74,7 +74,7 @@ O navegador não persiste objetos `File`. Fluxo:
 ### Limpeza
 
 - Tarefa horária (e na inicialização): sessões com `updated_at` mais antigo que `FILEZAM_UPLOAD_STALE` (24 h fixo em `config`) têm a parte removida via root base e a linha apagada.
-- Na listagem de um diretório, partes `.filezam-upload-*.part` cujo id não existe na tabela são apagadas (cobre perda do banco, crash, etc.).
+- Na listagem de um diretório, partes `.filezam-upload-*.part` cujo id não existe na tabela **e cujo mtime está parado há mais de `uploads.OrphanGrace` (15 min)** são apagadas (cobre perda do banco, crash, etc.). A carência existe porque `PUT` único e lote gravam a parte sem linha no banco: enquanto o corpo chega o mtime avança, e sem ela uma listagem da mesma pasta (de outro usuário, ou o refetch da própria interface) apagaria um upload em andamento e o `Finalize` falharia com 404.
 - Exclusão de usuário remove as partes das sessões dele antes do cascade.
 
 ## Conflitos (cliente, `upload/manager.ts`)

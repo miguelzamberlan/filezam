@@ -92,6 +92,9 @@ func (r *Root) Scan(ctx context.Context, p string) (Totals, error) {
 }
 
 // walk calls fn for p and, when p is a directory, all descendants (lstat, no symlink following).
+// Errors opening p itself are returned; a descendant directory that cannot be opened or read
+// (host-side permissions) is reported to fn and then skipped, so one unreadable folder never
+// aborts the index, a search, a quota scan or a zip. Descent stops at WalkMaxDepth.
 func (r *Root) walk(ctx context.Context, p string, fn func(path string, fi fs.FileInfo) error) error {
 	fi, err := r.r.Lstat(osPath(p))
 	if err != nil {
@@ -103,14 +106,24 @@ func (r *Root) walk(ctx context.Context, p string, fn func(path string, fi fs.Fi
 	if !fi.IsDir() {
 		return nil
 	}
+	return r.walkDir(ctx, p, Depth(p), fn, true)
+}
+
+func (r *Root) walkDir(ctx context.Context, p string, depth int, fn func(path string, fi fs.FileInfo) error, top bool) error {
 	f, err := r.r.Open(osPath(p))
 	if err != nil {
-		return MapError(err)
+		if top {
+			return MapError(err)
+		}
+		return nil
 	}
 	des, err := f.ReadDir(-1)
 	f.Close()
 	if err != nil {
-		return MapError(err)
+		if top {
+			return MapError(err)
+		}
+		return nil
 	}
 	for _, de := range des {
 		if err := ctx.Err(); err != nil {
@@ -124,12 +137,13 @@ func (r *Root) walk(ctx context.Context, p string, fn func(path string, fi fs.Fi
 		if err != nil {
 			continue
 		}
-		if cfi.IsDir() {
-			if err := r.walk(ctx, child, fn); err != nil {
+		if err := fn(child, cfi); err != nil {
+			return err
+		}
+		if cfi.IsDir() && depth+1 < WalkMaxDepth {
+			if err := r.walkDir(ctx, child, depth+1, fn, false); err != nil {
 				return err
 			}
-		} else if err := fn(child, cfi); err != nil {
-			return err
 		}
 	}
 	return nil

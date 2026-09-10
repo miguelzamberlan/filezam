@@ -39,8 +39,8 @@ Timestamps: `mtime` em milissegundos; os demais em segundos Unix.
 |---|---|---|---|
 | POST | `/api/auth/login` | - | `{username, password}` → `{user}`, ou `{totpRequired: true, token}` quando a conta tem 2FA e não há cookie de dispositivo confiável; 401 `bad_credentials` (também para conta bloqueada, desativada ou inexistente), 429 `rate_limited`/`busy` |
 | POST | `/api/auth/totp` | - | `{token, code, trust?}` → `{user}` + cookie de sessão (e `fz_trust` por 30 dias com `trust`). `code` = 6 dígitos ou código de recuperação. 401 `bad_totp` / `totp_expired`, 429 |
-| POST | `/api/auth/totp/setup` | S | → `{secret, uri}` (segredo pendente por 10 min) |
-| POST | `/api/auth/totp/enable` | S | `{code}` → `{user, recoveryCodes: [10]}`; 401 `bad_totp`, 409 `totp_setup_expired`. Derruba as outras sessões |
+| POST | `/api/auth/totp/setup` | S | → `{secret, uri}` (segredo pendente por 10 min); 409 `totp_already_enabled` se o 2FA já está ativo (desative antes) |
+| POST | `/api/auth/totp/enable` | S | `{password, code}` → `{user, recoveryCodes: [10]}`; 401 `bad_credentials`/`bad_totp`, 409 `totp_setup_expired`/`totp_already_enabled`, 429 `rate_limited`/`busy` (mesmos limites da troca de senha). Derruba as outras sessões |
 | POST | `/api/auth/totp/disable` | S | `{password, code}` → `{user}`; 401 `bad_credentials`/`bad_totp`, 409 `totp_not_enabled` |
 | POST | `/api/auth/totp/recovery` | S | `{password, code}` → `{recoveryCodes}` novos (os antigos morrem) |
 | POST | `/api/auth/logout` | S | → `{ok}`; limpa o cookie |
@@ -124,7 +124,7 @@ Links de um usuário desativado respondem 404 enquanto ele estiver desativado. E
 | Método | Rota | Auth | Descrição |
 |---|---|---|---|
 | GET | `/api/public/{token}` | P | `{name, kind, expiresAt, now, locked}` (+ `size, mtime, fileName` para arquivo); conta um acesso quando destravado. `locked: true` quando o link tem senha e o cookie de unlock não veio. 404 se inexistente, expirado, revogado, item sumiu ou dono desativado |
-| POST | `/api/public/{token}/unlock` | P | `{password}` → `{ok}` e cookie `fz_s_<hash16>` (HMAC do token, 24 h). 401 `bad_credentials`; 5/min por link e `loginSem` (Argon2). Exige `X-Filezam: 1` |
+| POST | `/api/public/{token}/unlock` | P | `{password}` → `{ok}` e cookie `fz_s_<hash16>` (HMAC do token, 24 h). 401 `bad_credentials`; 5/min por (link, IP) e `loginSem` (Argon2). Exige `X-Filezam: 1` |
 | GET | `/api/public/{token}/list?path=` | P | `{path, entries}`; 401 `share_locked` com senha pendente; 409 `not_dir` em link de arquivo |
 | GET | `/api/public/{token}/content?path=&inline=` | P | Conteúdo (mesmas regras de inline). Em link de arquivo `path` é ignorado: serve sempre o arquivo compartilhado. 401 `share_locked` |
 | GET | `/api/public/{token}/zip?path=...` | P | ZIP; sem `path` compacta a pasta inteira. 401 `share_locked`; 409 `not_dir` em link de arquivo |
@@ -164,7 +164,7 @@ Regras de `username`: 2–64 caracteres de `A-Z a-z 0-9 . _ - @`, único sem dis
 | 401 | `unauthorized`, `bad_credentials`, `share_locked`, `bad_totp`, `totp_expired` | Sem sessão / credenciais erradas / link com senha pendente / código 2FA inválido ou etapa expirada |
 | 403 | `forbidden`, `csrf`, `password_change_required`, `totp_required`, `scope_unavailable`, `fs_permission` | Sem permissão |
 | 404 | `not_found` | Caminho, job, share, usuário |
-| 409 | `exists`, `is_dir`, `not_dir`, `conflict`, `cross_device`, `upload_in_progress`, `incomplete`, `last_admin`, `self`, `totp_setup_expired`, `totp_not_enabled` | Conflito de estado |
+| 409 | `exists`, `is_dir`, `not_dir`, `conflict`, `cross_device`, `upload_in_progress`, `incomplete`, `last_admin`, `self`, `totp_setup_expired`, `totp_not_enabled`, `totp_already_enabled` | Conflito de estado |
 | 411 | `length_required` | Chunk sem `Content-Length` |
 | 413 | `too_large` | Corpo maior que o limite |
 | 507 | `no_space`, `quota_exceeded` | Disco cheio / cota do usuário estourada |

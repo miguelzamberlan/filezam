@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zamberlan/filezam/internal/auth"
+	"github.com/miguelzamberlan/filezam/internal/auth"
 )
 
 // State of a job.

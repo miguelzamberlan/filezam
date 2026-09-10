@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/zamberlan/filezam/internal/auth"
-	"github.com/zamberlan/filezam/internal/store"
-	"github.com/zamberlan/filezam/internal/vfs"
+	"github.com/miguelzamberlan/filezam/internal/auth"
+	"github.com/miguelzamberlan/filezam/internal/store"
+	"github.com/miguelzamberlan/filezam/internal/vfs"
 )
 
 type adminUserView struct {
@@ -280,7 +280,7 @@ func (s *Server) handleAdminUserDelete(w http.ResponseWriter, r *http.Request) e
 
 // handleAdminDirs lists directories of the base root for the scope picker.
 func (s *Server) handleAdminDirs(w http.ResponseWriter, r *http.Request) error {
-	p, err := vfs.Normalize(r.URL.Query().Get("path"))
+	p, err := vfs.NormalizeWritable(r.URL.Query().Get("path"))
 	if err != nil {
 		return err
 	}

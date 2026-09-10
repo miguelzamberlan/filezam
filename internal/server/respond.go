@@ -11,9 +11,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/zamberlan/filezam/internal/store"
-	"github.com/zamberlan/filezam/internal/uploads"
-	"github.com/zamberlan/filezam/internal/vfs"
+	"github.com/miguelzamberlan/filezam/internal/store"
+	"github.com/miguelzamberlan/filezam/internal/uploads"
+	"github.com/miguelzamberlan/filezam/internal/vfs"
 )
 
 // apiError carries an HTTP status and a stable machine-readable code.
@@ -151,7 +151,7 @@ func (s *Server) h(fn handlerFunc) http.Handler {
 		if err := fn(w, r); err != nil {
 			ae := toAPIError(err)
 			if ae.Status >= 500 {
-				s.log.Error("request failed", "method", r.Method, "path", r.URL.Path, "err", err)
+				s.log.Error("request failed", "method", r.Method, "path", logPath(r.URL.Path), "err", err)
 			}
 			writeError(w, r, err)
 		}

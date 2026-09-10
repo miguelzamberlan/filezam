@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/zamberlan/filezam/internal/metrics"
+	"github.com/miguelzamberlan/filezam/internal/metrics"
 )
 
 // GET /metrics: Prometheus text format. Enabled only with FILEZAM_METRICS_TOKEN; accepts

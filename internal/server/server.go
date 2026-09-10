@@ -12,14 +12,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zamberlan/filezam/internal/auth"
-	"github.com/zamberlan/filezam/internal/config"
-	"github.com/zamberlan/filezam/internal/index"
-	"github.com/zamberlan/filezam/internal/jobs"
-	"github.com/zamberlan/filezam/internal/metrics"
-	"github.com/zamberlan/filezam/internal/store"
-	"github.com/zamberlan/filezam/internal/uploads"
-	"github.com/zamberlan/filezam/internal/vfs"
+	"github.com/miguelzamberlan/filezam/internal/auth"
+	"github.com/miguelzamberlan/filezam/internal/config"
+	"github.com/miguelzamberlan/filezam/internal/index"
+	"github.com/miguelzamberlan/filezam/internal/jobs"
+	"github.com/miguelzamberlan/filezam/internal/metrics"
+	"github.com/miguelzamberlan/filezam/internal/store"
+	"github.com/miguelzamberlan/filezam/internal/uploads"
+	"github.com/miguelzamberlan/filezam/internal/vfs"
 )
 
 // Server holds all dependencies.

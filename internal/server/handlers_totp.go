@@ -17,9 +17,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zamberlan/filezam/internal/auth"
-	"github.com/zamberlan/filezam/internal/config"
-	"github.com/zamberlan/filezam/internal/store"
+	"github.com/miguelzamberlan/filezam/internal/auth"
+	"github.com/miguelzamberlan/filezam/internal/config"
+	"github.com/miguelzamberlan/filezam/internal/store"
 )
 
 // Verificação em duas etapas (TOTP) com códigos de recuperação e "confiar neste dispositivo".
@@ -200,7 +200,7 @@ func (s *Server) handleLoginTOTP(w http.ResponseWriter, r *http.Request) error {
 		return errorf(http.StatusUnauthorized, "totp_expired", "login step expired; sign in again")
 	}
 	lockKey := "totp|" + strings.ToLower(u.Username) + "|" + ip
-	if locked, _ := s.lockout.Locked(lockKey); locked || !s.loginUser.Allow("user:"+strings.ToLower(u.Username)) {
+	if locked, _ := s.lockout.Locked(lockKey); locked || !s.loginUser.Allow(userLimitKey(u.Username, ip)) {
 		return errorf(http.StatusTooManyRequests, "rate_limited", "too many attempts; try again later")
 	}
 	if !s.verifyTOTPOrRecovery(r, u, in.Code) {
@@ -232,14 +232,20 @@ func (s *Server) verifyTOTPOrRecovery(r *http.Request, u *store.User, code strin
 		return false
 	}
 	if ok, counter := auth.VerifyTOTP(secret, code, time.Now(), uint64(u.TOTPCounter)); ok {
-		_ = s.db.SetTOTPCounter(r.Context(), u.ID, int64(counter))
-		return true
+		// A gravação é condicional (counter < novo): de duas requisições simultâneas com o
+		// mesmo código só a primeira avança o contador; a outra é tratada como replay.
+		advanced, err := s.db.SetTOTPCounter(r.Context(), u.ID, int64(counter))
+		return err == nil && advanced
 	}
 	var hashes []string
 	_ = json.Unmarshal([]byte(u.TOTPRecovery), &hashes)
 	if rest, ok := auth.UseRecoveryCode(hashes, code); ok {
 		b, _ := json.Marshal(rest)
-		_ = s.db.SetTOTPRecovery(r.Context(), u.ID, string(b))
+		// Só consome se a lista ainda é a que foi lida: dois usos simultâneos não ressuscitam um código.
+		consumed, err := s.db.ConsumeTOTPRecovery(r.Context(), u.ID, u.TOTPRecovery, string(b))
+		if err != nil || !consumed {
+			return false
+		}
 		s.audit(r, u, "totp.recovery", map[string]any{"remaining": len(rest)})
 		return true
 	}
@@ -248,8 +254,15 @@ func (s *Server) verifyTOTPOrRecovery(r *http.Request, u *store.User, code strin
 
 // --- cadastro, confirmação, desativação ---
 
+var errTOTPAlreadyEnabled = errorf(http.StatusConflict, "totp_already_enabled", "two-factor authentication is already enabled; disable it first")
+
 func (s *Server) handleTOTPSetup(w http.ResponseWriter, r *http.Request) error {
 	u := userFrom(r)
+	// Recadastrar com o 2FA ligado equivale a desligar + ligar, e desligar exige senha e código:
+	// senão quem roubou um cookie trocaria o segredo e trancaria o dono fora.
+	if u.TOTPEnabled() {
+		return errTOTPAlreadyEnabled
+	}
 	secret, err := auth.NewTOTPSecret()
 	if err != nil {
 		return err
@@ -262,14 +275,33 @@ func (s *Server) handleTOTPSetup(w http.ResponseWriter, r *http.Request) error {
 func (s *Server) handleTOTPEnable(w http.ResponseWriter, r *http.Request) error {
 	u := userFrom(r)
 	var in struct {
-		Code string `json:"code"`
+		Password string `json:"password"`
+		Code     string `json:"code"`
 	}
 	if err := readJSON(r, &in); err != nil {
 		return err
 	}
+	if u.TOTPEnabled() {
+		return errTOTPAlreadyEnabled
+	}
 	secret, ok := s.pending.getSetup(u.ID)
 	if !ok {
 		return errorf(http.StatusConflict, "totp_setup_expired", "start the setup again")
+	}
+	// A senha atual prova que é o dono e não um cookie roubado: ligar o 2FA gera códigos de
+	// recuperação novos e derruba as outras sessões. Mesmos limites da troca de senha.
+	ip := ipFrom(r)
+	if !s.loginIP.Allow("ip:"+ip) || !s.loginUser.Allow(userLimitKey(u.Username, ip)) {
+		s.audit(r, u, "password.ratelimited", nil)
+		return errorf(http.StatusTooManyRequests, "rate_limited", "too many attempts; try again later")
+	}
+	if !s.loginSem.TryAcquire() {
+		return errorf(http.StatusTooManyRequests, "busy", "server busy; try again")
+	}
+	defer s.loginSem.Release()
+	if len(in.Password) > auth.MaxPasswordLen || !auth.VerifyPassword(u.PasswordHash, in.Password) {
+		s.audit(r, u, "password.fail", nil)
+		return errorf(http.StatusUnauthorized, "bad_credentials", "wrong password")
 	}
 	okCode, counter := auth.VerifyTOTP(secret, in.Code, time.Now(), 0)
 	if !okCode {
@@ -288,7 +320,7 @@ func (s *Server) handleTOTPEnable(w http.ResponseWriter, r *http.Request) error 
 	if err := s.db.SetTOTP(r.Context(), u.ID, sealed, &now, string(rec)); err != nil {
 		return err
 	}
-	_ = s.db.SetTOTPCounter(r.Context(), u.ID, int64(counter))
+	_, _ = s.db.SetTOTPCounter(r.Context(), u.ID, int64(counter))
 	s.pending.dropSetup(u.ID)
 	// outras sessões caem: a partir de agora todas passam pela segunda etapa
 	if sess := sessionFrom(r); sess != nil {

@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zamberlan/filezam/internal/auth"
-	"github.com/zamberlan/filezam/internal/store"
-	"github.com/zamberlan/filezam/internal/vfs"
+	"github.com/miguelzamberlan/filezam/internal/auth"
+	"github.com/miguelzamberlan/filezam/internal/store"
+	"github.com/miguelzamberlan/filezam/internal/vfs"
 )
 
 type shareView struct {
@@ -44,7 +44,7 @@ func (s *Server) shareURL(r *http.Request, token string) string {
 		scheme = "https"
 	}
 	host := r.Host
-	if fh := r.Header.Get("X-Forwarded-Host"); fh != "" && s.isTrustedRequest(r) {
+	if fh := lastHeader(r, "X-Forwarded-Host"); fh != "" && s.isTrustedRequest(r) {
 		host = fh
 	}
 	return scheme + "://" + host + "/s/" + token
@@ -86,7 +86,7 @@ func (s *Server) handleShareCreate(w http.ResponseWriter, r *http.Request) error
 	if err := readJSON(r, &in); err != nil {
 		return err
 	}
-	p, err := vfs.Normalize(in.Path)
+	p, err := vfs.NormalizeWritable(in.Path) // nunca compartilhar lixeira ou partes de upload
 	if err != nil {
 		return err
 	}

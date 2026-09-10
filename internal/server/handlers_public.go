@@ -9,11 +9,13 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"strconv"
+	"strings"
 	"time"
 
-	"github.com/zamberlan/filezam/internal/auth"
-	"github.com/zamberlan/filezam/internal/store"
-	"github.com/zamberlan/filezam/internal/vfs"
+	"github.com/miguelzamberlan/filezam/internal/auth"
+	"github.com/miguelzamberlan/filezam/internal/store"
+	"github.com/miguelzamberlan/filezam/internal/vfs"
 )
 
 var errShareNotFound = errorf(http.StatusNotFound, "not_found", "link not found or expired")
@@ -87,17 +89,22 @@ func (s *Server) shareRoot(r *http.Request) (*vfs.Root, *store.Share, error) {
 }
 
 // --- senha do link ---
-// O cookie por link guarda HMAC-SHA256(chave = hash Argon2 da senha, mensagem = hash do token):
-// só quem passou pelo unlock (e conhece o token) o obtém, e trocar a senha invalida todos.
+// O cookie por link é "<exp>.<HMAC-SHA256(chave = hash Argon2 da senha, mensagem = hash do token | exp)>":
+// só quem passou pelo unlock (e conhece o token) o obtém, trocar a senha ou o link invalida todos,
+// e a validade fica assinada dentro do valor (o MaxAge do cookie é só cortesia para o navegador).
+
+const shareUnlockTTL = 24 * time.Hour
 
 func shareCookieName(sh *store.Share) string {
 	return "fz_s_" + sh.TokenHash[:16]
 }
 
-func shareCookieValue(sh *store.Share) string {
+func shareCookieValue(sh *store.Share, exp int64) string {
 	m := hmac.New(sha256.New, []byte(sh.PasswordHash))
 	m.Write([]byte(sh.TokenHash))
-	return hex.EncodeToString(m.Sum(nil))
+	m.Write([]byte("|"))
+	m.Write([]byte(strconv.FormatInt(exp, 10)))
+	return strconv.FormatInt(exp, 10) + "." + hex.EncodeToString(m.Sum(nil))
 }
 
 // shareUnlocked reports whether the request may read a password-protected share.
@@ -109,7 +116,15 @@ func shareUnlocked(r *http.Request, sh *store.Share) bool {
 	if err != nil {
 		return false
 	}
-	return subtle.ConstantTimeCompare([]byte(c.Value), []byte(shareCookieValue(sh))) == 1
+	expStr, _, ok := strings.Cut(c.Value, ".")
+	if !ok {
+		return false
+	}
+	exp, err := strconv.ParseInt(expStr, 10, 64)
+	if err != nil || exp < time.Now().Unix() {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(c.Value), []byte(shareCookieValue(sh, exp))) == 1
 }
 
 func (s *Server) handlePublicUnlock(w http.ResponseWriter, r *http.Request) error {
@@ -127,7 +142,7 @@ func (s *Server) handlePublicUnlock(w http.ResponseWriter, r *http.Request) erro
 		writeJSON(w, r, 200, map[string]any{"ok": true})
 		return nil
 	}
-	if !s.shareUnlock.Allow(sh.TokenHash) {
+	if !s.shareUnlock.Allow(sh.TokenHash + "|" + ipFrom(r)) { // por (link, IP): 5 senhas erradas de um visitante não trancam os demais
 		return errorf(http.StatusTooManyRequests, "rate_limited", "too many attempts; try again later")
 	}
 	if !s.loginSem.TryAcquire() {
@@ -138,7 +153,8 @@ func (s *Server) handlePublicUnlock(w http.ResponseWriter, r *http.Request) erro
 		s.audit(r, nil, "share.unlock.fail", map[string]any{"id": sh.ID})
 		return errorf(http.StatusUnauthorized, "bad_credentials", "wrong password")
 	}
-	http.SetCookie(w, &http.Cookie{Name: shareCookieName(sh), Value: shareCookieValue(sh), Path: "/", HttpOnly: true, Secure: s.secureCookie(r), SameSite: http.SameSiteStrictMode, MaxAge: 86400})
+	exp := time.Now().Add(shareUnlockTTL).Unix()
+	http.SetCookie(w, &http.Cookie{Name: shareCookieName(sh), Value: shareCookieValue(sh, exp), Path: "/", HttpOnly: true, Secure: s.secureCookie(r), SameSite: http.SameSiteStrictMode, MaxAge: int(shareUnlockTTL.Seconds())})
 	writeJSON(w, r, 200, map[string]any{"ok": true})
 	return nil
 }

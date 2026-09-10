@@ -14,11 +14,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/zamberlan/filezam/internal/auth"
-	"github.com/zamberlan/filezam/internal/config"
-	"github.com/zamberlan/filezam/internal/server"
-	"github.com/zamberlan/filezam/internal/store"
-	"github.com/zamberlan/filezam/internal/vfs"
+	"github.com/miguelzamberlan/filezam/internal/auth"
+	"github.com/miguelzamberlan/filezam/internal/config"
+	"github.com/miguelzamberlan/filezam/internal/server"
+	"github.com/miguelzamberlan/filezam/internal/store"
+	"github.com/miguelzamberlan/filezam/internal/vfs"
 )
 
 var version = "dev"
@@ -207,6 +207,12 @@ func resetAdmin(args []string) error {
 	}
 	_ = db.DeleteUserSessions(ctx, u.ID, "")
 	_ = db.RecordLoginSuccess(ctx, u.ID)
+	// Quem chega aqui perdeu o acesso: sem limpar o 2FA, um admin sem autenticador e sem
+	// códigos de recuperação continuaria trancado fora mesmo com shell no servidor.
+	if u.TOTPEnabled() {
+		_ = db.SetTOTP(ctx, u.ID, "", nil, "")
+		fmt.Println("two-factor authentication cleared for:", cfg.AdminUser)
+	}
 	fmt.Println("admin password reset for:", cfg.AdminUser)
 	return nil
 }

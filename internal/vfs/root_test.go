@@ -84,6 +84,12 @@ func TestEscapeAttemptsAreRefused(t *testing.T) {
 	if _, err := r.Sub("link-out"); err == nil {
 		t.Error("Sub(link-out) succeeded")
 	}
+	if _, err := r.StatReserved("..", "canary.txt"); err == nil {
+		t.Error("StatReserved(../canary.txt) succeeded")
+	}
+	if _, err := r.StatReserved("link-out", "canary.txt"); err == nil {
+		t.Error("StatReserved through escaping link succeeded")
+	}
 	if err := r.Mkdir("link-out/newdir"); err == nil {
 		t.Error("Mkdir through escaping link succeeded")
 	}
@@ -401,4 +407,56 @@ func TestWalkEntriesStaysInsideRoot(t *testing.T) {
 		}
 	}
 	checkCanary(t, outside)
+}
+
+// Walks stop descending at WalkMaxDepth and skip folders they cannot open, so a deep chain
+// or one unreadable folder never wedges the index, a search, a quota scan or a zip.
+func TestWalkDepthCapAndUnreadableDirs(t *testing.T) {
+	r, root, _ := fixture(t)
+	chain := "deep"
+	for i := 1; i < WalkMaxDepth+20; i++ {
+		chain += "/d"
+	}
+	if err := os.MkdirAll(filepath.Join(root, filepath.FromSlash(chain)), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	maxSeen := 0
+	if err := r.WalkEntries(context.Background(), "deep", func(p string, e Entry) error {
+		if d := Depth(p); d > maxSeen {
+			maxSeen = d
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if maxSeen != WalkMaxDepth {
+		t.Fatalf("walk descended to depth %d, want %d", maxSeen, WalkMaxDepth)
+	}
+	if _, err := Normalize(chain); err == nil {
+		t.Fatal("Normalize accepted a path deeper than MaxDepth")
+	}
+
+	if os.Geteuid() == 0 {
+		t.Log("running as root: permission checks are bypassed, skipping unreadable-dir case")
+		return
+	}
+	os.MkdirAll(filepath.Join(root, "a", "locked", "inner"), 0o755)
+	os.WriteFile(filepath.Join(root, "a", "visible.txt"), []byte("x"), 0o644)
+	if err := os.Chmod(filepath.Join(root, "a", "locked"), 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(filepath.Join(root, "a", "locked"), 0o755) })
+	seen := map[string]bool{}
+	if err := r.WalkEntries(context.Background(), "", func(p string, e Entry) error {
+		seen[p] = true
+		return nil
+	}); err != nil {
+		t.Fatalf("one unreadable folder aborted the walk: %v", err)
+	}
+	if !seen["a/locked"] || !seen["a/visible.txt"] || seen["a/locked/inner"] {
+		t.Fatalf("walk: %v", seen)
+	}
+	if _, err := r.List("a/locked"); err == nil {
+		t.Fatal("listing the unreadable folder itself should still fail")
+	}
 }

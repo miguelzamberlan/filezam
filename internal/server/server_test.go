@@ -16,14 +16,16 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/zamberlan/filezam/internal/auth"
-	"github.com/zamberlan/filezam/internal/config"
-	"github.com/zamberlan/filezam/internal/store"
-	"github.com/zamberlan/filezam/internal/vfs"
+	"github.com/miguelzamberlan/filezam/internal/auth"
+	"github.com/miguelzamberlan/filezam/internal/config"
+	"github.com/miguelzamberlan/filezam/internal/store"
+	"github.com/miguelzamberlan/filezam/internal/uploads"
+	"github.com/miguelzamberlan/filezam/internal/vfs"
 )
 
 type client struct {
@@ -325,10 +327,18 @@ func TestEndToEnd(t *testing.T) {
 				t.Fatal("part visible in listing")
 			}
 		}
-		// orphan part gets pruned on listing
-		os.WriteFile(filepath.Join(root, "teamA", "docs", vfs.PartName("deadbeef")), []byte("x"), 0o644)
+		// orphan part gets pruned on listing, but only after OrphanGrace: a fresh part may be
+		// a single-PUT/batch upload still streaming (those have no session row)
+		part := filepath.Join(root, "teamA", "docs", vfs.PartName("deadbeef"))
+		os.WriteFile(part, []byte("x"), 0o644)
 		bob.expect("GET", "/api/files?path=docs", nil, 200)
-		if _, err := os.Stat(filepath.Join(root, "teamA", "docs", vfs.PartName("deadbeef"))); err == nil {
+		if _, err := os.Stat(part); err != nil {
+			t.Fatal("fresh part pruned while it could still be in flight")
+		}
+		old := time.Now().Add(-uploads.OrphanGrace - time.Minute)
+		os.Chtimes(part, old, old)
+		bob.expect("GET", "/api/files?path=docs", nil, 200)
+		if _, err := os.Stat(part); err == nil {
 			t.Fatal("orphan part not pruned")
 		}
 	}
@@ -1072,10 +1082,17 @@ func TestShareBoundToInode(t *testing.T) {
 	pub.expect("GET", "/api/public/"+tokDir, nil, 404)
 	os.Rename(filepath.Join(root, "teamA", "pub-moved"), filepath.Join(root, "teamA", "pub"))
 	pub.expect("GET", "/api/public/"+tokDir, nil, 200)
-	// apagar e recriar: inode novo → 404 para a pasta e para o arquivo
+	// apagar e recriar: inode novo → 404 para a pasta e para o arquivo. Sistemas de arquivos que
+	// devolvem o mesmo número de inode logo após apagar (overlayfs, às vezes ext4) não dão essa
+	// garantia — limitação documentada em docs/03 e docs/10 — e aqui o teste é pulado.
+	before, _ := os.Stat(filepath.Join(root, "teamA", "pub"))
 	os.RemoveAll(filepath.Join(root, "teamA", "pub"))
 	os.MkdirAll(filepath.Join(root, "teamA", "pub"), 0o755)
 	os.WriteFile(filepath.Join(root, "teamA", "pub", "doc.txt"), []byte("novo"), 0o644)
+	after, _ := os.Stat(filepath.Join(root, "teamA", "pub"))
+	if os.SameFile(before, after) {
+		t.Skip("filesystem reused the inode number; delete+recreate cannot be told apart here")
+	}
 	pub.expect("GET", "/api/public/"+tokDir, nil, 404)
 	pub.expect("GET", "/api/public/"+tokFile, nil, 404)
 	// links antigos (sem inode gravado) continuam por caminho
@@ -1206,13 +1223,17 @@ func TestTOTPFlow(t *testing.T) {
 	if !strings.HasPrefix(o["uri"].(string), "otpauth://totp/Filezam:admin?") {
 		t.Fatalf("uri: %v", o["uri"])
 	}
-	admin.expect("POST", "/api/auth/totp/enable", map[string]string{"code": "000000"}, 401)
 	code, _ := auth.TOTPCode(secret, time.Now())
-	o = admin.expect("POST", "/api/auth/totp/enable", map[string]string{"code": code}, 200)
+	admin.expect("POST", "/api/auth/totp/enable", map[string]string{"code": "000000", "password": "correct horse battery"}, 401)
+	admin.expect("POST", "/api/auth/totp/enable", map[string]string{"code": code, "password": "errada"}, 401) // cookie roubado não liga o 2FA
+	o = admin.expect("POST", "/api/auth/totp/enable", map[string]string{"code": code, "password": "correct horse battery"}, 200)
 	rec := o["recoveryCodes"].([]any)
 	if len(rec) != 10 || o["user"].(map[string]any)["totpEnabled"] != true {
 		t.Fatalf("enable: %v", o)
 	}
+	// com o 2FA ligado, recadastrar (trocar o segredo e os códigos) exige desligar antes, o que pede senha + código
+	admin.expect("POST", "/api/auth/totp/setup", nil, 409)
+	admin.expect("POST", "/api/auth/totp/enable", map[string]string{"code": code, "password": "correct horse battery"}, 409)
 	// novo login exige a segunda etapa; o mesmo código do cadastro não vale (anti-replay)
 	fresh := func() *client {
 		jar, _ := cookiejar.New(nil)
@@ -1263,7 +1284,7 @@ func TestTOTPFlow(t *testing.T) {
 	}
 	o = c1.expect("POST", "/api/auth/totp/setup", nil, 200)
 	code2, _ := auth.TOTPCode(o["secret"].(string), time.Now())
-	c1.expect("POST", "/api/auth/totp/enable", map[string]string{"code": code2}, 200)
+	c1.expect("POST", "/api/auth/totp/enable", map[string]string{"code": code2, "password": "correct horse battery"}, 200)
 	c1.expect("GET", "/api/files?path=", nil, 200)
 	// admin reseta o 2FA de outro usuário
 	s.cfg.Require2FA = false
@@ -1279,5 +1300,95 @@ func TestTOTPFlow(t *testing.T) {
 	// arquivo de chave criado em DataDir com permissão 0600
 	if fi, err := os.Stat(filepath.Join(s.cfg.DataDir, "secret.key")); err != nil || fi.Mode().Perm() != 0o600 {
 		t.Fatalf("secret.key: %v", err)
+	}
+}
+
+// Endurecimento antes da publicação: caminhos reservados em zip/links/favoritos, X-Forwarded-For
+// em várias linhas, limitador por usuário preso ao IP, cookie de senha do link com validade.
+func TestPublicationHardening(t *testing.T) {
+	admin, s, root := newEnv(t)
+	s.cfg.TrustedProxies = []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")}
+	admin.login("admin", "admin")
+	admin.expect("POST", "/api/auth/password", map[string]string{"current": "admin", "new": "correct horse battery"}, 200)
+
+	// lixeira e partes de upload nunca são endereçáveis, nem por zip, link público ou favorito
+	os.MkdirAll(filepath.Join(root, "teamA", ".filezam-trash", "x"), 0o755)
+	os.WriteFile(filepath.Join(root, "teamA", ".filezam-trash", "x", "secret.txt"), []byte("deleted by someone else"), 0o644)
+	os.WriteFile(filepath.Join(root, "teamA", "pub", ".filezam-upload-deadbeef.part"), []byte("partial"), 0o644)
+	for _, p := range []string{"teamA/.filezam-trash", "teamA/.filezam-trash/x", "teamA/pub/.filezam-upload-deadbeef.part"} {
+		resp, _ := admin.do("GET", "/api/files/zip?path="+url.QueryEscape(p), nil, nil)
+		io.ReadAll(resp.Body)
+		if resp.StatusCode != 400 {
+			t.Fatalf("zip %q: %d", p, resp.StatusCode)
+		}
+		admin.expect("POST", "/api/shares", map[string]any{"path": p, "expiresIn": 600}, 400)
+		admin.expect("POST", "/api/favorites", map[string]any{"path": p}, 400)
+	}
+	admin.expect("GET", "/api/admin/dirs?path=teamA/.filezam-trash", nil, 400)
+
+	// X-Forwarded-For em duas linhas: a última (posta pelo proxy) vale, não a primeira (do cliente)
+	req, _ := http.NewRequest("POST", admin.srv.URL+"/api/auth/login", strings.NewReader(`{"username":"nobody","password":"wrong"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Filezam", "1")
+	req.Header.Add("X-Forwarded-For", "203.0.113.9")
+	req.Header.Add("X-Forwarded-For", "198.51.100.7")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	io.ReadAll(resp.Body)
+	resp.Body.Close()
+	o := admin.expect("GET", "/api/admin/audit?limit=1", nil, 200)
+	if e := o["entries"].([]any)[0].(map[string]any); e["action"] != "login.fail" || e["ip"] != "198.51.100.7" {
+		t.Fatalf("audit ip from multi-line XFF: %v", e)
+	}
+
+	// limitador por usuário é por (usuário, IP): tentativas baratas de um IP não trancam o admin de outro
+	s.loginUser = auth.NewLimiter(2, 2)
+	attacker := map[string]string{"X-Forwarded-For": "203.0.113.9"}
+	victim := map[string]string{"X-Forwarded-For": "198.51.100.7"}
+	got429 := false
+	for i := 0; i < 3; i++ {
+		resp, _ := admin.do("POST", "/api/auth/login", map[string]string{"username": "admin", "password": "wrong"}, attacker)
+		io.ReadAll(resp.Body)
+		got429 = got429 || resp.StatusCode == 429
+	}
+	if !got429 {
+		t.Fatal("per-user limiter never fired")
+	}
+	victimJar, _ := cookiejar.New(nil)
+	v := &client{t: t, srv: admin.srv, c: &http.Client{Jar: victimJar}}
+	resp, body := v.do("POST", "/api/auth/login", map[string]string{"username": "admin", "password": "correct horse battery"}, victim)
+	if resp.StatusCode != 200 {
+		t.Fatalf("victim locked out from another ip: %d %v", resp.StatusCode, body)
+	}
+
+	// cookie de senha do link: a validade está assinada dentro do valor
+	o = admin.expect("POST", "/api/shares", map[string]any{"path": "teamA/pub", "expiresIn": 600, "password": "s3gredo"}, 201)
+	tok := o["token"].(string)
+	pubJar, _ := cookiejar.New(nil)
+	pub := &client{t: t, srv: admin.srv, c: &http.Client{Jar: pubJar}}
+	pub.expect("POST", "/api/public/"+tok+"/unlock", map[string]string{"password": "s3gredo"}, 200)
+	u, _ := url.Parse(admin.srv.URL)
+	var ck *http.Cookie
+	for _, c := range pubJar.Cookies(u) {
+		if strings.HasPrefix(c.Name, "fz_s_") {
+			ck = c
+		}
+	}
+	if ck == nil {
+		t.Fatal("unlock cookie missing")
+	}
+	expStr, mac, _ := strings.Cut(ck.Value, ".")
+	if exp, err := strconv.ParseInt(expStr, 10, 64); err != nil || exp < time.Now().Add(23*time.Hour).Unix() || len(mac) != 64 {
+		t.Fatalf("unlock cookie format: %q", ck.Value)
+	}
+	if o = pub.expect("GET", "/api/public/"+tok, nil, 200); o["locked"] != false {
+		t.Fatalf("unlocked: %v", o)
+	}
+	// valor com validade vencida (mesmo com MAC íntegro sobre outra validade) não abre
+	pubJar.SetCookies(u, []*http.Cookie{{Name: ck.Name, Value: "1." + mac, Path: "/"}})
+	if o = pub.expect("GET", "/api/public/"+tok, nil, 200); o["locked"] != true {
+		t.Fatalf("expired unlock cookie accepted: %v", o)
 	}
 }

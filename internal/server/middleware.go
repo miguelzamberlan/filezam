@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zamberlan/filezam/internal/store"
+	"github.com/miguelzamberlan/filezam/internal/store"
 )
 
 type ctxKey int
@@ -69,7 +69,9 @@ func (s *Server) realIP(next http.Handler) http.Handler {
 		}
 		ip := host
 		if addr, err := netip.ParseAddr(host); err == nil && s.trusted(addr) {
-			if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			// Values, não Get: proxies como o HAProxy acrescentam uma linha nova em vez de
+			// anexar à existente, e a primeira linha pode ter vindo do cliente.
+			if xff := strings.Join(r.Header.Values("X-Forwarded-For"), ","); xff != "" {
 				hops := strings.Split(xff, ",")
 				for i := len(hops) - 1; i >= 0; i-- {
 					h := strings.TrimSpace(hops[i])
@@ -98,7 +100,7 @@ func (s *Server) isHTTPS(r *http.Request) bool {
 		return false
 	}
 	if addr, err := netip.ParseAddr(host); err == nil && s.trusted(addr) {
-		return strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+		return strings.EqualFold(lastHeader(r, "X-Forwarded-Proto"), "https")
 	}
 	return false
 }
@@ -116,6 +118,17 @@ func (s *Server) securityHeaders(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// lastHeader returns the value set by the closest proxy: the last line, and within it the
+// last comma-separated element (a client can send an earlier line, never a later one).
+func lastHeader(r *http.Request, name string) string {
+	vals := r.Header.Values(name)
+	if len(vals) == 0 {
+		return ""
+	}
+	parts := strings.Split(vals[len(vals)-1], ",")
+	return strings.TrimSpace(parts[len(parts)-1])
 }
 
 // logPath hides share tokens carried in URL paths so they never land in stdout/log shipping.

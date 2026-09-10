@@ -4,7 +4,7 @@ SQLite em `FILEZAM_DATA_DIR/filezam.db` (mais `-wal` e `-shm`). Driver `modernc.
 
 ## Abertura (`internal/store/db.go`)
 
-- DSN: `file:<path>?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=foreign_keys(ON)&_txlock=immediate`.
+- DSN: `file:<path>?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=foreign_keys(ON)&_pragma=case_sensitive_like(ON)&_txlock=immediate`. `case_sensitive_like` porque os `LIKE` de prefixo de caminho no índice (`path LIKE 'Docs/%'`) não podem casar `docs/…`: senão estreitar o escopo de um usuário para `Docs` somaria na cota dele os bytes de `docs`, e reindexar uma pasta apagaria linhas da outra. A pesquisa por nome continua sem diferenciar maiúsculas porque usa a coluna `name_lc` com o termo já em minúsculas.
 - Dois pools: escrita (`MaxOpenConns(1)`) e leitura (`MaxOpenConns(8)`). Métodos de repositório usam `db.w` para `INSERT/UPDATE/DELETE` e `db.r` para `SELECT`.
 - `db.Now` é injetável (testes de expiração).
 
@@ -61,6 +61,7 @@ Todos os timestamps são segundos Unix, exceto `uploads.mtime` (ms, vindo do cli
 - Caminhos gravados são **base-relativos** (`vfs.Join(user.Scope, p)`), para sobreviverem a mudanças de escopo do usuário. A leitura converte para escopo-relativo e descarta o que ficou fora.
 - Nunca grave senhas ou tokens de sessão em claro (`auth.HashToken`). Segredos TOTP vão cifrados com `auth.Seal` e a chave de `<DataDir>/secret.key` (ou `FILEZAM_SECRET_KEY`): **o backup precisa levar o `secret.key` junto com o banco**, senão o 2FA de todos deixa de validar. A única exceção é `shares.token`, gravado em claro de propósito para permitir recopiar o link ([03](03-seguranca.md#links-públicos)); a consulta pública continua sendo por `token_hash`.
 - `RecordLoginFailure` aplica o bloqueio progressivo; `RecordLoginSuccess` zera.
+- `SetTOTPCounter` (`WHERE totp_counter < ?`) e `ConsumeTOTPRecovery` (`WHERE totp_recovery = ?`) devolvem se a linha mudou: são o anti-replay do 2FA, por isso o resultado nunca é ignorado.
 - `ListStaleUploads`, `PurgeExpiredSessions` e `PruneAudit` são chamados pela tarefa de fundo.
 
 ## Backup

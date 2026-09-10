@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/zamberlan/filezam/internal/vfs"
+	"github.com/miguelzamberlan/filezam/internal/vfs"
 )
 
 // Ganchos do índice de nomes: cada mutação avisa o indexador em segundo plano (melhor

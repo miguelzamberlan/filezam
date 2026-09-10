@@ -34,7 +34,7 @@ type DB struct {
 
 // Open opens (creating if needed) the database at path and applies migrations.
 func Open(path string) (*DB, error) {
-	dsn := "file:" + path + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=foreign_keys(ON)&_txlock=immediate"
+	dsn := "file:" + path + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=foreign_keys(ON)&_pragma=case_sensitive_like(ON)&_txlock=immediate"
 	w, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, err

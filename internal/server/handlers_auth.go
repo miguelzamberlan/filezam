@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zamberlan/filezam/internal/auth"
-	"github.com/zamberlan/filezam/internal/store"
+	"github.com/miguelzamberlan/filezam/internal/auth"
+	"github.com/miguelzamberlan/filezam/internal/store"
 )
 
 const (
@@ -33,6 +33,11 @@ func (s *Server) viewUser(u *store.User) userView {
 		TOTPEnabled: u.TOTPEnabled(), TOTPRequired: s.cfg.Require2FA && u.IsAdmin() && !u.TOTPEnabled()}
 }
 
+// userLimitKey keys the per-account limiter by (username, IP).
+func userLimitKey(username, ip string) string {
+	return "user:" + strings.ToLower(username) + "|" + ip
+}
+
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) error {
 	var in struct {
 		Username string `json:"username"`
@@ -46,7 +51,9 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) error {
 		return errorf(http.StatusBadRequest, "bad_credentials", "username and password required")
 	}
 	ip := ipFrom(r)
-	if !s.loginIP.Allow("ip:"+ip) || !s.loginUser.Allow("user:"+strings.ToLower(in.Username)) {
+	// O limitador por usuário é por (usuário, IP), como o bloqueio: um limitador só por nome
+	// deixaria qualquer um trancar o admin de fora com 5 tentativas baratas por minuto.
+	if !s.loginIP.Allow("ip:"+ip) || !s.loginUser.Allow(userLimitKey(in.Username, ip)) {
 		s.audit(r, nil, "login.ratelimited", map[string]any{"username": in.Username})
 		return errorf(http.StatusTooManyRequests, "rate_limited", "too many login attempts; try again later")
 	}
@@ -141,7 +148,7 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) er
 	u := userFrom(r)
 	// Mesmas barreiras do login: quem roubou um cookie não pode testar senhas à vontade,
 	// e cada verificação custa 64 MiB de Argon2.
-	if !s.loginIP.Allow("ip:"+ipFrom(r)) || !s.loginUser.Allow("user:"+strings.ToLower(u.Username)) {
+	if !s.loginIP.Allow("ip:"+ipFrom(r)) || !s.loginUser.Allow(userLimitKey(u.Username, ipFrom(r))) {
 		s.audit(r, u, "password.ratelimited", nil)
 		return errorf(http.StatusTooManyRequests, "rate_limited", "too many attempts; try again later")
 	}

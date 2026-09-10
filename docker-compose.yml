@@ -1,14 +1,21 @@
 services:
   # One-shot helper: Docker creates missing bind-mount folders as root, which
   # would make /config unwritable for the non-root app user. This fixes /config
-  # (owned by Filezam) and only touches /data when it is empty (freshly created).
+  # (the folder itself and the files Filezam keeps there, never recursively, so a
+  # wrong FILEZAM_HOST_CONFIG cannot re-own a whole host tree) and only touches
+  # /data when it is empty (freshly created). It refuses a /config that contains
+  # subfolders: that is not a Filezam config folder.
   init:
     image: alpine:3.20
     user: "0:0"
     command: >
       sh -c '
         mkdir -p /config /data &&
-        chown -R ${PUID:-1000}:${PGID:-1000} /config &&
+        if [ -n "$$(find /config -mindepth 1 -maxdepth 1 -type d | head -n 1)" ]; then
+          echo "init: /config contains subfolders; refusing to chown. Check FILEZAM_HOST_CONFIG." >&2; exit 1;
+        fi &&
+        chown ${PUID:-1000}:${PGID:-1000} /config &&
+        find /config -maxdepth 1 -type f \( -name "filezam.db*" -o -name "secret.key" \) -exec chown ${PUID:-1000}:${PGID:-1000} {} + &&
         { [ -n "$$(ls -A /data 2>/dev/null)" ] || chown ${PUID:-1000}:${PGID:-1000} /data 2>/dev/null || true; }'
     volumes:
       - ${FILEZAM_HOST_ROOT:-./data}:/data

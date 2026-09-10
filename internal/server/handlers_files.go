@@ -12,11 +12,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zamberlan/filezam/internal/auth"
-	"github.com/zamberlan/filezam/internal/jobs"
-	"github.com/zamberlan/filezam/internal/store"
-	"github.com/zamberlan/filezam/internal/uploads"
-	"github.com/zamberlan/filezam/internal/vfs"
+	"github.com/miguelzamberlan/filezam/internal/auth"
+	"github.com/miguelzamberlan/filezam/internal/jobs"
+	"github.com/miguelzamberlan/filezam/internal/store"
+	"github.com/miguelzamberlan/filezam/internal/uploads"
+	"github.com/miguelzamberlan/filezam/internal/vfs"
 )
 
 // userRoot opens the scope root of the requesting user.
@@ -320,7 +320,7 @@ func (s *Server) handleZip(w http.ResponseWriter, r *http.Request) error {
 	defer s.zipSem.Release(zipKey)
 	var paths []string
 	for _, raw := range r.URL.Query()["path"] {
-		p, err := vfs.Normalize(raw)
+		p, err := vfs.NormalizeWritable(raw) // recusa .filezam-* (lixeira, partes) também na leitura
 		if err != nil {
 			return err
 		}

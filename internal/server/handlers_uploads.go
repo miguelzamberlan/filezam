@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/zamberlan/filezam/internal/uploads"
-	"github.com/zamberlan/filezam/internal/vfs"
+	"github.com/miguelzamberlan/filezam/internal/uploads"
+	"github.com/miguelzamberlan/filezam/internal/vfs"
 )
 
 func (s *Server) handleUploadCreate(w http.ResponseWriter, r *http.Request) error {

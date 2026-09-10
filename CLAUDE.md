@@ -32,6 +32,8 @@ make web                 # npm ci + vite build -> internal/server/webdist/dist (
 make build               # CGO_ENABLED=0 go build -> ./filezam
 make test                # go test ./... + tsc --noEmit + vitest
 go test ./internal/vfs/ -run TestEscapeAttemptsAreRefused   # single Go test
+# no Go toolchain on this machine? run the Go suite in Docker (tmpfs: TestShareBoundToInode needs non-reused inodes):
+docker run --rm -v "$PWD":/src -w /src --tmpfs /tmp:exec -e GOFLAGS=-buildvcs=false golang:1.26-alpine go test ./...
 cd web && npx vitest run src/lib/paths.test.ts               # single frontend test
 docker compose build && docker compose up -d
 ```

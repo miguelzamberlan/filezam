@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/zamberlan/filezam/internal/store"
-	"github.com/zamberlan/filezam/internal/vfs"
+	"github.com/miguelzamberlan/filezam/internal/store"
+	"github.com/miguelzamberlan/filezam/internal/vfs"
 )
 
 // scopeRel converts a base-relative path into a scope-relative one.
@@ -54,7 +54,7 @@ func (s *Server) handleFavoriteAdd(w http.ResponseWriter, r *http.Request) error
 	if err := readJSON(r, &in); err != nil {
 		return err
 	}
-	p, err := vfs.Normalize(in.Path)
+	p, err := vfs.NormalizeWritable(in.Path)
 	if err != nil {
 		return err
 	}

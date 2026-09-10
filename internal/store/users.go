@@ -142,14 +142,30 @@ func (db *DB) SetTOTP(ctx context.Context, id int64, sealedSecret string, enable
 	return err
 }
 
-// SetTOTPCounter records the last accepted interval (anti-replay).
-func (db *DB) SetTOTPCounter(ctx context.Context, id, counter int64) error {
-	_, err := db.w.ExecContext(ctx, `UPDATE users SET totp_counter=? WHERE id=? AND totp_counter<?`, counter, id, counter)
-	return err
+// SetTOTPCounter records the last accepted interval (anti-replay). It reports false when
+// the stored counter is already >= counter, i.e. the code was accepted by another request.
+func (db *DB) SetTOTPCounter(ctx context.Context, id, counter int64) (bool, error) {
+	res, err := db.w.ExecContext(ctx, `UPDATE users SET totp_counter=? WHERE id=? AND totp_counter<?`, counter, id, counter)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n == 1, err
 }
 
 // SetTOTPRecovery replaces the remaining recovery-code hashes.
 func (db *DB) SetTOTPRecovery(ctx context.Context, id int64, recovery string) error {
 	_, err := db.w.ExecContext(ctx, `UPDATE users SET totp_recovery=? WHERE id=?`, recovery, id)
 	return err
+}
+
+// ConsumeTOTPRecovery replaces the recovery-code list only if it still equals prev
+// (compare-and-swap), so two concurrent uses cannot resurrect a spent code.
+func (db *DB) ConsumeTOTPRecovery(ctx context.Context, id int64, prev, next string) (bool, error) {
+	res, err := db.w.ExecContext(ctx, `UPDATE users SET totp_recovery=? WHERE id=? AND totp_recovery=?`, next, id, prev)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n == 1, err
 }

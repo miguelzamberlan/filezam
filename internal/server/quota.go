@@ -3,14 +3,14 @@ package server
 import (
 	"context"
 	"fmt"
-	"github.com/zamberlan/filezam/internal/jobs"
+	"github.com/miguelzamberlan/filezam/internal/jobs"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/zamberlan/filezam/internal/store"
-	"github.com/zamberlan/filezam/internal/vfs"
+	"github.com/miguelzamberlan/filezam/internal/store"
+	"github.com/miguelzamberlan/filezam/internal/vfs"
 )
 
 // Cota por usuário: o uso é o total de bytes dentro do escopo (lixeira e partes não contam).

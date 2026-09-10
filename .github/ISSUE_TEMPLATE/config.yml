@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Vulnerabilidade de segurança / Security vulnerability
+    url: https://github.com/miguelzamberlan/filezam/security/advisories/new
+    about: Não abra issue pública para falhas de segurança. Use um Security Advisory privado (veja SECURITY.md).

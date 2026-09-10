@@ -13,6 +13,7 @@ export default function TotpSetup({ onDone }: { onDone?: () => void }) {
   const [setup, setSetup] = useState<{ secret: string; uri: string } | null>(null)
   const [qr, setQr] = useState<string>('')
   const [code, setCode] = useState('')
+  const [password, setPassword] = useState('')
   const [codes, setCodes] = useState<string[] | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -30,7 +31,7 @@ export default function TotpSetup({ onDone }: { onDone?: () => void }) {
     setBusy(true)
     setErr(null)
     try {
-      const r = await Api.totpEnable(code)
+      const r = await Api.totpEnable(code, password)
       qc.setQueryData(['me'], { user: r.user })
       setCodes(r.recoveryCodes)
     } catch (e) {
@@ -68,10 +69,12 @@ export default function TotpSetup({ onDone }: { onDone?: () => void }) {
       </div>
       <p className="mt-4 text-sm font-medium">{S.totpStep2}</p>
       <input className="input mt-2 !w-40 text-center font-mono text-lg tracking-widest" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9 ]*" maxLength={7} placeholder="000000" autoFocus value={code} onChange={(e) => setCode(e.target.value)} />
+      <p className="mt-4 text-sm font-medium">{S.totpStep3}</p>
+      <input className="input mt-2 !w-64" type="password" autoComplete="current-password" placeholder={S.currentPassword} value={password} onChange={(e) => setPassword(e.target.value)} />
       {err && <p className="mt-2 text-sm text-red-600">{err}</p>}
       <div className="mt-4 flex justify-end gap-2">
         {onDone && <button type="button" className="btn-ghost" onClick={onDone}>{S.cancel}</button>}
-        <button type="submit" className="btn-primary" disabled={busy || !setup || code.replace(/\s/g, '').length !== 6}>{S.totpEnable}</button>
+        <button type="submit" className="btn-primary" disabled={busy || !setup || !password || code.replace(/\s/g, '').length !== 6}>{S.totpEnable}</button>
       </div>
     </form>
   )

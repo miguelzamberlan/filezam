@@ -1,6 +1,9 @@
 package vfs
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestNormalize(t *testing.T) {
 	cases := []struct {
@@ -128,4 +131,17 @@ func names(es []Entry) string {
 		out += e.Name
 	}
 	return out
+}
+
+func TestNormalizeDepth(t *testing.T) {
+	ok := strings.Repeat("d/", MaxDepth-1) + "d"
+	if _, err := Normalize(ok); err != nil {
+		t.Fatalf("depth %d should be accepted: %v", MaxDepth, err)
+	}
+	if _, err := Normalize(ok + "/d"); err == nil {
+		t.Fatalf("depth %d should be refused", MaxDepth+1)
+	}
+	if Depth("") != 0 || Depth("a") != 1 || Depth("a/b/c") != 3 {
+		t.Fatal("Depth")
+	}
 }

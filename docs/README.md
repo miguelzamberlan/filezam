@@ -15,4 +15,4 @@ Especificações do projeto, na ordem sugerida de leitura. Cada documento é a f
 | 09 | [Testes](09-testes.md) | Suítes automatizadas, como rodar, checklist manual |
 | 10 | [Roadmap e limitações](10-roadmap.md) | Limitações conhecidas e melhorias planejadas |
 
-Guia rápido para quem vai desenvolver: leia 01, 02 e 03 inteiros; consulte 04 a 07 conforme a área; 08 e 09 antes de publicar uma versão.
+Guia rápido para quem vai desenvolver: leia 01, 02 e 03 inteiros; consulte 04 a 07 conforme a área; 08 e 09 antes de publicar uma versão. Como contribuir: [`CONTRIBUTING.md`](../CONTRIBUTING.md); como reportar uma vulnerabilidade: [`SECURITY.md`](../SECURITY.md).

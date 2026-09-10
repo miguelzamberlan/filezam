@@ -11,9 +11,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zamberlan/filezam/internal/auth"
-	"github.com/zamberlan/filezam/internal/store"
-	"github.com/zamberlan/filezam/internal/vfs"
+	"github.com/miguelzamberlan/filezam/internal/auth"
+	"github.com/miguelzamberlan/filezam/internal/store"
+	"github.com/miguelzamberlan/filezam/internal/vfs"
 )
 
 // Errors specific to the upload protocol.
@@ -348,6 +348,7 @@ func (s *Service) PruneOrphans(ctx context.Context, root *vfs.Root, dir string, 
 	if err != nil {
 		return
 	}
+	cutoff := time.Now().Add(-OrphanGrace)
 	for _, name := range parts {
 		id, ok := strings.CutPrefix(name, vfs.ReservedPrefix+"upload-")
 		if !ok {
@@ -357,11 +358,21 @@ func (s *Service) PruneOrphans(ctx context.Context, root *vfs.Root, dir string, 
 		if active[id] {
 			continue
 		}
+		// Partes de PUT único e de lote não têm linha no banco: enquanto o corpo chega o
+		// mtime avança, então só uma parte parada há mais de OrphanGrace é órfã de verdade.
+		if fi, err := root.StatReserved(dir, name); err != nil || fi.ModTime().After(cutoff) {
+			continue
+		}
 		if err := root.RemoveReserved(dir, name); err == nil {
 			s.log.Info("removed orphan part", "dir", dir, "name", name)
 		}
 	}
 }
+
+// OrphanGrace is how long a part file without an upload session may sit untouched
+// before the listing sweep removes it. Single-PUT and batch uploads write their part
+// without a session row; their mtime keeps moving while the body streams in.
+const OrphanGrace = 15 * time.Minute
 
 // ClampMtime bounds a client-supplied unix-ms mtime to a sane range.
 func clampMtime(ms int64) time.Time {

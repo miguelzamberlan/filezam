@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/zamberlan/filezam/internal/store"
+	"github.com/miguelzamberlan/filezam/internal/store"
 )
 
 // audit records an audit event. Best effort; failures are logged.

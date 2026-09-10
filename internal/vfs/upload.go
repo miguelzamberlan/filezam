@@ -47,6 +47,15 @@ func (r *Root) RemovePart(dir, id string) error {
 	return nil
 }
 
+// StatReserved returns the FileInfo of a reserved file by name inside dir (Lstat: never follows links).
+func (r *Root) StatReserved(dir, name string) (fs.FileInfo, error) {
+	fi, err := r.r.Lstat(Join(dir, name))
+	if err != nil {
+		return nil, MapError(err)
+	}
+	return fi, nil
+}
+
 // RemoveReserved deletes a reserved file by name inside dir.
 func (r *Root) RemoveReserved(dir, name string) error {
 	err := r.r.Remove(Join(dir, name))

@@ -1,6 +1,6 @@
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 
-.PHONY: all web build test test-go test-web dev run docker clean
+.PHONY: all web build test test-go test-web vuln dev run docker clean
 
 all: build
 
@@ -19,6 +19,11 @@ test-go:
 
 test-web:
 	cd web && npm run typecheck && npm test
+
+## Dependency vulnerability scans (same as CI)
+vuln:
+	go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+	cd web && npm audit --omit=dev
 
 ## Run the Go API locally (serves ./data, db in ./config) with plain-HTTP cookies
 run:

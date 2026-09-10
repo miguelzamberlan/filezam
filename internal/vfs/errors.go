@@ -54,6 +54,8 @@ func MapError(err error) error {
 		return errors.Join(ErrTooManyLinks, err)
 	case errors.Is(err, syscall.ENOTEMPTY):
 		return errors.Join(ErrExists, err)
+	case errors.Is(err, syscall.ENAMETOOLONG):
+		return errors.Join(ErrInvalidName, err)
 	}
 	msg := err.Error()
 	if strings.Contains(msg, "escapes from parent") {

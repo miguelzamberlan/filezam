@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/zamberlan/filezam/internal/auth"
-	"github.com/zamberlan/filezam/internal/config"
-	"github.com/zamberlan/filezam/internal/store"
+	"github.com/miguelzamberlan/filezam/internal/auth"
+	"github.com/miguelzamberlan/filezam/internal/config"
+	"github.com/miguelzamberlan/filezam/internal/store"
 )
 
 const sessionCookie = "filezam_session"

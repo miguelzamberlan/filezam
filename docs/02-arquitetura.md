@@ -72,7 +72,9 @@ internal/server/webdist/dist        # saída do Vite (gitignored, exceto .keep)
 internal/store/migrations/NNN_*.sql # embutidas, aplicadas em ordem numérica
 web/                                 # projeto Vite (ver docs/07)
 docs/                                # esta documentação
-Dockerfile docker-compose.yml .env.example Makefile README.md CLAUDE.md
+Dockerfile docker-compose.yml .env.example Makefile
+README.md README.en.md CONTRIBUTING.md SECURITY.md CODE_OF_CONDUCT.md CLAUDE.md
+.github/                             # CI (testes, govulncheck, npm audit, build da imagem), release para ghcr.io, templates
 ```
 
 ## Concorrência e limites
@@ -81,8 +83,8 @@ Dockerfile docker-compose.yml .env.example Makefile README.md CLAUDE.md
 |---|---|---|
 | Logins simultâneos (Argon2 usa 64 MiB cada) | 4 | `loginSem` |
 | Tentativas de login por IP | 10/min, burst 10 | `loginIP` |
-| Tentativas de login por usuário | 5/min, burst 5 | `loginUser` |
-| Troca de senha (senha atual errada) | mesmos limites e semáforo do login | `handleChangePassword` |
+| Tentativas de login por (usuário, IP) | 5/min, burst 5 | `loginUser` |
+| Troca de senha e ativação do 2FA | mesmos limites e semáforo do login | `handleChangePassword`, `handleTOTPEnable` |
 | Uploads simultâneos por usuário (PUT, lote ou chunk) | 8 | `uploadSem` → 429 |
 | Requisições públicas por IP | 120/min | `publicIP` |
 | Downloads/zips públicos simultâneos por IP | 2 | `publicDL` |
@@ -93,12 +95,13 @@ Dockerfile docker-compose.yml .env.example Makefile README.md CLAUDE.md
 | Contagem em `/api/files/info` | 200 000 entradas ou 15 s | `infoScanLimit` |
 | Tamanho de um upload chunked | 1 PiB (`uploads.MaxUploadSize`) e o espaço livre | `Service.Create` |
 | Pesquisa recursiva | 2 simultâneas por usuário; 200 000 entradas, 500 resultados ou 10 s por requisição (walk); 500 resultados (índice) | `searchSem`, `handleSearch` |
-| Senha de link público | 5 tentativas/min por link + `loginSem` | `shareUnlock` |
+| Senha de link público | 5 tentativas/min por (link, IP) + `loginSem` | `shareUnlock` |
 | Listagem paginada | até 5000 por página (`listPageMax`); a UI pede 2000 | `handleList` |
 | Lixeira | restaurar/apagar até 1000 ids por requisição | `readIDs` |
 | Zips autenticados simultâneos por usuário | 2 | `zipSem` |
 | Jobs em andamento por usuário | 4 | `startJob` |
 | Cota de disco por usuário | `users.quota` (0 = sem limite); uso em cache 30 s | `checkQuota` |
 | Bloqueio de login | 10 falhas por (usuário, IP) → 15 min dobrando até 24 h | `auth.Lockout` |
+| Profundidade de caminho | 128 segmentos endereçáveis (`vfs.MaxDepth`); varreduras param em 256 (`vfs.WalkMaxDepth`) | `vfs.Normalize`, `vfs.walk` |
 
-Sem limite (aceito, ver [10](10-roadmap.md)): zips/downloads autenticados simultâneos, jobs por usuário, cota de disco.
+Sem limite (aceito, ver [10](10-roadmap.md)): downloads simples autenticados simultâneos e tamanho da lixeira (não conta na cota).

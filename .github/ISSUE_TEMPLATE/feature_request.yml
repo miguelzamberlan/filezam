@@ -1,0 +1,23 @@
+name: Funcionalidade
+description: Sugerir uma melhoria ou funcionalidade nova (pode escrever em português ou inglês)
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Qual problema isso resolve
+      description: Descreva a situação de uso, não só a solução. "Preciso que clientes enviem arquivos para a pasta deles" diz mais do que "adicionar upload em link público".
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposta
+      description: Como você imagina que funcionaria na interface ou na API. Alternativas que considerou.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Antes de abrir
+      options:
+        - label: Conferi `docs/10-roadmap.md` (limitações conhecidas, próximos passos e ideias descartadas).
+          required: true
