@@ -4,7 +4,8 @@ Todas as mudanças relevantes do Filezam ficam registradas aqui. O formato segue
 
 ## [Não lançado]
 
-Nada ainda.
+### Adicionado
+- **Editor de texto e markdown**: corrija um `.txt`, `.md` ou arquivo de configuração direto no navegador, sem baixar e reenviar. Arquivos `.md` mostram a prévia formatada ao lado enquanto você digita. Se alguém salvar o mesmo arquivo enquanto você edita, o Filezam avisa e **não** apaga o trabalho da outra pessoa — o seu texto continua na tela para você copiar.
 
 ## [1.0.0] - 2026-09-10
 

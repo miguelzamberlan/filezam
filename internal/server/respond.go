@@ -37,6 +37,8 @@ var (
 	errBadJSON      = errorf(http.StatusBadRequest, "bad_json", "invalid JSON body")
 	errShareLocked  = errorf(http.StatusUnauthorized, "share_locked", "this link requires a password")
 	errTOTPRequired = errorf(http.StatusForbidden, "totp_required", "two-factor authentication must be set up first")
+	// errModified: alguém gravou o arquivo enquanto ele estava aberto no editor.
+	errModified = errorf(http.StatusConflict, "modified", "the file changed since it was opened")
 )
 
 // toAPIError maps domain errors to API errors.

@@ -1613,3 +1613,48 @@ func TestUploadSessionsPerUserAndReserve(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// O editor abre um arquivo, o usuário digita por minutos e só então salva. Sem conferir o mtime,
+// quem salvasse por último apagaria em silêncio o trabalho do outro. Os mtimes são explícitos para
+// o teste não depender do relógio: a conferência tem resolução de 1 ms.
+func TestPutContentIfMtime(t *testing.T) {
+	admin, _, root := newEnv(t)
+	admin.login("admin", "admin")
+	admin.expect("POST", "/api/auth/password", map[string]string{"current": "admin", "new": "correct horse battery"}, 200)
+
+	put := func(q, body string, status int) map[string]any {
+		resp, out := admin.do("PUT", "/api/files/content?path=teamA/nota.txt&overwrite=1"+q, []byte(body), nil)
+		resp.Body.Close()
+		if resp.StatusCode != status {
+			admin.t.Fatalf("PUT %s: status %d want %d: %v", q, resp.StatusCode, status, out)
+		}
+		return out
+	}
+	const t1, t2 = 1700000000000, 1700000060000
+	put(fmt.Sprintf("&mtime=%d", t1), "primeira", 201)
+
+	// O editor abriu quando o arquivo estava em t1 e salva: passa, e o arquivo vai para t2.
+	put(fmt.Sprintf("&mtime=%d&ifMtime=%d", t2, t1), "segunda", 201)
+
+	// A outra aba, que também abriu em t1, tenta salvar depois: recusada.
+	if o := put(fmt.Sprintf("&ifMtime=%d", t1), "terceira", 409); code(o) != "modified" {
+		t.Fatalf("stale write: %v", o)
+	}
+	if b, _ := os.ReadFile(filepath.Join(root, "teamA", "nota.txt")); string(b) != "segunda" {
+		t.Fatalf("content on disk: %q", b)
+	}
+	// Recarregando, ela passa a ver t2 e consegue salvar.
+	put(fmt.Sprintf("&ifMtime=%d", t2), "terceira", 201)
+
+	// Sem o parâmetro, o comportamento de sempre: sobrescreve sem perguntar.
+	put("", "quarta", 201)
+	if b, _ := os.ReadFile(filepath.Join(root, "teamA", "nota.txt")); string(b) != "quarta" {
+		t.Fatalf("plain overwrite: %q", b)
+	}
+	// ifMtime num arquivo que já não existe → 404, e nada é recriado.
+	admin.expect("POST", "/api/files/delete", map[string]any{"paths": []string{"teamA/nota.txt"}, "permanent": true}, 200)
+	put(fmt.Sprintf("&ifMtime=%d", t2), "quinta", 404)
+	if _, err := os.Stat(filepath.Join(root, "teamA", "nota.txt")); !os.IsNotExist(err) {
+		t.Fatalf("file recreated by a stale write: %v", err)
+	}
+}

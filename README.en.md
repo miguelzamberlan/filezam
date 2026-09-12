@@ -39,6 +39,7 @@ It is a personal, free and open-source project. It fits home servers, small offi
 - **Trash** with configurable retention and restore to the original place; `Shift+Del` deletes permanently.
 - **Previews** for images, video, audio, PDF, text and rendered Markdown.
 - **Serious uploads**: multi-GB files in parallel resumable chunks, whole folders by drag and drop, thousands of small files batched, all with a progress panel, pause and retry.
+- **Built-in editor**: edit text, markdown and config files in the browser, with a live preview for `.md` and protection against two people overwriting each other.
 - **Public links**: share a folder or a file read-only with an expiry, optional password, access count and instant revocation.
 - **Two-factor authentication** (TOTP) with recovery codes and "trust this device for 30 days"; optionally mandatory for admins.
 - **Administration**: users with disk quotas and 2FA reset, audit log, progressive brute-force lockout, job history, Prometheus metrics.

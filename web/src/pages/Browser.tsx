@@ -15,13 +15,14 @@ import FileList, { DRAG_MIME, setDragging } from '../components/FileList'
 import Breadcrumb from '../components/Breadcrumb'
 import ContextMenu, { type MenuItem } from '../components/ContextMenu'
 import Preview, { previewKind } from '../components/Preview'
+import Editor, { canEdit } from '../components/Editor'
 import ShareDialog from '../components/ShareDialog'
 import InfoDialog from '../components/InfoDialog'
 import { dialogs, toast } from '../components/dialogs'
 import { useUploads } from '../components/UploadPanel'
 import { MenuButton } from '../components/Shell'
 import {
-  IArrowUp, ICopy, IDownload, IEdit, IFolderPlus, IGrid, IList, IPaste, IRefresh, IScissors, IShare, IStar, ITrash, IUpload, ISpinner, IEye, IInfo, ISearch, IZoomIn, IZoomOut, IMore, IClose,
+  IArrowUp, ICopy, IDownload, IEdit, IText, IFolderPlus, IGrid, IList, IPaste, IRefresh, IScissors, IShare, IStar, ITrash, IUpload, ISpinner, IEye, IInfo, ISearch, IZoomIn, IZoomOut, IMore, IClose,
 } from '../components/Icons'
 
 function triggerDownload(url: string) {
@@ -52,6 +53,8 @@ export default function Browser() {
   const [preview, setPreview] = useState<number | null>(null)
   const [share, setShare] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
+  const [editing, setEditing] = useState<Entry | null>(null)
+  const maxText = cfg?.previewMaxText ?? 1 << 20
   const [dragOver, setDragOver] = useState(false)
   const [dragOverName, setDragOverName] = useState<string | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
@@ -313,7 +316,7 @@ export default function Browser() {
 
   // ---- keyboard ----
   const onKeyDown = (ev: React.KeyboardEvent) => {
-    if (menu || preview !== null || share || info !== null) return
+    if (menu || preview !== null || share || info !== null || editing) return
     const tag = (ev.target as HTMLElement).tagName
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
     const mod = ev.ctrlKey || ev.metaKey
@@ -415,6 +418,7 @@ export default function Browser() {
     const items: MenuItem[] = [
       ...(one ? [header] : []),
       { label: one?.type === 'dir' ? S.open : previewKind(one!) ? S.preview : S.download, icon: <IEye size={16} />, onClick: () => one && open(one), disabled: !one, shortcut: 'Enter' },
+      { label: S.edit, icon: <IText size={16} />, onClick: () => one && setEditing(one), disabled: !one || !canEdit(one, maxText), shortcut: 'F4' },
     ]
     if (one?.type === 'dir') items.push({ label: S.paste, icon: <IPaste size={16} />, onClick: () => paste(join(path, one.name)), disabled: !ui.clipboard })
     items.push(
@@ -565,8 +569,18 @@ export default function Browser() {
       <input ref={dirInput} type="file" hidden {...({ webkitdirectory: '', directory: '' } as Record<string, string>)} onChange={(e) => (addFiles(collectFromFileList(e.target.files ?? []), path), (e.target.value = ''))} />
 
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu.entry)} onClose={() => setMenu(null)} />}
+      {editing && (
+        <Editor
+          path={join(path, editing.name)}
+          entry={editing}
+          maxText={maxText}
+          assetUrl={(p) => Api.contentUrl(join(path, p), true)}
+          onClose={() => setEditing(null)}
+          onSaved={() => invalidate([path])}
+        />
+      )}
       {preview !== null && entries[preview] && (
-        <Preview entries={entries} index={preview} urlFor={(e, inline) => Api.contentUrl(join(path, e.name), inline)} maxText={cfg?.previewMaxText ?? 1 << 20} assetUrl={(p) => Api.contentUrl(join(path, p), true)} onClose={() => setPreview(null)} onIndex={setPreview} />
+        <Preview entries={entries} index={preview} urlFor={(e, inline) => Api.contentUrl(join(path, e.name), inline)} maxText={maxText} assetUrl={(p) => Api.contentUrl(join(path, p), true)} onClose={() => setPreview(null)} onIndex={setPreview} onEdit={(e) => (setPreview(null), setEditing(e))} />
       )}
       {info !== null && <InfoDialog path={info} onClose={() => setInfo(null)} />}
       {share !== null && <ShareDialog path={share} name={shareName} kind={share !== path && byName.get(basename(share))?.type === 'file' ? 'file' : 'dir'} maxTtl={cfg?.shareMaxTtl ?? 30 * 86400} onClose={() => setShare(null)} onCreated={() => qc.invalidateQueries({ queryKey: ['shares'] })} />}

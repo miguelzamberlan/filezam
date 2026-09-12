@@ -357,15 +357,29 @@ func bodyReader(w http.ResponseWriter, r *http.Request, limit int64) io.Reader {
 	return &deadlineReader{r: http.MaxBytesReader(w, r.Body, limit), rc: rc, idle: 60 * time.Second}
 }
 
+// writeOpts controls how a small file is written.
+type writeOpts struct {
+	Mtime     int64 // ms; 0 = agora
+	Overwrite bool
+	// IfMtime (ms) exige que o arquivo ainda tenha esse mtime na hora de publicar. É o que o
+	// editor usa para não sobrescrever em silêncio o que outra aba (ou outra pessoa) salvou
+	// enquanto o texto estava aberto. 0 desliga a checagem, que é o caso dos uploads.
+	//
+	// A granularidade é de 1 ms: duas gravações no mesmo milissegundo são indistinguíveis. Para
+	// edição humana isso é irrelevante (o intervalo real é de segundos ou minutos), e a
+	// alternativa — expor nanossegundos — mudaria o contrato de Entry.Mtime em todo o produto.
+	IfMtime int64
+}
+
 // storeSmallFile writes body to dir/name via a temp part and finalizes it.
-func (s *Server) storeSmallFile(root *vfs.Root, dir, name string, mtime int64, overwrite bool, body io.Reader) (*vfs.Entry, error) {
+func (s *Server) storeSmallFile(root *vfs.Root, dir, name string, o writeOpts, body io.Reader) (*vfs.Entry, error) {
 	if err := vfs.ValidName(name); err != nil {
 		return nil, err
 	}
 	if err := root.MkdirAll(dir); err != nil {
 		return nil, err
 	}
-	if !overwrite {
+	if !o.Overwrite {
 		if ok, err := root.Exists(vfs.Join(dir, name)); err != nil {
 			return nil, err
 		} else if ok {
@@ -397,10 +411,22 @@ func (s *Server) storeSmallFile(root *vfs.Root, dir, name string, mtime int64, o
 		_ = root.RemovePart(dir, id)
 		return nil, vfs.MapError(err)
 	}
-	if mtime > 0 {
-		_ = root.Chtimes(vfs.Join(dir, vfs.PartName(id)), uploads.ClampMtime(mtime))
+	if o.Mtime > 0 {
+		_ = root.Chtimes(vfs.Join(dir, vfs.PartName(id)), uploads.ClampMtime(o.Mtime))
 	}
-	if err := root.Finalize(dir, id, name, overwrite); err != nil {
+	// A conferência vem imediatamente antes de publicar: a janela em que outro escritor pode
+	// entrar cai do tempo inteiro de edição para o intervalo entre estas duas chamadas.
+	if o.IfMtime > 0 {
+		cur, err := root.Stat(vfs.Join(dir, name))
+		if err != nil || cur.Mtime != o.IfMtime {
+			_ = root.RemovePart(dir, id)
+			if err != nil {
+				return nil, err
+			}
+			return nil, errModified
+		}
+	}
+	if err := root.Finalize(dir, id, name, o.Overwrite); err != nil {
 		_ = root.RemovePart(dir, id)
 		return nil, err
 	}
@@ -444,7 +470,8 @@ func (s *Server) handlePutContent(w http.ResponseWriter, r *http.Request) error 
 	if err := s.checkQuota(r.Context(), userFrom(r), incoming); err != nil {
 		return err
 	}
-	e, err := s.storeSmallFile(root, vfs.Dir(p), vfs.Base(p), mtime, queryBool(r, "overwrite"), bodyReader(w, r, s.cfg.ChunkSize))
+	ifMtime, _ := strconv.ParseInt(r.URL.Query().Get("ifMtime"), 10, 64)
+	e, err := s.storeSmallFile(root, vfs.Dir(p), vfs.Base(p), writeOpts{Mtime: mtime, Overwrite: queryBool(r, "overwrite"), IfMtime: ifMtime}, bodyReader(w, r, s.cfg.ChunkSize))
 	if err != nil {
 		return err
 	}
@@ -535,7 +562,7 @@ func (s *Server) handleBatch(w http.ResponseWriter, r *http.Request) error {
 			continue
 		}
 		full := vfs.Join(dir, rel)
-		e, err := s.storeSmallFile(root, vfs.Dir(full), vfs.Base(full), spec.Mtime, overwrite, part)
+		e, err := s.storeSmallFile(root, vfs.Dir(full), vfs.Base(full), writeOpts{Mtime: spec.Mtime, Overwrite: overwrite}, part)
 		if err != nil {
 			ae := toAPIError(err)
 			results[idx].Code, results[idx].Error = ae.Code, ae.Message

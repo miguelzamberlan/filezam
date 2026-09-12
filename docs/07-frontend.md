@@ -25,6 +25,7 @@ web/src/
                       Preview, Markdown (lazy), ShareDialog, InfoDialog (propriedades), SettingsDialog, DiskBar,
                       UploadPanel, JobToasts, dialogs (prompt/confirm/conflict/toast), Icons
   pages/              Login, ChangePassword, Browser, Shares, AdminUsers, AdminAudit, PublicShare
+  components/Editor.tsx   Editor de texto e markdown (fora do Preview, ver abaixo)
 ```
 
 ## Rotas
@@ -93,6 +94,24 @@ Estado na URL (`?path=&q=`), consulta `['search', path, q]` (staleTime 30 s). Mo
 ## DiskBar e cota
 
 `DiskBar` mostra a cota do usuário (`quota`/`quotaUsed` de `/api/files/disk`) quando existe, senão o disco do escopo. No formulário de usuário o admin informa a cota em GB (convertida para bytes; vazio = sem limite). `quota_exceeded` (507) é traduzido como os demais códigos.
+
+## Editor (`components/Editor.tsx`)
+
+Edita os mesmos tipos de texto que o preview mostra, até `previewMaxText` (1 MiB) — acima disso a
+opção fica desabilitada, porque salvar um texto truncado destruiria o arquivo. Para `.md`, prévia
+ao lado reusando o `Markdown` (o mesmo chunk lazy do preview); em tela estreita, alterna.
+
+**Vive fora do `Preview` de propósito.** O `Preview` registra `keydown` em *capture* no `window`
+para navegar entre arquivos com as setas e fechar com `Escape`; dentro dele, digitar num `textarea`
+seria impossível. O `Browser` também trata `editing` como os outros modais no guard do `onKeyDown`.
+
+Abre por: **Editar** no menu de contexto (`F4`), botão no cabeçalho do preview de texto, ou `F4` na
+listagem. Não aparece no `PublicShare`, que é somente leitura.
+
+Ao salvar manda o `mtime` que leu ao abrir (`ifMtime`); se o servidor responder 409 `modified`, o
+texto digitado **permanece na tela** e o usuário é avisado de que alguém salvou antes — nada é
+descartado automaticamente. `dialogs.confirm` ao fechar sujo, e `beforeunload` enquanto houver
+alteração pendente.
 
 ## Página Trash (`pages/Trash.tsx`) e PublicShare
 

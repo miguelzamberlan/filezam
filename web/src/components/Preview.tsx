@@ -41,11 +41,13 @@ export interface PreviewProps {
   maxText: number
   /** URL inline de um caminho relativo à pasta (imagens/links relativos do Markdown); omitido quando irmãos não são alcançáveis. */
   assetUrl?: (relPath: string) => string
+  /** Abre o arquivo no editor; ausente onde não se edita (link público). */
+  onEdit?: (e: Entry) => void
   onClose: () => void
   onIndex: (i: number) => void
 }
 
-export default function Preview({ entries, index, urlFor, maxText, assetUrl, onClose, onIndex }: PreviewProps) {
+export default function Preview({ entries, index, urlFor, maxText, assetUrl, onEdit, onClose, onIndex }: PreviewProps) {
   const e = entries[index]
   const kind = previewKind(e)
   const isMd = kind === 'text' && MD.has(extOf(e.name))
@@ -95,6 +97,9 @@ export default function Preview({ entries, index, urlFor, maxText, assetUrl, onC
           <button className="btn-ghost !text-white hover:!bg-white/20" onClick={() => setFormatted(!formatted)}>
             {formatted ? S.previewPlain : S.previewFormatted}
           </button>
+        )}
+        {onEdit && kind === 'text' && !truncated && (
+          <button className="btn-ghost !text-white hover:!bg-white/20" onClick={() => onEdit(e)}>{S.edit}</button>
         )}
         <div className="text-xs text-neutral-300">{formatBytes(e.size)} · {formatDate(e.mtime)}</div>
         <a href={urlFor(e, false)} className="btn-ghost !text-white hover:!bg-white/20" download><IDownload size={16} /> {S.download}</a>

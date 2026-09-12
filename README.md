@@ -56,6 +56,7 @@ Três prioridades guiam cada decisão, nesta ordem:
 - **Lixeira** com retenção configurável e restauração ao lugar original. `Shift+Del` apaga de vez.
 - **Visualização** de imagens, vídeo, áudio, PDF, texto e Markdown formatado sem sair da página.
 - **Uploads sérios**: arquivos de vários GB em blocos paralelos com retomada, pastas inteiras por arrastar e soltar, milhares de arquivos pequenos em lote, tudo com painel de progresso, pausa e repetição de falhas.
+- **Editor embutido**: edite arquivos de texto, markdown e configuração pelo navegador, com prévia formatada para `.md` e proteção contra duas pessoas salvarem por cima uma da outra.
 - **Links públicos**: compartilhe uma pasta ou um arquivo por link somente leitura com prazo de validade, senha opcional, contagem de acessos e revogação imediata.
 - **Verificação em duas etapas** (TOTP) com códigos de recuperação e "confiar neste dispositivo por 30 dias"; opcionalmente obrigatória para administradores.
 - **Administração**: usuários com cota de disco e redefinição de 2FA, auditoria de logins e alterações, bloqueio progressivo contra força bruta, histórico de operações e métricas Prometheus.

@@ -84,6 +84,22 @@ export const Api = {
   info: (path: string) => api<EntryInfo>('GET', '/api/files/info' + q({ path })),
   disk: () => api<DiskUsage>('GET', '/api/files/disk'),
   search: (path: string, query: string, limit?: number) => api<SearchResult>('GET', '/api/files/search' + q({ path, q: query, limit })),
+  // putContent grava texto pequeno (editor). Não passa pelo helper api(): ele serializa o corpo
+  // como JSON e fixa o Content-Type. ifMtime faz o servidor recusar se o arquivo mudou desde que
+  // foi aberto, em vez de sobrescrever em silêncio.
+  putContent: async (path: string, text: string, ifMtime?: number) => {
+    const res = await fetch('/api/files/content' + q({ path, overwrite: 1, ifMtime }), {
+      method: 'PUT',
+      headers: { 'X-Filezam': '1', 'Content-Type': 'application/octet-stream' },
+      credentials: 'same-origin',
+      body: new Blob([text]),
+    }).catch((e) => {
+      throw new ApiError(0, 'network', String(e))
+    })
+    if (!res.ok) throw await parseError(res)
+    return (await res.json()) as { path: string; entry: Entry }
+  },
+
   contentUrl: (path: string, inline = false) => '/api/files/content' + q({ path, inline: inline ? 1 : undefined }),
   zipUrl: (paths: string[], name?: string) => {
     const sp = new URLSearchParams()
