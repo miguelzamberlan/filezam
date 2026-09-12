@@ -8,8 +8,11 @@ export class ApiError extends Error {
   }
 }
 
+// 408/'incomplete_body' entram aqui porque são falhas de rede no meio da transferência: tentar de
+// novo é exatamente o certo, e antes disso caíam como erro definitivo na tela.
 export const isRetryable = (e: unknown) =>
-  e instanceof ApiError && (e.status === 429 || e.status === 502 || e.status === 503 || e.status === 504 || e.status === 0)
+  e instanceof ApiError &&
+  (e.status === 429 || e.status === 408 || e.status === 502 || e.status === 503 || e.status === 504 || e.status === 0 || e.code === 'incomplete_body')
 
 let onUnauthorized: (() => void) | null = null
 export function setUnauthorizedHandler(fn: () => void) {

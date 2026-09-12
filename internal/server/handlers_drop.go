@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -162,56 +163,75 @@ func (s *Server) dropOwner(ctx context.Context, sh *store.Share) (*store.User, e
 	return u, nil
 }
 
-// admit reserves room for one incoming file on the link: quota, per-file cap and file count are
-// checked and the name is resolved under the link's lock, so two visitors never both pass.
-// Devolve o nome final já livre no disco.
-func (s *Server) admit(ctx context.Context, root *vfs.Root, sh *store.Share, sender, name string, size int64) (string, func(), error) {
+// admit checks whether one more file fits on the link: cota, teto por arquivo, contagem e
+// sessões abertas. O mutex do link cobre só estas contas, que são rápidas — nunca a transferência
+// dos bytes, senão dois visitantes do mesmo link ficariam em fila e o segundo esperaria a subida
+// inteira do primeiro.
+//
+// O nome não é escolhido aqui: ele é resolvido na publicação, que também é rápida e acontece sob
+// o mesmo mutex. Entre uma coisa e outra, a cota pode ser ultrapassada pelo que está em voo (no
+// máximo os envios simultâneos permitidos por IP, cada um limitado ao tamanho de um bloco).
+func (s *Server) admit(ctx context.Context, sh *store.Share, sender, name string, size int64) error {
 	if err := vfs.ValidName(name); err != nil {
-		return "", nil, err
+		return err
 	}
 	if sh.MaxFileBytes > 0 && size > sh.MaxFileBytes {
-		return "", nil, errDropFileLimit
+		return errDropFileLimit
 	}
 	owner, err := s.dropOwner(ctx, sh)
 	if err != nil {
-		return "", nil, err
+		return err
 	}
 	unlock := s.dropMu.lock(sh.ID)
+	defer unlock()
 	usage, err := s.db.ShareUsage(ctx, sh.ID)
 	if err != nil {
-		unlock()
-		return "", nil, err
+		return err
 	}
 	if sh.MaxFiles > 0 && usage.Count >= sh.MaxFiles {
-		unlock()
-		return "", nil, errDropCount
+		return errDropCount
 	}
 	if sh.QuotaBytes > 0 && usage.Bytes+size > sh.QuotaBytes {
-		unlock()
-		return "", nil, errDropFull
+		return errDropFull
 	}
 	// A cota do dono também vale: o link não pode servir de desvio para enchê-la. Ela mede o
 	// que já foi finalizado, não o que está reservado — quem limita a reserva é a cota do link.
 	if err := s.checkQuota(ctx, owner, size); err != nil {
-		unlock()
 		if isQuotaErr(err) {
-			return "", nil, errDropFull // nunca contar ao visitante como anda a conta do dono
+			return errDropFull // nunca contar ao visitante como anda a conta do dono
 		}
-		return "", nil, err
+		return err
 	}
 	if n, err := s.db.CountOpenShareUploads(ctx, sh.ID, sender); err != nil {
-		unlock()
-		return "", nil, err
+		return err
 	} else if n >= dropOpenPerSender {
-		unlock()
-		return "", nil, errDropCount
+		return errDropCount
 	}
-	final, err := s.freeName(ctx, root, sh, name)
-	if err != nil {
-		unlock()
-		return "", nil, err
+	return nil
+}
+
+// publish gives the part file its final name. Roda sob o mutex do link e só faz metadados, então
+// não segura ninguém: a colisão com um nome que apareceu no meio do caminho é resolvida aqui,
+// tentando o próximo nome livre.
+func (s *Server) publish(ctx context.Context, root *vfs.Root, sh *store.Share, id, want string) (string, error) {
+	unlock := s.dropMu.lock(sh.ID)
+	defer unlock()
+	name := want
+	for i := 0; i < 5; i++ {
+		free, err := s.freeName(ctx, root, sh, name)
+		if err != nil {
+			return "", err
+		}
+		err = root.Finalize("", id, free, false)
+		if err == nil {
+			return free, nil
+		}
+		if !errors.Is(err, vfs.ErrExists) {
+			return "", err
+		}
+		name = free
 	}
-	return final, unlock, nil
+	return "", vfs.ErrExists
 }
 
 // freeName picks a name nobody is using yet in the drop folder — nem no disco, nem reservado
@@ -278,24 +298,62 @@ func (s *Server) handleDropPut(w http.ResponseWriter, r *http.Request) error {
 	if incoming < 0 {
 		incoming = s.cfg.ChunkSize
 	}
-	final, unlock, err := s.admit(r.Context(), root, sh, sender, name, incoming)
-	if err != nil {
+	if err := s.admit(r.Context(), sh, sender, name, incoming); err != nil {
 		return err
 	}
-	// O mutex do link só é solto depois de gravar: entre reservar o nome e finalizar não pode
-	// haver janela em que outro visitante pegue o mesmo nome. Isso serializa os envios pequenos
-	// de um mesmo link, o que é aceitável (são no máximo chunkSize) e não afeta os grandes, que
-	// soltam o mutex assim que a sessão é criada.
 	mtime, _ := strconv.ParseInt(r.URL.Query().Get("mtime"), 10, 64)
-	e, err := s.storeSmallFile(root, "", final, writeOpts{Mtime: mtime}, bodyReader(w, r, s.cfg.ChunkSize))
-	unlock()
+	final, size, err := s.storeDropFile(r.Context(), root, sh, name, mtime, bodyReader(w, r, s.cfg.ChunkSize))
 	if err != nil {
 		return err
 	}
-	s.usageAdd(sh.CreatedBy, e.Size)
-	s.recordDrop(r, sh, sender, final, name, e.Size)
-	writeJSON(w, r, 201, map[string]any{"name": name, "size": e.Size})
+	s.usageAdd(sh.CreatedBy, size)
+	s.recordDrop(r, sh, sender, final, name, size)
+	writeJSON(w, r, 201, map[string]any{"name": name, "size": size})
 	return nil
+}
+
+// storeDropFile receives one file and publishes it under a free name.
+//
+// A transferência acontece **fora** do mutex do link: ela dura o tempo da rede do visitante, e
+// segurar o mutex ali fazia o segundo envio do mesmo link esperar a subida inteira do primeiro —
+// o suficiente para estourar o tempo limite de um proxy e virar erro na tela de quem enviou.
+// O nome só é decidido na publicação, que é uma operação de metadados.
+func (s *Server) storeDropFile(ctx context.Context, root *vfs.Root, sh *store.Share, want string, mtime int64, body io.Reader) (string, int64, error) {
+	id, err := auth.NewID(8)
+	if err != nil {
+		return "", 0, err
+	}
+	f, err := root.CreatePart("", id, 0)
+	if err != nil {
+		return "", 0, err
+	}
+	fail := func(err error) (string, int64, error) {
+		f.Close()
+		_ = root.RemovePart("", id)
+		return "", 0, vfs.MapError(err)
+	}
+	n, err := io.Copy(f, body)
+	if err != nil {
+		return fail(err)
+	}
+	if s.cfg.Fsync {
+		if err := f.Sync(); err != nil {
+			return fail(err)
+		}
+	}
+	if err := f.Close(); err != nil {
+		_ = root.RemovePart("", id)
+		return "", 0, vfs.MapError(err)
+	}
+	if mtime > 0 {
+		_ = root.Chtimes(vfs.Join("", vfs.PartName(id)), uploads.ClampMtime(mtime))
+	}
+	final, err := s.publish(ctx, root, sh, id, want)
+	if err != nil {
+		_ = root.RemovePart("", id)
+		return "", 0, err
+	}
+	return final, n, nil
 }
 
 // handleDropUploadCreate opens a resumable session for a large file.
@@ -313,8 +371,15 @@ func (s *Server) handleDropUploadCreate(w http.ResponseWriter, r *http.Request) 
 	if err := readJSON(r, &in); err != nil {
 		return err
 	}
-	final, unlock, err := s.admit(r.Context(), root, sh, sender, in.Name, in.Size)
+	if err := s.admit(r.Context(), sh, sender, in.Name, in.Size); err != nil {
+		return err
+	}
+	// A sessão precisa de um nome livre já na criação (o índice de destino é por nome), mas isso
+	// é metadado e sai rápido; os blocos chegam depois, sem segurar ninguém.
+	unlock := s.dropMu.lock(sh.ID)
+	final, err := s.freeName(r.Context(), root, sh, in.Name)
 	if err != nil {
+		unlock()
 		return err
 	}
 	info, err := s.uploads.Create(r.Context(), root, uploads.CreateOpts{Scope: sh.Path, Name: final, SentName: in.Name, UserID: sh.CreatedBy, ShareID: sh.ID, Sender: sender, Size: in.Size, Mtime: in.Mtime})

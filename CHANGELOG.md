@@ -13,6 +13,8 @@ Todas as mudanças relevantes do Filezam ficam registradas aqui. O formato segue
 - **Administração → Configurações do sistema**: liga e desliga os dois recursos para todos os usuários e define os tetos dos links de recebimento (cota, validade, tamanho por arquivo, número de arquivos, links por usuário). O link de recebimento vem **desligado** por padrão.
 
 ### Corrigido
+- No link de recebimento, **um envio lento prendia os outros**: cada arquivo esperava o anterior terminar de subir por inteiro, o que em conexão doméstica e atrás de proxy estourava o tempo limite e aparecia como "erro interno no servidor". A fila agora só existe para as contas de cota e para escolher o nome, que levam milissegundos.
+- Envio interrompido por rede deixou de aparecer como "erro interno no servidor": agora diz que a transferência parou no meio, e o cliente tenta de novo sozinho.
 - Clicar com o botão direito com **vários itens selecionados** deixava a tela em branco. Vinha da 1.0.0.
 - No link de recebimento, os primeiros arquivos enviados podiam **não aparecer na lista** de quem enviou. A identidade do visitante só era criada na primeira gravação, e dois envios simultâneos — o comportamento normal — geravam duas identidades, perdendo o rastro de uma delas.
 - Ao enviar uma **pasta**, a listagem aberta não mostrava o conteúdo novo até recarregar a página: o aviso de mudança ia só para a subpasta de destino, não para a pasta que estava na tela.

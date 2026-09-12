@@ -389,6 +389,8 @@ export const en: Strings = {
     modified: 'The file changed on the server since it was opened.',
     bad_archive: 'This file is not a .zip that Filezam can open.',
     archive_too_large: 'Archive too large to extract.',
+    timeout: 'The transfer stalled and was dropped. Try again.',
+    incomplete_body: 'The transfer ended before all bytes arrived. Try again.',
     internal: 'Internal server error',
     network: 'Network failure',
   } as Record<string, string>,

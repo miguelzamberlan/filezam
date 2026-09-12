@@ -225,11 +225,12 @@ Regras de `username`: 2–64 caracteres de `A-Z a-z 0-9 . _ - @`, único sem dis
 
 | HTTP | code | Quando |
 |---|---|---|
-| 400 | `bad_json`, `invalid_path` (inclui tamanho de upload fora de `[0, 1 PiB]` e nomes `.filezam-*`), `invalid_name` (inclui caracteres de controle em nomes novos), `bad_query`, `nested`, `root_op`, `bad_index`, `bad_length`, `bad_conflict`, `bad_expiry`, `bad_id`, `bad_meta`, `bad_multipart`, `no_paths`, `too_many`, `too_many_files`, `weak_password`, `bad_archive`, `invalid_slug`, `password_required`, `bad_mode`, `invalid_username`, `invalid_role`, `invalid_scope`, `bad_quota`, `unsupported` | Entrada inválida |
+| 400 | `bad_json`, `incomplete_body` (a transferência acabou antes dos bytes prometidos), `invalid_path` (inclui tamanho de upload fora de `[0, 1 PiB]` e nomes `.filezam-*`), `invalid_name` (inclui caracteres de controle em nomes novos), `bad_query`, `nested`, `root_op`, `bad_index`, `bad_length`, `bad_conflict`, `bad_expiry`, `bad_id`, `bad_meta`, `bad_multipart`, `no_paths`, `too_many`, `too_many_files`, `weak_password`, `bad_archive`, `invalid_slug`, `password_required`, `bad_mode`, `invalid_username`, `invalid_role`, `invalid_scope`, `bad_quota`, `unsupported` | Entrada inválida |
 | 401 | `unauthorized`, `bad_credentials`, `share_locked`, `bad_totp`, `totp_expired` | Sem sessão / credenciais erradas / link com senha pendente / código 2FA inválido ou etapa expirada |
 | 403 | `forbidden`, `csrf`, `feature_disabled`, `password_change_required`, `totp_required`, `scope_unavailable`, `fs_permission` | Sem permissão |
 | 404 | `not_found`, `no_thumb` | Caminho, job, share, usuário; `no_thumb` não é erro para o usuário, é o sinal para usar o ícone |
 | 409 | `exists`, `is_dir`, `not_dir`, `not_empty`, `modified`, `slug_taken`, `drop_count_exceeded`, `drop_links_exceeded`, `conflict`, `cross_device`, `upload_in_progress`, `incomplete`, `last_admin`, `self`, `totp_setup_expired`, `totp_not_enabled`, `totp_already_enabled` | Conflito de estado |
+| 408 | `timeout` | A transferência estancou e foi descartada (rede do cliente, ou proxy) |
 | 411 | `length_required` | Chunk sem `Content-Length` |
 | 413 | `too_large`, `upload_reserve_exceeded`, `drop_file_limit`, `archive_too_large` | Corpo maior que o limite / uploads inacabados do usuário já reservam o teto de espaço / arquivo acima do teto por arquivo do link de envio |
 | 507 | `no_space`, `quota_exceeded`, `drop_full` | Disco cheio / cota do usuário estourada / link de envio sem espaço (a cota do link ou a do dono: um visitante anônimo não distingue as duas) |

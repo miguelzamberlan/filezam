@@ -387,6 +387,8 @@ export const ptBR = {
     modified: 'O arquivo mudou no servidor desde que foi aberto.',
     bad_archive: 'Este arquivo não é um .zip que o Filezam consiga abrir.',
     archive_too_large: 'Arquivo compactado grande demais para extrair.',
+    timeout: 'O envio parou no meio do caminho e foi descartado. Tente de novo.',
+    incomplete_body: 'O envio terminou antes de todos os bytes chegarem. Tente de novo.',
     internal: 'Erro interno no servidor',
     network: 'Falha de rede',
   } as Record<string, string>,

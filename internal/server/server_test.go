@@ -2483,3 +2483,58 @@ func TestDropSenderSurvivesParallelFirstUpload(t *testing.T) {
 		t.Fatalf("want 4 uploads listed for the sender, got %d", len(mine))
 	}
 }
+
+// slowReader entrega o corpo devagar, como uma conexão doméstica enviando para o servidor.
+type slowReader struct {
+	data  []byte
+	step  int
+	pause time.Duration
+}
+
+func (s *slowReader) Read(p []byte) (int, error) {
+	if len(s.data) == 0 {
+		return 0, io.EOF
+	}
+	time.Sleep(s.pause)
+	n := min(s.step, min(len(p), len(s.data)))
+	copy(p, s.data[:n])
+	s.data = s.data[n:]
+	return n, nil
+}
+
+// Um envio lento não pode bloquear os outros do mesmo link. O mutex existe para as contas de
+// cota e para escolher o nome — se ele cobrisse a transferência, o segundo visitante esperaria a
+// subida inteira do primeiro, tempo suficiente para um proxy desistir e virar erro na tela.
+func TestDropSlowUploadDoesNotBlockOthers(t *testing.T) {
+	admin, _, _ := dropEnv(t)
+	tok, _ := mkDrop(admin, "teamA/recebidos", 1<<20, 0, 0)
+	pub := newPublic(t, admin.srv)
+	pub.expect("GET", "/api/public/"+tok, nil, 200)
+
+	// O lento leva ~1,5 s entregando o corpo aos poucos.
+	slow := &slowReader{data: make([]byte, 15000), step: 1000, pause: 100 * time.Millisecond}
+	done := make(chan time.Duration, 1)
+	go func() {
+		start := time.Now()
+		resp, _ := pub.do("PUT", "/api/public/"+tok+"/content?name=lento.bin", io.Reader(slow), nil)
+		resp.Body.Close()
+		done <- time.Since(start)
+	}()
+	time.Sleep(300 * time.Millisecond) // o lento já está no meio da transferência
+
+	start := time.Now()
+	resp, out := send(pub, tok, "rapido.bin", []byte("pronto"))
+	fast := time.Since(start)
+	resp.Body.Close()
+	if resp.StatusCode != 201 {
+		t.Fatalf("fast upload: %d %v", resp.StatusCode, out)
+	}
+	slowTook := <-done
+	if slowTook < 800*time.Millisecond {
+		t.Skipf("o envio lento terminou rápido demais (%v) para o teste valer", slowTook)
+	}
+	// O rápido não pode ter esperado o lento: sem a separação, os dois terminariam juntos.
+	if fast > slowTook/2 {
+		t.Fatalf("envio rápido bloqueado pelo lento: rápido %v, lento %v", fast, slowTook)
+	}
+}

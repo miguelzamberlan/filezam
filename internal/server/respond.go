@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/miguelzamberlan/filezam/internal/store"
@@ -95,6 +96,12 @@ func toAPIError(err error) *apiError {
 		return errorf(http.StatusConflict, "conflict", "already exists")
 	case errors.Is(err, context.Canceled):
 		return errorf(499, "cancelled", "request cancelled")
+	// Um envio que estanca ou é cortado no meio é condição de rede, não defeito do servidor:
+	// mapeado à parte para o visitante ver o que houve e para o log não encher de "internal".
+	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, os.ErrDeadlineExceeded):
+		return errorf(http.StatusRequestTimeout, "timeout", "the transfer stalled and was dropped")
+	case errors.Is(err, io.ErrUnexpectedEOF):
+		return errorf(http.StatusBadRequest, "incomplete_body", "the transfer ended before all bytes arrived")
 	case errors.Is(err, http.ErrNotSupported):
 		return errorf(http.StatusBadRequest, "unsupported", "%s", err.Error())
 	}
