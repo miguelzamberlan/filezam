@@ -12,6 +12,7 @@ import (
 	"io"
 	"log/slog"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
@@ -2536,5 +2537,28 @@ func TestDropSlowUploadDoesNotBlockOthers(t *testing.T) {
 	// O rápido não pode ter esperado o lento: sem a separação, os dois terminariam juntos.
 	if fast > slowTook/2 {
 		t.Fatalf("envio rápido bloqueado pelo lento: rápido %v, lento %v", fast, slowTook)
+	}
+}
+
+// Uma transferência que estanca não é defeito do servidor. O erro que chega aqui é o mesmo que
+// apareceu em produção — "read tcp ...: i/o timeout", do prazo de leitura do corpo — e ele caía
+// como 500 "erro interno", assustando quem enviava e poluindo o log de erros do operador.
+func TestStalledTransferIsNotInternalError(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		code string
+		want int
+	}{
+		{"prazo de leitura estourado", &net.OpError{Op: "read", Net: "tcp", Err: os.ErrDeadlineExceeded}, "timeout", 408},
+		{"contexto expirado", context.DeadlineExceeded, "timeout", 408},
+		{"corpo cortado no meio", io.ErrUnexpectedEOF, "incomplete_body", 400},
+		{"cliente desistiu", context.Canceled, "cancelled", 499},
+	}
+	for _, c := range cases {
+		ae := toAPIError(c.err)
+		if ae.Code != c.code || ae.Status != c.want {
+			t.Errorf("%s: virou %d %q, esperado %d %q", c.name, ae.Status, ae.Code, c.want, c.code)
+		}
 	}
 }
