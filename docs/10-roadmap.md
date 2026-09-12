@@ -15,8 +15,8 @@
 - **Retomada de upload só soltando o mesmo arquivo de novo** (até 24 h): o navegador não guarda o `File`, e a retomada automática foi descartada (ver Decisões).
 - **Listagem paginada só na ordem do servidor**: enquanto faltam páginas, o filtro da pasta e `Ctrl+A` só alcançam o que já foi carregado.
 - **Índice de nomes não vê mudanças externas** (Samba, SSH) até a próxima varredura completa ou um "Reconstruir índice".
-- **Miniaturas só de imagem, e só de alguns formatos**: HEIC, AVIF, RAW, PDF e vídeo exigiriam bibliotecas em C, incompatíveis com o binário estático e a imagem distroless. Links públicos também não têm miniatura, para não bater no teto de downloads simultâneos por IP.
-- **`.tar.gz` não é extraído**: só `.zip`. O tar tem uma superfície própria (arquivos esparsos, entradas puladas que o leitor descomprime para descartar, hardlinks) que precisa dos seus próprios limites e testes.
+- **Miniaturas só de imagem, e só de alguns formatos**: HEIC, AVIF, RAW, PDF e vídeo exigiriam bibliotecas em C, incompatíveis com o binário estático e a imagem distroless. Decidido não cobrir esses formatos: eles caem no ícone por tipo, que é um resultado aceitável.
+- **`.tar.gz` não é extraído**: só `.zip`, por decisão. Ver "Próximos passos".
 - **Diretório central na memória**: o `archive/zip` carrega o índice do arquivo inteiro antes de qualquer filtro; um `.zip` só de cabeçalhos amplifica o uso de RAM. Contido pelo teto de tamanho do arquivo e pelos semáforos, não eliminado.
 - **Cota do link de recebimento não é devolvida**: ela mede o total que já entrou pelo link, não o que está ocupado agora. Apagar os arquivos recebidos não libera espaço no link — o que impede o link de virar um ralo infinito, mas significa que um link muito usado precisa ser recriado.
 - **Apelido fica preso ao dono**: um endereço personalizado revogado continua reservado a quem o criou até ele liberar de propósito (ou até a conta ser excluída). É o que impede o sequestro de um endereço já divulgado, ao custo de apelidos "presos" em instalações com muita rotatividade.
@@ -61,7 +61,7 @@ Não verificado manualmente antes do lançamento: o item 15 do checklist de [09]
 ## Próximos passos sugeridos (ordem de valor)
 
 1. Avisar o dono quando chega arquivo num link de recebimento (hoje ele precisa ir olhar a pasta).
-2. Extrair `.tar.gz` além de `.zip`.
+2. **Extrair `.tar.gz` além de `.zip`.** Decidido ficar de fora da primeira versão do extrator: toda a superfície escorregadia é exclusiva do tar — são precisos **dois** limitadores de bytes em vez de um (uma entrada pulada com tamanho enorme faz o leitor descomprimir tudo só para descartar, e arquivos esparsos geram bytes que nunca passaram pelo gzip), além de hardlinks, `pax_global_header` e totais desconhecidos na barra de progresso. Entra numa versão futura, com os seus próprios limites e testes.
 3. Retomar jobs interrompidos por reinício a partir do histórico.
 4. Chaves de acesso (WebAuthn/passkeys) como alternativa ao TOTP; revogação individual de dispositivos confiáveis.
 
@@ -77,6 +77,7 @@ Lixeira com retenção, índice de nomes em SQLite, link de arquivo único e sen
 - **`btime` (`statx`) no link**: trocado pela revogação quando o app exclui/move/renomeia. Não precisa de migração e vale em qualquer sistema de arquivos para o que passa pelo app.
 - **Substituir a sessão chunked parada de outro usuário**: trocado pela sessão por (usuário, destino), em que ninguém interfere no envio alheio.
 - **Link que segue o item movido**: o link publicaria um caminho que quem o criou não escolheu.
+- **Miniaturas em links públicos**: não serão feitas. Uma grade de miniaturas dispara dezenas de requisições de uma vez e bateria no teto de 2 downloads simultâneos por IP — o mesmo problema que o preview de Markdown já teve. Aumentar esse teto para visitantes anônimos trocaria uma comodidade por uma porta de consumo de CPU sem sessão por trás. O link público continua com os ícones por tipo.
 - **tus** para uploads: exige blocos sequenciais e mais superfície; o protocolo próprio é menor e paralelo.
 - **SSE** para progresso: exige `proxy_buffering off` e conexões abertas; polling de 500 ms é invisível e à prova de proxy.
 - **Trocar a raiz pela UI**: um admin comprometido leria qualquer pasta que o container enxerga.

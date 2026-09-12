@@ -123,8 +123,10 @@ produto manda o navegador guardar. As duas coisas têm tratamento próprio:
 - **Concorrência**: no máximo 4 gerações por usuário, e a requisição **espera** por um slot (até
   20 s) em vez de receber 429. Um `<img>` que recebe erro não tenta de novo, então recusar deixaria
   o ícone congelado na tela — a mesma razão pela qual o download público espera.
-- **Só no navegador autenticado.** Links públicos não têm miniatura: o teto de 2 downloads
-  simultâneos por IP seria atingido por uma grade inteira.
+- **Só no navegador autenticado.** Links públicos não têm miniatura, por decisão registrada em
+  `docs/10-roadmap.md`: uma grade dispararia dezenas de requisições de uma vez contra o teto de 2
+  downloads simultâneos por IP, e afrouxar esse teto para visitantes anônimos abriria uma porta de
+  consumo de CPU sem sessão por trás.
 - Desligável pelo administrador, e cada usuário ainda pode desligar nas próprias preferências.
 
 ## Cabeçalhos HTTP

@@ -436,6 +436,9 @@ export default function Browser() {
         { label: S.refresh, icon: <IRefresh size={16} />, onClick: refresh },
       ]
     }
+    // Abrir/Visualizar cai em "Baixar" quando o arquivo não tem pré-visualização; nesse caso o
+    // item de download logo abaixo seria o mesmo rótulo duas vezes seguidas.
+    const opensAsDownload = !!one && one.type === 'file' && !previewKind(one)
     const items: MenuItem[] = [
       ...(one ? [header] : []),
       { label: one?.type === 'dir' ? S.open : previewKind(one!) ? S.preview : S.download, icon: <IEye size={16} />, onClick: () => one && open(one), disabled: !one, shortcut: 'Enter' },
@@ -443,7 +446,9 @@ export default function Browser() {
     ]
     if (one?.type === 'dir') items.push({ label: S.paste, icon: <IPaste size={16} />, onClick: () => paste(join(path, one.name)), disabled: !ui.clipboard })
     items.push(
-      { label: S.download, icon: <IDownload size={16} />, onClick: () => download(sel) },
+      ...(opensAsDownload && sel.length === 1
+        ? []
+        : [{ label: sel.length > 1 ? S.downloadZip : S.download, icon: <IDownload size={16} />, onClick: () => download(sel) } as MenuItem]),
       ...(archiveOn && one?.type === 'file' && isExtractable(one.name)
         ? [{ label: S.extract, icon: <IArchive size={16} />, onClick: () => extract(one) } as MenuItem]
         : []),

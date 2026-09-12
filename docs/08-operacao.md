@@ -288,6 +288,34 @@ O cache de miniaturas fica em `<DATA_DIR>/thumbs` e entra no dimensionamento do 
 configuração, não no de dados: o padrão é no máximo 2 GiB, ajustável em **Configurações do
 sistema**. Apagar a pasta é seguro a qualquer momento — o servidor regenera sob demanda.
 
+### Baixar uma pasta grande como ZIP
+
+O ZIP é montado **em transmissão**, sem passar pelo disco e sem buffer do tamanho do conteúdo: um
+download de 2 GB custa menos de 2 MB de memória no servidor, o mesmo que um de 256 MB (medido). Não
+há teto de tamanho — baixar a raiz inteira funciona, e o método é `Store` (sem compressão), então o
+custo é praticamente só o de ler o disco e mandar pela rede.
+
+Consequências práticas de ser transmitido:
+
+- A resposta vai **sem `Content-Length`** (`Transfer-Encoding: chunked`), porque o tamanho final só
+  seria conhecido no fim. O navegador mostra os bytes já baixados, mas **não o total nem o tempo
+  restante**, e a barra de progresso fica indeterminada.
+- **Não há como retomar**: o download não aceita `Range`. Cair a conexão a 90% significa recomeçar.
+- Se o cliente desiste (fecha a aba), a montagem para na hora — a escrita falha e a varredura
+  aborta. O servidor não continua lendo disco à toa.
+- Um erro no meio (arquivo removido durante a leitura, disco com problema) só pode derrubar a
+  conexão, porque o cabeçalho `200` já foi enviado. O navegador mostra um download incompleto.
+- Cada usuário pode ter **2 zips ao mesmo tempo**; o terceiro recebe 429 `busy`.
+
+**Atrás de proxy**, esse é o ponto a conferir num download de horas: o tempo limite de resposta.
+No nginx, `proxy_read_timeout` e `proxy_send_timeout`; no Traefik, `respondingTimeouts`; no
+Cloudflare Tunnel, a conexão é mantida enquanto houver bytes fluindo, mas um HD lento com uma pausa
+longa entre arquivos pode encostar no limite. O Filezam em si não impõe tempo limite de escrita.
+
+Para arquivamentos muito grandes e repetidos, **Compactar em .zip** costuma servir melhor: gera o
+arquivo no servidor em segundo plano, com progresso e cancelamento, e o download que vem depois é
+de um arquivo comum — com tamanho conhecido e retomável.
+
 ## Subcomandos do binário
 
 | Comando | Uso |

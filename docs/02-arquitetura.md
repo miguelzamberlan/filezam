@@ -115,7 +115,8 @@ README.md README.en.md CONTRIBUTING.md SECURITY.md CODE_OF_CONDUCT.md CLAUDE.md
 | Senha de link público | 5 tentativas/min por (link, IP) + `loginSem` | `shareUnlock` |
 | Listagem paginada | até 5000 por página (`listPageMax`); a UI pede 2000 | `handleList` |
 | Lixeira | restaurar/apagar até 1000 ids por requisição | `readIDs` |
-| Zips autenticados simultâneos por usuário | 2 | `zipSem` |
+| Zips autenticados simultâneos por usuário | 2 | `zipSem` → 429 `busy` |
+| Memória de um zip em transmissão | < 2 MB, independente do tamanho | `WriteZip` é streaming com método `Store` |
 | Jobs em andamento por usuário | 4 | `startJob` |
 | Cota de disco por usuário | `users.quota` (0 = sem limite); uso em cache 30 s | `checkQuota` |
 | Bloqueio de login | 10 falhas por (usuário, IP) → 15 min dobrando até 24 h | `auth.Lockout` |
