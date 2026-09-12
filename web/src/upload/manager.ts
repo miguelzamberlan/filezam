@@ -1,6 +1,6 @@
 import { Api, ApiError, isRetryable } from '../api/client'
 import type { AppConfig, Conflict, UploadSession } from '../api/types'
-import { basename, dirname, join, uniqueName } from '../lib/paths'
+import { basename, dirChain, dirname, join, uniqueName } from '../lib/paths'
 import { backoffMs, chunkRange, classify, pickBatch, type Mode } from './scheduler'
 import { xhrSend, type XhrHandle } from './xhr'
 import type { PickedFile } from './walk'
@@ -65,6 +65,7 @@ export class UploadManager {
   private cfg: AppConfig | null = null
   private conflictDefault: Conflict | null = null
   private dirTimers = new Map<string, number>()
+  private touched = new Set<string>() // pastas que mudaram nesta rodada de envios
   private lastTick = performance.now()
   private lastSent = 0
   private speed = 0
@@ -247,6 +248,7 @@ export class UploadManager {
           this.active--
           this.markDirty()
           this.pump()
+          if (this.active === 0 && !this.items.some((i) => i.state === 'queued' || i.state === 'uploading')) this.flushDirs()
         })
       }
     } finally {
@@ -440,7 +442,7 @@ export class UploadManager {
     it.state = 'done'
     it.sent = it.size
     it.session = undefined
-    this.notifyDir(join(it.destDir, dirname(it.relPath)))
+    this.notifyDir(join(it.destDir, dirname(it.relPath)), it.destDir)
     this.markDirty()
   }
 
@@ -536,12 +538,43 @@ export class UploadManager {
     this.markDirty()
   }
 
-  private notifyDir(dir: string) {
+  /**
+   * Avisa a listagem sobre um arquivo concluído em `dir`.
+   *
+   * Avisa também cada pasta ancestral até `root`, o destino escolhido no envio: mandar a pasta
+   * "viagem" para /fotos grava os arquivos em fotos/viagem, mas quem está olhando /fotos precisa
+   * ver a pasta nova aparecer. Avisar só a pasta do arquivo deixava a tela aberta desatualizada
+   * até recarregar.
+   */
+  private notifyDir(dir: string, root = '') {
+    for (const d of dirChain(dir, root)) {
+      this.touched.add(d)
+      this.scheduleNotify(d)
+    }
+  }
+
+  private scheduleNotify(dir: string) {
     if (this.dirTimers.has(dir)) return
     this.dirTimers.set(dir, window.setTimeout(() => {
       this.dirTimers.delete(dir)
       this.onDirChanged(dir)
     }, this.active > 1 ? 2000 : 300))
+  }
+
+  /**
+   * Fecho da fila: quando o último envio termina, avisa uma vez mais cada pasta tocada.
+   *
+   * Os avisos são agrupados por tempo para não invalidar a listagem a cada arquivo de um envio
+   * com milhares deles; o agrupamento pode ser atendido por uma consulta que saiu antes dos
+   * últimos arquivos gravarem, e aí a tela ficava faltando itens até alguém recarregar.
+   */
+  private flushDirs() {
+    for (const [dir, t] of this.dirTimers) {
+      clearTimeout(t)
+      this.dirTimers.delete(dir)
+    }
+    for (const dir of this.touched) this.onDirChanged(dir)
+    this.touched.clear()
   }
 }
 

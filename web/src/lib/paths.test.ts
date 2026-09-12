@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { basename, dirname, encodePath, decodePath, join, resolveRelative, uniqueName } from './paths'
+import { basename, decodePath, dirChain, dirname, encodePath, join, resolveRelative, uniqueName } from './paths'
 
 describe('paths', () => {
   it('resolveRelative', () => {
@@ -29,5 +29,24 @@ describe('paths', () => {
     expect(uniqueName('a.txt', new Set(['a.txt']))).toBe('a (1).txt')
     expect(uniqueName('a.txt', new Set(['a.txt', 'a (1).txt']))).toBe('a (2).txt')
     expect(uniqueName('noext', new Set(['noext']))).toBe('noext (1)')
+  })
+})
+
+// Enviar uma pasta grava os arquivos numa subpasta, mas quem está olhando a pasta de destino
+// precisa ver a nova aparecer. Avisar só a pasta do arquivo deixava a tela desatualizada.
+describe('dirChain', () => {
+  it('lists the folder and every ancestor up to the destination', () => {
+    expect(dirChain('fotos/viagem/dia1', 'fotos')).toEqual(['fotos/viagem/dia1', 'fotos/viagem', 'fotos'])
+    expect(dirChain('fotos', 'fotos')).toEqual(['fotos'])
+  })
+
+  it('walks to the root when the destination is the root', () => {
+    expect(dirChain('a/b/c', '')).toEqual(['a/b/c', 'a/b', 'a', ''])
+    expect(dirChain('', '')).toEqual([''])
+  })
+
+  it('stops at the root even when the destination is not an ancestor', () => {
+    // Não trava nem cresce sem limite se as duas pontas não se encontrarem.
+    expect(dirChain('a/b', 'outro')).toEqual(['a/b', 'a', ''])
   })
 })

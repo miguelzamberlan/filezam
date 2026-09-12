@@ -23,8 +23,10 @@ const canEmbedPdf =
 
 export type PreviewKind = 'image' | 'video' | 'audio' | 'pdf' | 'text' | null
 
-export function previewKind(e: Entry): PreviewKind {
-  if (e.type !== 'file') return null
+// Aceita null de propósito: os chamadores decidem o rótulo do menu a partir da seleção, que pode
+// não ter item único. Um crash aqui derruba a página inteira.
+export function previewKind(e: Entry | null | undefined): PreviewKind {
+  if (!e || e.type !== 'file') return null
   const x = extOf(e.name)
   if (IMG.has(x)) return 'image'
   if (VID.has(x)) return 'video'

@@ -124,12 +124,12 @@ export default function ShareDialog({ path, name, kind = 'dir', maxTtl, onClose,
                 maxLength={63}
                 placeholder="ex: orcamento-2026"
               />
-              <p className="mt-1 text-xs text-neutral-500">{needsPassword ? S.shareSlugNeedsPassword : S.shareSlugHint}</p>
+              <p className="mt-1 text-xs text-neutral-500">{S.shareSlugHint}</p>
             </>
           )}
-          <label className="mt-3 block text-sm" htmlFor="share-password">{S.sharePassword}</label>
+          <label className="mt-3 block text-sm" htmlFor="share-password">{needsPassword ? S.sharePasswordMandatory : S.sharePassword}</label>
           <input id="share-password" className="input mt-1" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} minLength={4} maxLength={256} />
-          <p className="mt-1 text-xs text-neutral-500">{S.sharePasswordHint}</p>
+          <p className="mt-1 text-xs text-neutral-500">{needsPassword ? S.sharePasswordWhyRequired : S.sharePasswordHint}</p>
           <p className="mt-2 text-xs text-neutral-500">
             {mode === 'drop' ? S.dropWriteOnly : `${S.shareReadOnly}. ${kind === 'file' ? S.shareFileNote : S.shareMoveWarning}`}
           </p>

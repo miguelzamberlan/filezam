@@ -22,6 +22,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -2436,4 +2437,49 @@ func TestThumbnails(t *testing.T) {
 		t.Fatalf("config still advertises thumbnails: %v", cfgOut["thumbsEnabled"])
 	}
 	_ = s
+}
+
+// O cookie de identidade do remetente precisa existir antes do primeiro envio. Se ele só
+// nascesse na primeira escrita, dois envios em paralelo — o padrão do cliente — sairiam os dois
+// sem cookie, ganhariam identidades diferentes e uma sobrescreveria a outra: os arquivos da
+// identidade perdida sumiriam da lista do próprio remetente.
+func TestDropSenderSurvivesParallelFirstUpload(t *testing.T) {
+	admin, _, _ := dropEnv(t)
+	tok, _ := mkDrop(admin, "teamA/recebidos", 1<<20, 0, 0)
+	pub := newPublic(t, admin.srv)
+
+	// Abrir a página já dá identidade ao visitante.
+	pub.expect("GET", "/api/public/"+tok, nil, 200)
+	u, _ := url.Parse(admin.srv.URL)
+	var cookie string
+	for _, c := range pub.c.Jar.Cookies(u) {
+		if strings.HasPrefix(c.Name, "fz_d_") {
+			cookie = c.Value
+		}
+	}
+	if cookie == "" {
+		t.Fatal("opening the page did not establish a sender identity")
+	}
+
+	// Envios em paralelo, como o cliente faz.
+	var wg sync.WaitGroup
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			resp, _ := send(pub, tok, fmt.Sprintf("f%d.txt", n), []byte("x"))
+			resp.Body.Close()
+		}(i)
+	}
+	wg.Wait()
+
+	// A identidade não mudou, e os quatro estão na lista de quem enviou.
+	for _, c := range pub.c.Jar.Cookies(u) {
+		if strings.HasPrefix(c.Name, "fz_d_") && c.Value != cookie {
+			t.Fatal("sender identity changed during parallel uploads")
+		}
+	}
+	if mine := pub.expect("GET", "/api/public/"+tok, nil, 200)["mine"].([]any); len(mine) != 4 {
+		t.Fatalf("want 4 uploads listed for the sender, got %d", len(mine))
+	}
 }

@@ -219,9 +219,17 @@ func (s *Server) handlePublicInfo(w http.ResponseWriter, r *http.Request) error 
 	s.db.TouchShare(r.Context(), sh.ID)
 	switch {
 	case sh.Mode == "drop":
+		// Emite o cookie de remetente já aqui, se ainda não houver. Se ele só nascesse na
+		// primeira escrita, dois envios em paralelo (o padrão do cliente) sairiam os dois sem
+		// cookie, ganhariam identidades diferentes e uma sobrescreveria a outra — os arquivos da
+		// identidade perdida sumiriam da lista do próprio remetente para sempre.
+		sender, err := s.dropSenderOrNew(w, r, sh)
+		if err != nil {
+			return err
+		}
 		// O link de envio devolve os próprios limites e a lista de quem está enviando: é a
 		// configuração de que o cliente público precisa, já que /api/config exige sessão.
-		for k, v := range s.dropInfo(r.Context(), r, sh, s.dropSender(r, sh)) {
+		for k, v := range s.dropInfo(r.Context(), r, sh, sender) {
 			out[k] = v
 		}
 	case sh.Kind == "file":

@@ -149,7 +149,6 @@ export const ptBR = {
   // Apelido do link e link de recebimento (migração 011).
   shareSlug: 'Endereço personalizado',
   shareSlugHint: 'Opcional. Deixe em branco para um endereço aleatório. Só letras minúsculas, números e hífen.',
-  shareSlugNeedsPassword: 'Um endereço personalizado é fácil de adivinhar, então exige senha.',
   shareSlugTaken: 'Este endereço já está em uso.',
   shareSlugReserved: 'Apelido reservado',
   shareSlugRelease: 'Liberar endereço',
@@ -294,6 +293,8 @@ export const ptBR = {
   movedToTrash: (n: number) => (n === 1 ? '1 item movido para a lixeira' : `${n} itens movidos para a lixeira`),
   shareFileTitle: 'Compartilhar arquivo',
   sharePassword: 'Senha (opcional)',
+  sharePasswordMandatory: 'Senha (obrigatória)',
+  sharePasswordWhyRequired: 'O endereço personalizado é fácil de adivinhar, então é a senha que protege o link. Mínimo 4 caracteres.',
   sharePasswordHint: 'Quem abrir o link precisa digitar a senha. Mínimo 4 caracteres.',
   sharePasswordRequired: 'Este link é protegido por senha.',
   shareUnlock: 'Entrar',

@@ -439,9 +439,11 @@ export default function Browser() {
     // Abrir/Visualizar cai em "Baixar" quando o arquivo não tem pré-visualização; nesse caso o
     // item de download logo abaixo seria o mesmo rótulo duas vezes seguidas.
     const opensAsDownload = !!one && one.type === 'file' && !previewKind(one)
+    // Com vários itens selecionados não há "um" item: o rótulo é neutro e a ação fica desabilitada.
+    const openLabel = !one || one.type === 'dir' ? S.open : previewKind(one) ? S.preview : S.download
     const items: MenuItem[] = [
       ...(one ? [header] : []),
-      { label: one?.type === 'dir' ? S.open : previewKind(one!) ? S.preview : S.download, icon: <IEye size={16} />, onClick: () => one && open(one), disabled: !one, shortcut: 'Enter' },
+      { label: openLabel, icon: <IEye size={16} />, onClick: () => one && open(one), disabled: !one, shortcut: 'Enter' },
       { label: S.edit, icon: <IText size={16} />, onClick: () => one && setEditing(one), disabled: !one || !canEdit(one, maxText), shortcut: 'F4' },
     ]
     if (one?.type === 'dir') items.push({ label: S.paste, icon: <IPaste size={16} />, onClick: () => paste(join(path, one.name)), disabled: !ui.clipboard })

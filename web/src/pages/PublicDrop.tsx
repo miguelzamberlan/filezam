@@ -24,6 +24,19 @@ export default function PublicDrop({ token, info }: { token: string; info: Publi
     up.onDone = () => qc.invalidateQueries({ queryKey: ['public', token] })
   }, [up, token, info.chunkSize, info.maxParallel, info.maxFileBytes, qc])
 
+  // Fecho da fila. Vários arquivos terminam quase juntos e as invalidações em rajada acabam
+  // atendidas por uma única consulta, que pode ter saído antes dos últimos arquivos gravarem —
+  // aí a lista ficava faltando itens até a janela ganhar foco. Quando a fila esvazia, pedimos o
+  // estado final uma vez; a contagem de concluídos evita repetir sem necessidade.
+  const doneCount = snap.items.filter((i) => i.state === 'done').length
+  const synced = useRef(0)
+  useEffect(() => {
+    if (snap.active === 0 && doneCount !== synced.current) {
+      synced.current = doneCount
+      void qc.invalidateQueries({ queryKey: ['public', token] })
+    }
+  }, [snap.active, doneCount, qc, token])
+
   const quota = info.quotaBytes ?? 0
   const used = info.usedBytes ?? 0
   const left = Math.max(quota - used, 0)

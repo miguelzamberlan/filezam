@@ -79,3 +79,22 @@ export function uniqueName(name: string, taken: Set<string>): string {
 export function isExtractable(name: string): boolean {
   return name.toLowerCase().endsWith('.zip')
 }
+
+/**
+ * dirChain lista a pasta e cada ancestral dela até `root` (inclusive).
+ *
+ * Enviar a pasta "viagem" para /fotos grava em fotos/viagem, mas quem está olhando /fotos precisa
+ * ver a pasta nova aparecer: avisar só a pasta do arquivo deixa a tela aberta desatualizada.
+ */
+export function dirChain(dir: string, root = ''): string[] {
+  const out: string[] = []
+  let d = dir
+  for (let i = 0; i < 64; i++) {
+    out.push(d)
+    if (d === root || d === '') break
+    const up = dirname(d)
+    if (up === d) break
+    d = up
+  }
+  return out
+}

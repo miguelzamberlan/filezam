@@ -12,6 +12,12 @@ Todas as mudanças relevantes do Filezam ficam registradas aqui. O formato segue
 - **Link público para receber arquivos**: uma caixa de entrada que qualquer pessoa, sem conta, usa para enviar arquivos para uma pasta sua. A pasta é criada na hora e precisa estar vazia; cota e vencimento (no máximo 30 dias) são obrigatórios. Quem envia não lista nem baixa nada — vê apenas os próprios envios — e nenhum arquivo existente é sobrescrito: um nome repetido vira `nome (1).ext`.
 - **Administração → Configurações do sistema**: liga e desliga os dois recursos para todos os usuários e define os tetos dos links de recebimento (cota, validade, tamanho por arquivo, número de arquivos, links por usuário). O link de recebimento vem **desligado** por padrão.
 
+### Corrigido
+- Clicar com o botão direito com **vários itens selecionados** deixava a tela em branco. Vinha da 1.0.0.
+- No link de recebimento, os primeiros arquivos enviados podiam **não aparecer na lista** de quem enviou. A identidade do visitante só era criada na primeira gravação, e dois envios simultâneos — o comportamento normal — geravam duas identidades, perdendo o rastro de uma delas.
+- Ao enviar uma **pasta**, a listagem aberta não mostrava o conteúdo novo até recarregar a página: o aviso de mudança ia só para a subpasta de destino, não para a pasta que estava na tela.
+- O campo de senha dizia "opcional" mesmo quando um endereço personalizado a tornava obrigatória.
+
 ### Alterado
 - Um link público protegido por senha não revela mais o nome do item enquanto não for destravado.
 - Desligar um dos dois recursos em **Configurações do sistema** vale também para os links que já existem, e não só para a criação de novos.

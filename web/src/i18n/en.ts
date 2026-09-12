@@ -151,7 +151,6 @@ export const en: Strings = {
   // Custom link address and drop links (migration 011).
   shareSlug: 'Custom address',
   shareSlugHint: 'Optional. Leave blank for a random address. Lowercase letters, digits and hyphens only.',
-  shareSlugNeedsPassword: 'A custom address is easy to guess, so it requires a password.',
   shareSlugTaken: 'This address is already in use.',
   shareSlugReserved: 'Reserved address',
   shareSlugRelease: 'Release address',
@@ -296,6 +295,8 @@ export const en: Strings = {
   movedToTrash: (n: number) => (n === 1 ? '1 item moved to the trash' : `${n} items moved to the trash`),
   shareFileTitle: 'Share file',
   sharePassword: 'Password (optional)',
+  sharePasswordMandatory: 'Password (required)',
+  sharePasswordWhyRequired: 'A custom address is easy to guess, so the password is what protects the link. At least 4 characters.',
   sharePasswordHint: 'Whoever opens the link must type the password. At least 4 characters.',
   sharePasswordRequired: 'This link is password protected.',
   shareUnlock: 'Enter',
