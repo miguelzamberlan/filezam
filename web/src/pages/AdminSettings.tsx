@@ -44,8 +44,10 @@ function Num({ label, value, options, format, onPick }: { label: string; value: 
   )
 }
 
-// Os dois recursos que esta tela liga mexem com quem está fora da instalação, então o padrão de
-// fábrica do recebimento é "desligado": ele só passa a existir quando alguém decide que deve.
+// Quatro interruptores, todos valendo para a instalação inteira e conferidos a cada requisição
+// (não só na criação), para que desligar um pare na hora o que já existe. O recebimento anônimo
+// sai de fábrica **desligado**: ele inverte o modelo de ameaça do produto ao deixar alguém de
+// fora escrever no disco, e isso precisa ser uma decisão de alguém, não um padrão.
 export default function AdminSettings() {
   const qc = useQueryClient()
   const q = useQuery({ queryKey: ['settings'], queryFn: () => Api.adminSettings() })
@@ -68,7 +70,7 @@ export default function AdminSettings() {
   if (q.isLoading || !form) return <div className="flex h-full items-center justify-center"><ISpinner /></div>
 
   const set = (patch: Partial<Settings>) => setForm({ ...form, ...patch })
-  const toggle = (key: 'slugsEnabled' | 'dropEnabled' | 'thumbsEnabled') => {
+  const toggle = (key: 'slugsEnabled' | 'dropEnabled' | 'extractEnabled' | 'thumbsEnabled') => {
     set({ [key]: !form[key] } as Partial<Settings>)
     save.mutate({ [key]: !form[key] } as Partial<Settings>)
   }
@@ -80,6 +82,7 @@ export default function AdminSettings() {
       <div className="card max-w-2xl divide-y divide-neutral-200 dark:divide-neutral-800">
         <Switch on={form.slugsEnabled} onClick={() => toggle('slugsEnabled')} label={S.settingsSlugs} hint={S.settingsSlugsHint} />
         <Switch on={form.dropEnabled} onClick={() => toggle('dropEnabled')} label={S.settingsDrop} hint={S.settingsDropHint} />
+        <Switch on={form.extractEnabled} onClick={() => toggle('extractEnabled')} label={S.settingsExtract} hint={S.settingsExtractHint} />
         <Switch on={form.thumbsEnabled} onClick={() => toggle('thumbsEnabled')} label={S.settingsThumbs} hint={S.settingsThumbsHint} />
         {form.dropEnabled && (
           <div className="space-y-3 px-4 py-4">

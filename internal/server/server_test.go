@@ -786,7 +786,7 @@ func TestFileShareAndPassword(t *testing.T) {
 	admin.expect("POST", "/api/shares", map[string]any{"path": "teamA/pub/doc.txt", "expiresIn": 600, "password": "abc"}, 400)
 
 	// pasta com senha
-	o = admin.expect("POST", "/api/shares", map[string]any{"path": "teamA/pub", "expiresIn": 600, "password": "s3gredo"}, 201)
+	o = admin.expect("POST", "/api/shares", map[string]any{"path": "teamA/pub", "expiresIn": 600, "password": "s3gredo-forte"}, 201)
 	tok2 := o["token"].(string)
 	if o["share"].(map[string]any)["hasPassword"] != true {
 		t.Fatalf("hasPassword: %v", o)
@@ -799,7 +799,7 @@ func TestFileShareAndPassword(t *testing.T) {
 	pub.expect("GET", "/api/public/"+tok2+"/content?path=doc.txt", nil, 401)
 	pub.expect("GET", "/api/public/"+tok2+"/zip", nil, 401)
 	pub.expect("POST", "/api/public/"+tok2+"/unlock", map[string]string{"password": "errada"}, 401)
-	pub.expect("POST", "/api/public/"+tok2+"/unlock", map[string]string{"password": "s3gredo"}, 200)
+	pub.expect("POST", "/api/public/"+tok2+"/unlock", map[string]string{"password": "s3gredo-forte"}, 200)
 	o = pub.expect("GET", "/api/public/"+tok2, nil, 200)
 	if o["locked"] != false {
 		t.Fatalf("unlocked info: %v", o)
@@ -1443,11 +1443,11 @@ func TestPublicationHardening(t *testing.T) {
 	}
 
 	// cookie de senha do link: a validade está assinada dentro do valor
-	o = admin.expect("POST", "/api/shares", map[string]any{"path": "teamA/pub", "expiresIn": 600, "password": "s3gredo"}, 201)
+	o = admin.expect("POST", "/api/shares", map[string]any{"path": "teamA/pub", "expiresIn": 600, "password": "s3gredo-forte"}, 201)
 	tok := o["token"].(string)
 	pubJar, _ := cookiejar.New(nil)
 	pub := &client{t: t, srv: admin.srv, c: &http.Client{Jar: pubJar}}
-	pub.expect("POST", "/api/public/"+tok+"/unlock", map[string]string{"password": "s3gredo"}, 200)
+	pub.expect("POST", "/api/public/"+tok+"/unlock", map[string]string{"password": "s3gredo-forte"}, 200)
 	u, _ := url.Parse(admin.srv.URL)
 	var ck *http.Cookie
 	for _, c := range pubJar.Cookies(u) {
@@ -1648,16 +1648,16 @@ func TestAdminSettings(t *testing.T) {
 		t.Fatalf("factory defaults: %v", out)
 	}
 	// Desligado vale também para o admin: ele liga primeiro, e isso fica na auditoria.
-	o := admin.expect("POST", "/api/shares", map[string]any{"path": "teamA/caixa", "expiresIn": 3600, "mode": "drop", "quotaBytes": 1 << 20, "password": "abcd"}, 403)
+	o := admin.expect("POST", "/api/shares", map[string]any{"path": "teamA/caixa", "expiresIn": 3600, "mode": "drop", "quotaBytes": 1 << 20, "password": "abcd1234"}, 403)
 	if code(o) != "feature_disabled" {
 		t.Fatalf("drop while disabled: %v", o)
 	}
-	o = admin.expect("POST", "/api/shares", map[string]any{"path": "teamA/pub", "expiresIn": 3600, "slug": "vendas", "password": "abcd"}, 201)
+	o = admin.expect("POST", "/api/shares", map[string]any{"path": "teamA/pub", "expiresIn": 3600, "slug": "vendas", "password": "abcd1234"}, 201)
 	if o["share"].(map[string]any)["slug"] != "vendas" {
 		t.Fatalf("slug is on by default: %v", o)
 	}
 	admin.expect("PATCH", "/api/admin/settings", map[string]any{"slugsEnabled": false}, 200)
-	o = admin.expect("POST", "/api/shares", map[string]any{"path": "teamA/pub", "expiresIn": 3600, "slug": "compras", "password": "abcd"}, 403)
+	o = admin.expect("POST", "/api/shares", map[string]any{"path": "teamA/pub", "expiresIn": 3600, "slug": "compras", "password": "abcd1234"}, 403)
 	if code(o) != "feature_disabled" {
 		t.Fatalf("slug while disabled: %v", o)
 	}
@@ -1702,16 +1702,16 @@ func TestShareSlug(t *testing.T) {
 		t.Fatalf("slug without password: %v", o)
 	}
 	for _, bad := range []string{"ab", "Vendas", "-vendas", "vendas-", "ven das", "ven_das", "admin", "api", strings.Repeat("a", 64)} {
-		if o := mk(bad, "abcd", 400); code(o) != "invalid_slug" {
+		if o := mk(bad, "abcd1234", 400); code(o) != "invalid_slug" {
 			t.Fatalf("slug %q accepted: %v", bad, o)
 		}
 	}
-	o := mk("vendas-2026", "abcd", 201)
+	o := mk("vendas-2026", "abcd1234", 201)
 	tok := o["token"].(string)
 	if url, _ := o["url"].(string); !strings.HasSuffix(url, "/s/vendas-2026") {
 		t.Fatalf("url should carry the slug: %v", url)
 	}
-	if o2 := mk("vendas-2026", "abcd", 409); code(o2) != "slug_taken" {
+	if o2 := mk("vendas-2026", "abcd1234", 409); code(o2) != "slug_taken" {
 		t.Fatalf("duplicate slug: %v", o2)
 	}
 	// O endereço resolve pelo apelido e pelo token; ambos pedem a senha.
@@ -1725,7 +1725,7 @@ func TestShareSlug(t *testing.T) {
 			t.Fatalf("locked info leaks the name: %v", info)
 		}
 	}
-	pub.expect("POST", "/api/public/vendas-2026/unlock", map[string]string{"password": "abcd"}, 200)
+	pub.expect("POST", "/api/public/vendas-2026/unlock", map[string]string{"password": "abcd1234"}, 200)
 	if info := pub.expect("GET", "/api/public/vendas-2026", nil, 200); info["name"] != "pub" {
 		t.Fatalf("after unlock: %v", info)
 	}
@@ -1736,7 +1736,7 @@ func TestShareSlug(t *testing.T) {
 	id := int64(admin.expect("GET", "/api/shares", nil, 200)["shares"].([]any)[0].(map[string]any)["id"].(float64))
 	admin.expect("DELETE", fmt.Sprintf("/api/shares/%d", id), nil, 200)
 	pub.expect("GET", "/api/public/vendas-2026", nil, 404)
-	if o2 := mk("vendas-2026", "abcd", 409); code(o2) != "slug_taken" {
+	if o2 := mk("vendas-2026", "abcd1234", 409); code(o2) != "slug_taken" {
 		t.Fatalf("revoked slug went back to the pool: %v", o2)
 	}
 	// O dono continua vendo o apelido reservado e pode liberá-lo de propósito.
@@ -1750,12 +1750,12 @@ func TestShareSlug(t *testing.T) {
 		t.Fatalf("revoked slug should stay listed: %v", revoked)
 	}
 	admin.expect("DELETE", fmt.Sprintf("/api/shares/%d?purge=1", id), nil, 200)
-	mk("vendas-2026", "abcd", 201)
+	mk("vendas-2026", "abcd1234", 201)
 }
 
 func TestSlugEnumerationIsRateLimited(t *testing.T) {
 	admin, s, _ := dropEnv(t)
-	admin.expect("POST", "/api/shares", map[string]any{"path": "teamA/pub", "expiresIn": 3600, "slug": "existe", "password": "abcd"}, 201)
+	admin.expect("POST", "/api/shares", map[string]any{"path": "teamA/pub", "expiresIn": 3600, "slug": "existe", "password": "abcd1234"}, 201)
 	pub := newPublic(t, admin.srv)
 	s.slugMiss = auth.NewLimiter(5, 5)
 	limited := false
@@ -1981,7 +1981,7 @@ func TestDropDoesNotLeakExistingNames(t *testing.T) {
 func TestFeatureSwitchStopsLiveLinks(t *testing.T) {
 	admin, _, _ := dropEnv(t)
 	tok, _ := mkDrop(admin, "teamA/recebidos", 1<<20, 0, 0)
-	slug := admin.expect("POST", "/api/shares", map[string]any{"path": "teamA/pub", "expiresIn": 3600, "slug": "vendas", "password": "abcd"}, 201)["token"].(string)
+	slug := admin.expect("POST", "/api/shares", map[string]any{"path": "teamA/pub", "expiresIn": 3600, "slug": "vendas", "password": "abcd1234"}, 201)["token"].(string)
 	pub := newPublic(t, admin.srv)
 	if resp, _ := send(pub, tok, "a.txt", []byte("a")); resp.StatusCode != 201 {
 		t.Fatal("setup upload failed")
@@ -2074,13 +2074,13 @@ func TestDropIsNotReadable(t *testing.T) {
 	pub.expect("POST", "/api/public/"+read+"/uploads", map[string]any{"name": "x", "size": 1}, 404)
 
 	// Com senha, nada de escrita antes do unlock.
-	o := admin.expect("POST", "/api/shares", map[string]any{"path": "teamA/cofre", "expiresIn": 3600, "mode": "drop", "quotaBytes": 1 << 20, "password": "abcd"}, 201)
+	o := admin.expect("POST", "/api/shares", map[string]any{"path": "teamA/cofre", "expiresIn": 3600, "mode": "drop", "quotaBytes": 1 << 20, "password": "abcd1234"}, 201)
 	locked := o["token"].(string)
 	if resp, out := send(pub, locked, "x.txt", []byte("x")); resp.StatusCode != 401 || code(out) != "share_locked" {
 		t.Fatalf("upload before unlock: %d %v", resp.StatusCode, out)
 	}
 	pub.expect("POST", "/api/public/"+locked+"/uploads", map[string]any{"name": "x", "size": 1}, 401)
-	pub.expect("POST", "/api/public/"+locked+"/unlock", map[string]string{"password": "abcd"}, 200)
+	pub.expect("POST", "/api/public/"+locked+"/unlock", map[string]string{"password": "abcd1234"}, 200)
 	if resp, _ := send(pub, locked, "x.txt", []byte("x")); resp.StatusCode != 201 {
 		t.Fatalf("upload after unlock: %d", resp.StatusCode)
 	}
@@ -2374,8 +2374,12 @@ func TestThumbnails(t *testing.T) {
 	if resp.StatusCode != 200 || resp.Header.Get("Content-Type") != "image/jpeg" {
 		t.Fatalf("thumb: %d %s", resp.StatusCode, resp.Header.Get("Content-Type"))
 	}
-	if !strings.Contains(resp.Header.Get("Cache-Control"), "max-age=") || resp.Header.Get("ETag") == "" {
-		t.Fatalf("cache headers: %q %q", resp.Header.Get("Cache-Control"), resp.Header.Get("ETag"))
+	// `private` mantém a miniatura fora de proxy compartilhado; a ausência de `immutable` é o que
+	// garante a revalidação depois dos cinco minutos, em vez de a imagem ficar dias no disco de
+	// quem já saiu da sessão.
+	cc := resp.Header.Get("Cache-Control")
+	if !strings.Contains(cc, "private") || !strings.Contains(cc, "max-age=300") || strings.Contains(cc, "immutable") || resp.Header.Get("ETag") == "" {
+		t.Fatalf("cache headers: %q %q", cc, resp.Header.Get("ETag"))
 	}
 	cfg, _, err := image.DecodeConfig(bytes.NewReader(body))
 	if err != nil {
@@ -2561,4 +2565,95 @@ func TestStalledTransferIsNotInternalError(t *testing.T) {
 			t.Errorf("%s: virou %d %q, esperado %d %q", c.name, ae.Status, ae.Code, c.want, c.code)
 		}
 	}
+}
+
+// Duas sessões em blocos abertas ao mesmo tempo não podem passar as duas pela mesma leitura de
+// cota. Cada uma reserva no disco o tamanho declarado, então admitir as duas reservaria o dobro
+// do que o dono do link autorizou — e o excedente ficaria ocupado até a faxina de sessões velhas.
+//
+// A garantia é estrutural, não estatística: `admit` devolve o mutex do link **ainda tomado** e
+// quem cria a sessão só solta depois de a linha existir. É isso que o teste afirma, porque uma
+// corrida de microssegundos disparada por HTTP quase nunca aparece de propósito.
+func TestDropAdmitHoldsTheLinkUntilTheSessionExists(t *testing.T) {
+	admin, s, _ := dropEnv(t)
+	_, id := mkDrop(admin, "teamA/recebidos", 1000, 0, 0)
+	ctx := t.Context()
+	sh, err := s.db.GetShare(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unlock, err := s.admit(ctx, sh, "remetente-1", "a.bin", 600)
+	if err != nil {
+		t.Fatalf("admit: %v", err)
+	}
+	entered := make(chan struct{})
+	go func() {
+		release := s.dropMu.lock(sh.ID)
+		close(entered)
+		release()
+	}()
+	select {
+	case <-entered:
+		unlock()
+		t.Fatal("admit devolveu o link destravado: conferir a cota e criar a sessão não são atômicos")
+	case <-time.After(100 * time.Millisecond):
+	}
+	unlock()
+	select {
+	case <-entered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("o mutex do link não foi devolvido")
+	}
+}
+
+// O mesmo pelo protocolo, de ponta a ponta: o que sai reservado nunca passa do que o link prometeu.
+func TestDropQuotaHoldsAgainstParallelSessions(t *testing.T) {
+	admin, s, _ := dropEnv(t)
+	// A cota cabe uma sessão de 600 bytes, nunca duas.
+	tok, _ := mkDrop(admin, "teamA/recebidos", 1000, 0, 0)
+	s.uploads = uploads.New(s.db, 64, false, s.cfg.UploadReserve, s.log)
+	pub := newPublic(t, admin.srv)
+	pub.expect("GET", "/api/public/"+tok, nil, 200) // identidade antes de disparar em paralelo
+
+	const tries = 8
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	codes := make([]int, tries)
+	for i := 0; i < tries; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			<-start
+			resp, _ := pub.do("POST", "/api/public/"+tok+"/uploads",
+				map[string]any{"name": fmt.Sprintf("a%d.bin", n), "size": 600}, nil)
+			resp.Body.Close()
+			codes[n] = resp.StatusCode
+		}(i)
+	}
+	close(start)
+	wg.Wait()
+
+	accepted := 0
+	for _, c := range codes {
+		if c == 201 {
+			accepted++
+		}
+	}
+	if accepted != 1 {
+		t.Fatalf("want exactly one session admitted, got %d (%v)", accepted, codes)
+	}
+	if used := pub.expect("GET", "/api/public/"+tok, nil, 200)["usedBytes"].(float64); used > 1000 {
+		t.Fatalf("reserved %v bytes on a link capped at 1000", used)
+	}
+}
+
+// A senha de um link segue o mesmo mínimo das senhas de conta. Num link com apelido ela é o
+// único segredo, porque o endereço é escolhido para ser fácil de dizer — e de adivinhar.
+func TestSharePasswordMinimumLength(t *testing.T) {
+	admin, _, _ := dropEnv(t)
+	o := admin.expect("POST", "/api/shares", map[string]any{"path": "teamA", "expiresIn": 3600, "password": "abc1"}, 400)
+	if code(o) != "weak_password" {
+		t.Fatalf("4-character share password: %v", o)
+	}
+	admin.expect("POST", "/api/shares", map[string]any{"path": "teamA", "expiresIn": 3600, "password": "abcd1234"}, 201)
 }

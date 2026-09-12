@@ -58,13 +58,13 @@ Migrações aplicadas depois de `001_init.sql`:
 | 002 | `002_share_token.sql` | `shares.token` (texto, default `''`): guarda o token do link público para poder copiá-lo de novo |
 | 003 | `003_share_file_password.sql` | `shares.kind` (`dir`/`file`) e `shares.password_hash` (Argon2id, `''` = sem senha) |
 | 004 | `004_trash.sql` | Tabela `trash(id, user_id → users CASCADE, trash_dir, name, path, type, size, deleted_at)`: itens da lixeira com o caminho original base-relativo |
-| 006 | `006_share_inode.sql` | `shares.dev`, `shares.ino`: identidade do item compartilhado (0 = desconhecida) |
-| 011 | `011_settings_slug_drop.sql` | Tabela `settings` (configurações globais do admin); `shares.slug` com índice único parcial, `shares.mode` e os tetos do link de envio; tabela `share_uploads` (recibo de cada arquivo recebido, com o nome no disco e o nome pedido); `uploads.share_id`/`uploads.sender`/`uploads.sent_name` |
-| 007 | `007_user_quota.sql` | `users.quota` (bytes, 0 = sem limite) |
-| 009 | `009_totp.sql` | `users.totp_secret` (cifrado), `totp_enabled_at`, `totp_counter`, `totp_recovery` (JSON de hashes) |
-| 008 | `008_jobs.sql` | Tabela `jobs(id, user_id → users CASCADE, type, label, state, done, total, bytes_done, bytes_total, error, warnings, started_at, finished_at)`: histórico de operações |
 | 005 | `005_file_index.sql` | `file_index(path PK, parent, name, name_lc, type, size, mtime, gen)` com índices em `name_lc` e `parent`, e `index_state(id=1, last_full_at, entries, gen)` |
+| 006 | `006_share_inode.sql` | `shares.dev`, `shares.ino`: identidade do item compartilhado (0 = desconhecida) |
+| 007 | `007_user_quota.sql` | `users.quota` (bytes, 0 = sem limite) |
+| 008 | `008_jobs.sql` | Tabela `jobs(id, user_id → users CASCADE, type, label, state, done, total, bytes_done, bytes_total, error, warnings, started_at, finished_at)`: histórico de operações |
+| 009 | `009_totp.sql` | `users.totp_secret` (cifrado), `totp_enabled_at`, `totp_counter`, `totp_recovery` (JSON de hashes) |
 | 010 | `010_upload_target_per_user.sql` | Índice único de `uploads` passa de `(dir, name)` para `(user_id, dir, name)`: a sessão parada de um usuário não bloqueia outro |
+| 011 | `011_settings_slug_drop.sql` | Tabela `settings` (configurações globais do admin); `shares.slug` com índice único parcial, `shares.mode` e os tetos do link de envio; tabela `share_uploads` (recibo de cada arquivo recebido, com o nome no disco e o nome pedido); `uploads.share_id`/`uploads.sender`/`uploads.sent_name` |
 
 Todos os timestamps são segundos Unix, exceto `uploads.mtime` (ms, vindo do cliente).
 

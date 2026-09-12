@@ -43,7 +43,7 @@ It is a personal, free and open-source project. It fits home servers, small offi
 - **Extract and compress**: unpack a `.zip` into a new folder from the context menu, or zip the current selection. Extraction never overwrites what is already there and refuses entries that try to write outside the folder.
 - **Built-in editor**: edit text, markdown and config files in the browser, with a live preview for `.md` and protection against two people overwriting each other.
 - **Public links**: share a folder or a file read-only with an expiry, optional password, access count and instant revocation. The address can be a name you pick (`/s/budget-2026`), which then requires a password.
-- **Drop links**: a public inbox where people without an account send files into a folder of yours, with a mandatory quota and expiry. Senders never see or download what is already there.
+- **Drop links**: a public inbox where people without an account send files into a folder of yours, with a mandatory quota and expiry. Senders never see or download what is already there. **Off by default** — an admin turns it on under **Administration → System settings**, which is also where the ceilings live.
 - **Two-factor authentication** (TOTP) with recovery codes and "trust this device for 30 days"; optionally mandatory for admins.
 - **Administration**: users with disk quotas and 2FA reset, audit log, progressive brute-force lockout, job history, Prometheus metrics.
 - **UI**: Portuguese or English, light/dark/system theme, custom colors, list zoom, per-type icons, drag and drop to move, paginated listing for huge folders, keyboard shortcuts, comfortable on phones.

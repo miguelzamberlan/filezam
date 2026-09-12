@@ -361,7 +361,10 @@ func (s *Service) Complete(ctx context.Context, root *vfs.Root, ref SessionRef) 
 	if err := root.Finalize(dir, id, u.Name, u.Overwrite); err != nil {
 		return nil, nil, err
 	}
-	_ = s.db.DeleteUpload(ctx, id)
+	// A partir daqui o arquivo já existe com o nome final: desistir agora deixaria a sessão viva
+	// no banco reservando cota de um arquivo que foi entregue. WithoutCancel garante que a baixa
+	// acontece mesmo que quem enviou tenha fechado a aba no exato instante da finalização.
+	_ = s.db.DeleteUpload(context.WithoutCancel(ctx), id)
 	s.unlock(id)
 	e, err := root.Stat(vfs.Join(dir, u.Name))
 	if err != nil {

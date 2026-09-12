@@ -1,4 +1,6 @@
-import { defineConfig, type Plugin } from 'vite'
+import { type Plugin } from 'vite'
+// defineConfig vem do vitest: a partir da 4 o tipo do vite não aceita mais a seção 'test'.
+import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { writeFileSync, mkdirSync } from 'node:fs'

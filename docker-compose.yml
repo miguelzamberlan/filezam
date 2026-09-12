@@ -11,10 +11,11 @@ services:
     command: >
       sh -c '
         mkdir -p /config /data &&
-        if [ -n "$$(find /config -mindepth 1 -maxdepth 1 -type d | head -n 1)" ]; then
+        if [ -n "$$(find /config -mindepth 1 -maxdepth 1 -type d ! -name thumbs | head -n 1)" ]; then
           echo "init: /config contains subfolders; refusing to chown. Check FILEZAM_HOST_CONFIG." >&2; exit 1;
         fi &&
         chown ${PUID:-1000}:${PGID:-1000} /config &&
+        [ ! -d /config/thumbs ] || chown -R ${PUID:-1000}:${PGID:-1000} /config/thumbs &&
         find /config -maxdepth 1 -type f \( -name "filezam.db*" -o -name "secret.key" \) -exec chown ${PUID:-1000}:${PGID:-1000} {} + &&
         { [ -n "$$(ls -A /data 2>/dev/null)" ] || chown ${PUID:-1000}:${PGID:-1000} /data 2>/dev/null || true; }'
     volumes:

@@ -75,7 +75,7 @@ O navegador não persiste objetos `File`. Fluxo:
 
 ### Limpeza
 
-- Tarefa horária (e na inicialização): sessões com `updated_at` mais antigo que `FILEZAM_UPLOAD_STALE` (24 h fixo em `config`) têm a parte removida via root base e a linha apagada.
+- Tarefa horária (e na inicialização): sessões com `updated_at` mais antigo que `cfg.UploadStaleAge` (24 h, fixo em `internal/config`; **não há variável de ambiente**) têm a parte removida via root base e a linha apagada.
 - Na listagem de um diretório, partes `.filezam-upload-*.part` cujo id não existe na tabela **e cujo mtime está parado há mais de `uploads.OrphanGrace` (15 min)** são apagadas (cobre perda do banco, crash, etc.). A carência existe porque `PUT` único e lote gravam a parte sem linha no banco: enquanto o corpo chega o mtime avança, e sem ela uma listagem da mesma pasta (de outro usuário, ou o refetch da própria interface) apagaria um upload em andamento e o `Finalize` falharia com 404.
 - Exclusão de usuário remove as partes das sessões dele antes do cascade.
 
@@ -99,10 +99,14 @@ Diferenças em relação ao caminho autenticado:
   desvio faria do envio um teste de existência de nome numa pasta que o link não deixa ler.
 - A sessão é gravada com o `user_id` do **dono do link** (para a reserva de disco continuar valendo)
   mas é autorizada pelo par `(share_id, sender)`, e fica invisível em `GET /api/uploads`.
-- Sessões abandonadas de link de envio caem em `drop_stale_age` (2 h por padrão), não nas 24 h de
-  `FILEZAM_UPLOAD_STALE`; `CleanupStale` aplica os dois cortes na mesma varredura.
-- Admissão (cota, teto por arquivo, contagem, nome livre) acontece sob um mutex por link antes de
-  qualquer byte tocar o disco.
+- Sessões abandonadas de link de envio caem em `drop_stale_age` (2 h por padrão, editável pelo
+  administrador), não nas 24 h de `cfg.UploadStaleAge`; `CleanupStale` aplica os dois cortes na
+  mesma varredura.
+- Admissão (cota, teto por arquivo, contagem) acontece sob um mutex por link antes de qualquer byte
+  tocar o disco. O mutex **nunca** cobre a transferência: no envio único ele é solto assim que a
+  admissão passa, e o nome só é escolhido na publicação, que é metadado. Na sessão em blocos ele vai
+  até a linha existir, porque ela reserva o tamanho declarado no disco — conferir a cota e inserir
+  precisam ser uma coisa só, senão duas sessões simultâneas reservam o dobro do que o link prometeu.
 
 ## Conflitos (cliente, `upload/manager.ts`)
 

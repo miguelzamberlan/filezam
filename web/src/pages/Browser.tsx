@@ -387,6 +387,11 @@ export default function Browser() {
       case 'F2':
         void rename()
         break
+      case 'F4': {
+        const target = selectedEntries.length === 1 ? selectedEntries[0] : undefined
+        if (target && canEdit(target, maxText)) setEditing(target)
+        break
+      }
       case 'Delete':
         void remove(selectedEntries, ev.shiftKey)
         break

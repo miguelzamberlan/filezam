@@ -20,9 +20,11 @@ import (
 	"github.com/miguelzamberlan/filezam/internal/vfs"
 )
 
-// dropOpenPerSender limita quantas sessões em blocos um visitante mantém abertas no mesmo
-// link. A cota limita bytes, não inodes: sem este teto, milhares de sessões de 1 byte caberiam
-// na cota e encheriam o diretório de arquivos .part.
+// dropOpenPerSender limita quantas sessões em blocos um visitante mantém abertas no mesmo link.
+// É repartição, não contenção: a identidade do remetente é emitida a quem pedir, então quem
+// descarta o cookie volta com o contador zerado. O que segura o total é o teto de arquivos do
+// link, que `ShareUsage` conta somando as sessões abertas às recebidas — esse não depende de
+// cookie nenhum e é o que impede milhares de sessões de 1 byte de encherem o diretório de .part.
 const dropOpenPerSender = 8
 
 // dropCookieName carries the visitor's identity on one link. Não é autenticação: serve só para
@@ -164,50 +166,56 @@ func (s *Server) dropOwner(ctx context.Context, sh *store.Share) (*store.User, e
 }
 
 // admit checks whether one more file fits on the link: cota, teto por arquivo, contagem e
-// sessões abertas. O mutex do link cobre só estas contas, que são rápidas — nunca a transferência
-// dos bytes, senão dois visitantes do mesmo link ficariam em fila e o segundo esperaria a subida
-// inteira do primeiro.
+// sessões abertas. Devolve o mutex do link **ainda tomado** — quem chama decide até onde segurar:
 //
-// O nome não é escolhido aqui: ele é resolvido na publicação, que também é rápida e acontece sob
-// o mesmo mutex. Entre uma coisa e outra, a cota pode ser ultrapassada pelo que está em voo (no
-// máximo os envios simultâneos permitidos por IP, cada um limitado ao tamanho de um bloco).
-func (s *Server) admit(ctx context.Context, sh *store.Share, sender, name string, size int64) error {
+//   - a sessão em blocos segura até depois de a linha existir, porque ela reserva o tamanho
+//     declarado no disco na hora (fallocate) e soltar antes deixaria duas sessões simultâneas
+//     passarem pela mesma leitura de cota e reservarem o dobro;
+//   - o envio único solta na hora, porque o que vem depois é a transferência, que dura o tempo
+//     da rede de quem envia. Ali a cota pode ser ultrapassada pelo que está em voo, limitado aos
+//     envios simultâneos por IP vezes o tamanho de um bloco.
+//
+// O que o mutex nunca cobre, em nenhum dos dois caminhos, é a transferência dos bytes.
+func (s *Server) admit(ctx context.Context, sh *store.Share, sender, name string, size int64) (func(), error) {
 	if err := vfs.ValidName(name); err != nil {
-		return err
+		return nil, err
 	}
 	if sh.MaxFileBytes > 0 && size > sh.MaxFileBytes {
-		return errDropFileLimit
+		return nil, errDropFileLimit
 	}
 	owner, err := s.dropOwner(ctx, sh)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	unlock := s.dropMu.lock(sh.ID)
-	defer unlock()
+	fail := func(err error) (func(), error) {
+		unlock()
+		return nil, err
+	}
 	usage, err := s.db.ShareUsage(ctx, sh.ID)
 	if err != nil {
-		return err
+		return fail(err)
 	}
 	if sh.MaxFiles > 0 && usage.Count >= sh.MaxFiles {
-		return errDropCount
+		return fail(errDropCount)
 	}
 	if sh.QuotaBytes > 0 && usage.Bytes+size > sh.QuotaBytes {
-		return errDropFull
+		return fail(errDropFull)
 	}
 	// A cota do dono também vale: o link não pode servir de desvio para enchê-la. Ela mede o
 	// que já foi finalizado, não o que está reservado — quem limita a reserva é a cota do link.
 	if err := s.checkQuota(ctx, owner, size); err != nil {
 		if isQuotaErr(err) {
-			return errDropFull // nunca contar ao visitante como anda a conta do dono
+			return fail(errDropFull) // nunca contar ao visitante como anda a conta do dono
 		}
-		return err
+		return fail(err)
 	}
 	if n, err := s.db.CountOpenShareUploads(ctx, sh.ID, sender); err != nil {
-		return err
+		return fail(err)
 	} else if n >= dropOpenPerSender {
-		return errDropCount
+		return fail(errDropCount)
 	}
-	return nil
+	return unlock, nil
 }
 
 // publish gives the part file its final name. Roda sob o mutex do link e só faz metadados, então
@@ -270,10 +278,15 @@ func (s *Server) freeName(ctx context.Context, root *vfs.Root, sh *store.Share, 
 // recordDrop books a finished upload and logs who sent it. `name` é o nome no disco e `sent` o
 // que o remetente pediu; só o segundo volta para ele.
 func (s *Server) recordDrop(r *http.Request, sh *store.Share, sender, name, sent string, size int64) {
-	if err := s.db.AddShareUpload(r.Context(), &store.ShareUpload{ShareID: sh.ID, Sender: sender, Name: name, SentName: sent, Size: size}); err != nil {
+	// Contexto sem cancelamento: o arquivo já está publicado no disco. Se o recibo dependesse da
+	// conexão de quem enviou, um fechamento de aba entre a publicação e o INSERT deixaria o
+	// arquivo lá e fora da cota — invisível para o teto do link e para a lista do remetente,
+	// para sempre.
+	ctx := context.WithoutCancel(r.Context())
+	if err := s.db.AddShareUpload(ctx, &store.ShareUpload{ShareID: sh.ID, Sender: sender, Name: name, SentName: sent, Size: size}); err != nil {
 		s.log.Warn("record drop upload", "id", sh.ID, "err", err)
 	}
-	s.db.TouchShare(r.Context(), sh.ID)
+	s.db.TouchShare(ctx, sh.ID)
 	// O id do link vai no evento porque o segmento de token é mascarado nos logs: sem ele não
 	// dá para saber qual link está sendo martelado.
 	s.audit(r, nil, "share.drop.upload", map[string]any{"shareID": sh.ID, "name": name, "size": size, "sender": sender})
@@ -298,9 +311,11 @@ func (s *Server) handleDropPut(w http.ResponseWriter, r *http.Request) error {
 	if incoming < 0 {
 		incoming = s.cfg.ChunkSize
 	}
-	if err := s.admit(r.Context(), sh, sender, name, incoming); err != nil {
+	unlock, err := s.admit(r.Context(), sh, sender, name, incoming)
+	if err != nil {
 		return err
 	}
+	unlock() // o que vem agora é a transferência: nunca sob o mutex
 	mtime, _ := strconv.ParseInt(r.URL.Query().Get("mtime"), 10, 64)
 	final, size, err := s.storeDropFile(r.Context(), root, sh, name, mtime, bodyReader(w, r, s.cfg.ChunkSize))
 	if err != nil {
@@ -371,12 +386,13 @@ func (s *Server) handleDropUploadCreate(w http.ResponseWriter, r *http.Request) 
 	if err := readJSON(r, &in); err != nil {
 		return err
 	}
-	if err := s.admit(r.Context(), sh, sender, in.Name, in.Size); err != nil {
+	// O mutex vem tomado do admit e só é solto depois de a sessão existir: ela reserva o tamanho
+	// declarado no disco, então conferir a cota e inserir precisam ser uma coisa só. Tudo aqui é
+	// metadado; os blocos chegam depois, sem segurar ninguém.
+	unlock, err := s.admit(r.Context(), sh, sender, in.Name, in.Size)
+	if err != nil {
 		return err
 	}
-	// A sessão precisa de um nome livre já na criação (o índice de destino é por nome), mas isso
-	// é metadado e sai rápido; os blocos chegam depois, sem segurar ninguém.
-	unlock := s.dropMu.lock(sh.ID)
 	final, err := s.freeName(r.Context(), root, sh, in.Name)
 	if err != nil {
 		unlock()

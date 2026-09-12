@@ -101,8 +101,23 @@ func ValidName(name string) error {
 		if r < 0x20 || r == 0x7f {
 			return fmt.Errorf("%w: control character", ErrInvalidName)
 		}
+		if isBidiControl(r) {
+			return fmt.Errorf("%w: bidirectional control character", ErrInvalidName)
+		}
 	}
 	return nil
+}
+
+// isBidiControl reports whether r reorders the text that follows it. Um nome com U+202E aparece
+// na listagem ao contrário a partir dali: `nota‮gpj.exe` é desenhado como `notaexe.jpg`, um
+// executável com cara de foto. Quem envia por um link público não é autenticado, então o nome
+// que ele escolhe chega à tela do dono — e é ele quem decide se clica.
+//
+// Só os controles fortes (embutir, sobrepor, isolar) são recusados. As marcas U+200E/U+200F e
+// U+061C continuam valendo: elas ajustam a direção de um trecho sem reordenar o resto e
+// aparecem em nomes legítimos em árabe e hebraico.
+func isBidiControl(r rune) bool {
+	return (r >= 0x202A && r <= 0x202E) || (r >= 0x2066 && r <= 0x2069)
 }
 
 // Join joins normalized components.

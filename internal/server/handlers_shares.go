@@ -124,7 +124,7 @@ func (s *Server) handleShareCreate(w http.ResponseWriter, r *http.Request) error
 		Path      string `json:"path"`
 		ExpiresIn int64  `json:"expiresIn"`
 		Name      string `json:"name"`
-		Password  string `json:"password"` // opcional; 4–256 caracteres
+		Password  string `json:"password"` // opcional; 8–256 caracteres
 		Slug      string `json:"slug"`     // apelido; exige senha
 		Mode      string `json:"mode"`     // "read" (padrão) | "drop"
 		// Só no modo drop. QuotaBytes é obrigatório; os outros dois caem no padrão.
@@ -199,8 +199,11 @@ func (s *Server) handleShareCreate(w http.ResponseWriter, r *http.Request) error
 	}
 	pwHash := ""
 	if in.Password != "" {
-		if n := len([]rune(in.Password)); n < 4 || n > 256 {
-			err = errorf(http.StatusBadRequest, "weak_password", "share password must have 4-256 characters")
+		// O mínimo é o mesmo das senhas de conta. Num link com apelido ela é o único segredo (o
+		// endereço é escolhido para ser fácil de dizer, logo fácil de adivinhar), e mesmo num link
+		// por token uma senha de 4 caracteres dá a quem recebeu o endereço a ilusão de proteção.
+		if n := len([]rune(in.Password)); n < auth.MinPasswordLen || n > 256 {
+			err = errorf(http.StatusBadRequest, "weak_password", "share password must have %d-256 characters", auth.MinPasswordLen)
 			return err
 		}
 		if pwHash, err = auth.HashPassword(in.Password); err != nil {

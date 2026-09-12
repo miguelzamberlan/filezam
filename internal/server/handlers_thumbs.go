@@ -12,11 +12,16 @@ import (
 	"github.com/miguelzamberlan/filezam/internal/vfs"
 )
 
-// thumbMaxAge: a URL carrega o mtime do arquivo (?v=), então o endereço muda sempre que o
-// conteúdo muda e a resposta pode ser guardada sem revalidar. É a única resposta de conteúdo do
-// produto que não é `no-store`, e é o que faz a segunda visita a uma pasta de fotos ser
-// instantânea em vez de gerar uma requisição por imagem.
-const thumbMaxAge = 7 * 24 * 3600
+// thumbMaxAge é curto de propósito. A miniatura é a única resposta de conteúdo do produto que
+// não é `no-store`: sem nenhum cache, rolar uma pasta de fotos para baixo e voltar refaria uma
+// requisição por imagem. Mas é conteúdo do usuário, e o que o navegador guarda em disco continua
+// lá depois do logout — então a janela de reuso livre cobre a navegação (rolar, entrar numa pasta
+// e voltar) e não a sessão inteira.
+//
+// Passados os cinco minutos a entrada não é descartada: o ETag a revalida com um 304 vazio, que
+// custa um ida-e-volta e nenhum byte de imagem. Sem `immutable`, justamente para que essa
+// revalidação aconteça.
+const thumbMaxAge = 300
 
 // thumbWait: quanto uma requisição espera por um slot de geração antes de desistir e deixar o
 // cliente com o ícone.
@@ -87,7 +92,7 @@ func (s *Server) handleThumb(w http.ResponseWriter, r *http.Request) error {
 	}
 	h := w.Header()
 	h.Set("Content-Type", "image/jpeg")
-	h.Set("Cache-Control", "private, max-age="+strconv.Itoa(thumbMaxAge)+", immutable")
+	h.Set("Cache-Control", "private, max-age="+strconv.Itoa(thumbMaxAge))
 	h.Set("ETag", thumbs.ETag(path))
 	h.Set("X-Content-Type-Options", "nosniff")
 	http.ServeContent(w, r, "", fi.ModTime(), f)

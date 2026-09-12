@@ -64,12 +64,17 @@ func TestNormalize(t *testing.T) {
 }
 
 func TestValidName(t *testing.T) {
-	for _, bad := range []string{"", ".", "..", "a/b", "a\x00", ".filezam-x", "\xff", "a\nb", "a\rb", "tab\there", "del\x7f"} {
+	// Os controles bidi entram aqui porque um nome com U+202E é desenhado ao contrário a partir
+	// dali: "nota\u202Egpj.exe" aparece como "notaexe.jpg" na listagem de quem recebeu.
+	for _, bad := range []string{"", ".", "..", "a/b", "a\x00", ".filezam-x", "\xff", "a\nb", "a\rb", "tab\there", "del\x7f",
+		"nota\u202Egpj.exe", "a\u202Db", "x\u2066y", "x\u2069y"} {
 		if ValidName(bad) == nil {
 			t.Errorf("ValidName(%q) accepted", bad)
 		}
 	}
-	for _, good := range []string{"a", "..a", "a b", "ção", ".hidden", "x.tar.gz"} {
+	// As marcas de direção (LRM/RLM/ALM) continuam valendo: elas não reordenam o que vem depois
+	// e aparecem em nomes legítimos em árabe e hebraico.
+	for _, good := range []string{"a", "..a", "a b", "ção", ".hidden", "x.tar.gz", "\u200fدليل.pdf", "a\u200eb", "x\u061cy"} {
 		if err := ValidName(good); err != nil {
 			t.Errorf("ValidName(%q) rejected: %v", good, err)
 		}

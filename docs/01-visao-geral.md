@@ -81,6 +81,18 @@ Consequência assumida: **um reinício mata as operações em andamento**. O des
 
 O share guarda o caminho base-relativo e o SHA-256 do token (256 bits). Excluir, mover ou renomear o item pelo app revoga o link (e os links de tudo que estiver dentro dele); para mudanças feitas por fora, o `dev`/`inode` gravado na criação faz o link parar de responder. Seguir o item para o novo caminho foi descartado: o link publicaria um lugar que quem o criou não escolheu. A resposta para token inexistente, expirado ou revogado é sempre o mesmo 404.
 
+### ADR-10 · Container distroless sem root e sem `chown` no entrypoint
+
+Não há shell na imagem; o healthcheck é o subcomando `healthcheck` do próprio binário. O app roda como `PUID:PGID` e testa a gravação em `/data` e `/config` na inicialização. Como o Docker cria bind mounts inexistentes como `root`, o compose traz um serviço `init` (Alpine, executa uma vez) que ajusta `/config` e, só se vazia, `/data`.
+
+### ADR-11 · Banco fora da raiz de dados
+
+`FILEZAM_DATA_DIR` não pode ficar dentro de `FILEZAM_ROOT` (verificado no `config.Load`). Do contrário o próprio gestor exibiria e permitiria baixar `filezam.db`, que contém hashes de senhas, sessões e tokens.
+
+### ADR-12 · Interface em pt-BR num único arquivo de strings
+
+Todos os textos ficam em `web/src/i18n/pt-BR.ts` (referência) e `web/src/i18n/en.ts`, incluindo a tradução dos códigos de erro da API; `strings.ts` expõe o objeto `S` do idioma ativo (preferência `auto`/`pt-BR`/`en`). Um idioma novo é um arquivo em `i18n/` com as mesmas chaves, sem tocar nos componentes.
+
 ### ADR-13 · Apelido de link com senha obrigatória, e que não volta ao pool
 
 Um endereço escolhido pelo usuário é adivinhável, ao contrário do token de 256 bits, então o sigilo passa a morar na senha, que vira obrigatória — em vez de embutir um sufixo aleatório, que devolveria um endereço que ninguém consegue ditar por telefone, que era o motivo do recurso. Contra varredura: link travado não revela sequer o nome do item, e só a tentativa **errada** consome o balde de 30/min por IP. Revogar um link com apelido marca `revoked_at` em vez de apagar a linha: liberar o endereço deixaria outra pessoa assumir um link já divulgado e passar a receber o que era destinado a quem o criou. O dono libera de propósito com `?purge=1`.
@@ -122,15 +134,3 @@ Sobra gerar sob demanda: só o que a virtualização da listagem mostra, guardad
 resposta é a única do produto que o navegador guarda, e isso só é seguro porque a URL carrega o
 `mtime`. O recurso é desligável pelo administrador e por cada usuário, porque velocidade é a
 prioridade declarada do projeto e nem toda instalação quer pagar essa CPU.
-
-### ADR-10 · Container distroless sem root e sem `chown` no entrypoint
-
-Não há shell na imagem; o healthcheck é o subcomando `healthcheck` do próprio binário. O app roda como `PUID:PGID` e testa a gravação em `/data` e `/config` na inicialização. Como o Docker cria bind mounts inexistentes como `root`, o compose traz um serviço `init` (Alpine, executa uma vez) que ajusta `/config` e, só se vazia, `/data`.
-
-### ADR-11 · Banco fora da raiz de dados
-
-`FILEZAM_DATA_DIR` não pode ficar dentro de `FILEZAM_ROOT` (verificado no `config.Load`). Do contrário o próprio gestor exibiria e permitiria baixar `filezam.db`, que contém hashes de senhas, sessões e tokens.
-
-### ADR-12 · Interface em pt-BR num único arquivo de strings
-
-Todos os textos ficam em `web/src/i18n/pt-BR.ts` (referência) e `web/src/i18n/en.ts`, incluindo a tradução dos códigos de erro da API; `strings.ts` expõe o objeto `S` do idioma ativo (preferência `auto`/`pt-BR`/`en`). Um idioma novo é um arquivo em `i18n/` com as mesmas chaves, sem tocar nos componentes.

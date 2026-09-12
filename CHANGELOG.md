@@ -10,7 +10,11 @@ Todas as mudanças relevantes do Filezam ficam registradas aqui. O formato segue
 - **Editor de texto e markdown**: corrija um `.txt`, `.md` ou arquivo de configuração direto no navegador, sem baixar e reenviar. Arquivos `.md` mostram a prévia formatada ao lado enquanto você digita. Se alguém salvar o mesmo arquivo enquanto você edita, o Filezam avisa e **não** apaga o trabalho da outra pessoa — o seu texto continua na tela para você copiar.
 - **Endereço personalizado no link público**: em vez do token aleatório, o link pode ter um apelido escolhido por quem o cria (`/s/orcamento-2026`), único em toda a instalação. Como um apelido é fácil de adivinhar, ele **exige senha** — o sigilo do link passa a morar nela. Revogar um link com apelido não devolve o endereço para outras pessoas: ele continua reservado a quem o criou, até ser liberado de propósito em **Compartilhamentos**.
 - **Link público para receber arquivos**: uma caixa de entrada que qualquer pessoa, sem conta, usa para enviar arquivos para uma pasta sua. A pasta é criada na hora e precisa estar vazia; cota e vencimento (no máximo 30 dias) são obrigatórios. Quem envia não lista nem baixa nada — vê apenas os próprios envios — e nenhum arquivo existente é sobrescrito: um nome repetido vira `nome (1).ext`.
-- **Administração → Configurações do sistema**: liga e desliga os dois recursos para todos os usuários e define os tetos dos links de recebimento (cota, validade, tamanho por arquivo, número de arquivos, links por usuário). O link de recebimento vem **desligado** por padrão.
+- **Administração → Configurações do sistema**: liga e desliga os quatro recursos opcionais (endereço personalizado, link de recebimento, extrair/compactar, miniaturas) para todos os usuários e define os tetos dos links de recebimento (cota, validade, tamanho por arquivo, número de arquivos, links por usuário). O link de recebimento vem **desligado** por padrão.
+
+### Alterado
+- Um link público protegido por senha não revela mais o nome do item enquanto não for destravado.
+- Desligar um recurso em **Configurações do sistema** vale também para o que já existe — links no ar, item de menu — e não só para a criação de novos.
 
 ### Corrigido
 - No link de recebimento, **um envio lento prendia os outros**: cada arquivo esperava o anterior terminar de subir por inteiro, o que em conexão doméstica e atrás de proxy estourava o tempo limite e aparecia como "erro interno no servidor". A fila agora só existe para as contas de cota e para escolher o nome, que levam milissegundos.
@@ -20,9 +24,12 @@ Todas as mudanças relevantes do Filezam ficam registradas aqui. O formato segue
 - Ao enviar uma **pasta**, a listagem aberta não mostrava o conteúdo novo até recarregar a página: o aviso de mudança ia só para a subpasta de destino, não para a pasta que estava na tela.
 - O campo de senha dizia "opcional" mesmo quando um endereço personalizado a tornava obrigatória.
 
-### Alterado
-- Um link público protegido por senha não revela mais o nome do item enquanto não for destravado.
-- Desligar um dos dois recursos em **Configurações do sistema** vale também para os links que já existem, e não só para a criação de novos.
+### Segurança
+- A senha de um link público passa a exigir **8 caracteres**, o mesmo mínimo das senhas de conta. Num link com endereço personalizado ela é o único segredo, porque o endereço é escolhido para ser fácil de dizer — e de adivinhar.
+- Duas sessões de envio abertas no mesmo instante no mesmo link não reservam mais espaço além da cota: conferir a cota e criar a sessão viraram uma operação só.
+- Um arquivo recebido por link público é registrado mesmo que quem enviou feche a aba no exato momento em que a transferência termina. Antes, o arquivo podia ficar no disco sem entrar na conta do link.
+- Nomes de arquivo com caracteres de inversão de texto (U+202A–U+202E, U+2066–U+2069) são recusados: eles fazem `nota‮gpj.exe` aparecer na tela como `notaexe.jpg`, dando a um executável cara de foto. As marcas de direção usadas em árabe e hebraico continuam valendo.
+- As miniaturas ficam cinco minutos no cache do navegador, e não sete dias: é conteúdo do usuário, e o que o navegador guarda em disco sobrevive ao logout. Passado esse tempo a imagem é revalidada sem ser transferida de novo.
 
 ## [1.0.0] - 2026-09-10
 
