@@ -68,7 +68,7 @@ export default function AdminSettings() {
   if (q.isLoading || !form) return <div className="flex h-full items-center justify-center"><ISpinner /></div>
 
   const set = (patch: Partial<Settings>) => setForm({ ...form, ...patch })
-  const toggle = (key: 'slugsEnabled' | 'dropEnabled') => {
+  const toggle = (key: 'slugsEnabled' | 'dropEnabled' | 'thumbsEnabled') => {
     set({ [key]: !form[key] } as Partial<Settings>)
     save.mutate({ [key]: !form[key] } as Partial<Settings>)
   }
@@ -80,6 +80,7 @@ export default function AdminSettings() {
       <div className="card max-w-2xl divide-y divide-neutral-200 dark:divide-neutral-800">
         <Switch on={form.slugsEnabled} onClick={() => toggle('slugsEnabled')} label={S.settingsSlugs} hint={S.settingsSlugsHint} />
         <Switch on={form.dropEnabled} onClick={() => toggle('dropEnabled')} label={S.settingsDrop} hint={S.settingsDropHint} />
+        <Switch on={form.thumbsEnabled} onClick={() => toggle('thumbsEnabled')} label={S.settingsThumbs} hint={S.settingsThumbsHint} />
         {form.dropEnabled && (
           <div className="space-y-3 px-4 py-4">
             <h2 className="text-sm font-semibold">{S.settingsDropLimits}</h2>

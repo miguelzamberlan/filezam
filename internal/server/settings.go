@@ -31,6 +31,13 @@ const (
 	defExtractMaxEntries = int64(50000)
 	defExtractMaxArchive = int64(2) << 30
 
+	// Miniaturas. O teto de pixels é lido do cabeçalho antes de decodificar, que é o que impede
+	// uma imagem declarada como enorme de estourar a memória.
+	defThumbsEnabled   = true
+	defThumbsMaxPixels = int64(50_000_000)
+	defThumbsMaxFile   = int64(64) << 20
+	defThumbsCacheMax  = int64(2) << 30
+
 	// dropTTLHardMax é requisito de produto, não configuração: um link de envio nunca pode
 	// valer mais de 30 dias, e o administrador só consegue encurtar esse prazo.
 	dropTTLHardMax = 30 * 24 * time.Hour
@@ -42,6 +49,10 @@ const (
 	extractBytesHardMax   = int64(1) << 40
 	extractEntriesHardMax = int64(500000)
 	extractArchiveHardMax = int64(16) << 30
+
+	thumbsPixelsHardMax = int64(500_000_000)
+	thumbsFileHardMax   = int64(1) << 30
+	thumbsCacheHardMax  = int64(100) << 30
 )
 
 // settings holds the admin-editable globals.
@@ -59,6 +70,11 @@ type settings struct {
 	ExtractMaxBytes   int64 `json:"extractMaxBytes"`   // total escrito por extração
 	ExtractMaxEntries int64 `json:"extractMaxEntries"` // entradas por arquivo
 	ExtractMaxArchive int64 `json:"extractMaxArchive"` // tamanho do arquivo de origem
+
+	ThumbsEnabled   bool  `json:"thumbsEnabled"`
+	ThumbsMaxPixels int64 `json:"thumbsMaxPixels"`
+	ThumbsMaxFile   int64 `json:"thumbsMaxFile"`
+	ThumbsCacheMax  int64 `json:"thumbsCacheMax"`
 }
 
 func defaultSettings() settings {
@@ -76,6 +92,11 @@ func defaultSettings() settings {
 		ExtractMaxBytes:   defExtractMaxBytes,
 		ExtractMaxEntries: defExtractMaxEntries,
 		ExtractMaxArchive: defExtractMaxArchive,
+
+		ThumbsEnabled:   defThumbsEnabled,
+		ThumbsMaxPixels: defThumbsMaxPixels,
+		ThumbsMaxFile:   defThumbsMaxFile,
+		ThumbsCacheMax:  defThumbsCacheMax,
 	}
 }
 
@@ -126,6 +147,14 @@ func (s *Server) loadSettings(ctx context.Context) error {
 			v.ExtractMaxEntries = parseInt(row.Value, v.ExtractMaxEntries)
 		case "extract_max_archive":
 			v.ExtractMaxArchive = parseInt(row.Value, v.ExtractMaxArchive)
+		case "thumbs_enabled":
+			v.ThumbsEnabled = row.Value == "1"
+		case "thumbs_max_pixels":
+			v.ThumbsMaxPixels = parseInt(row.Value, v.ThumbsMaxPixels)
+		case "thumbs_max_file":
+			v.ThumbsMaxFile = parseInt(row.Value, v.ThumbsMaxFile)
+		case "thumbs_cache_max":
+			v.ThumbsCacheMax = parseInt(row.Value, v.ThumbsCacheMax)
 		}
 	}
 	s.set.mu.Lock()
@@ -154,6 +183,9 @@ func clampSettings(v settings) settings {
 	v.ExtractMaxBytes = clamp64(v.ExtractMaxBytes, 1<<20, extractBytesHardMax)
 	v.ExtractMaxEntries = clamp64(v.ExtractMaxEntries, 1, extractEntriesHardMax)
 	v.ExtractMaxArchive = clamp64(v.ExtractMaxArchive, 1<<20, extractArchiveHardMax)
+	v.ThumbsMaxPixels = clamp64(v.ThumbsMaxPixels, 1<<16, thumbsPixelsHardMax)
+	v.ThumbsMaxFile = clamp64(v.ThumbsMaxFile, 1<<16, thumbsFileHardMax)
+	v.ThumbsCacheMax = clamp64(v.ThumbsCacheMax, 1<<20, thumbsCacheHardMax)
 	return v
 }
 
@@ -195,6 +227,11 @@ func (s *Server) handleAdminSettingsUpdate(w http.ResponseWriter, r *http.Reques
 		ExtractMaxBytes   *int64 `json:"extractMaxBytes"`
 		ExtractMaxEntries *int64 `json:"extractMaxEntries"`
 		ExtractMaxArchive *int64 `json:"extractMaxArchive"`
+
+		ThumbsEnabled   *bool  `json:"thumbsEnabled"`
+		ThumbsMaxPixels *int64 `json:"thumbsMaxPixels"`
+		ThumbsMaxFile   *int64 `json:"thumbsMaxFile"`
+		ThumbsCacheMax  *int64 `json:"thumbsCacheMax"`
 	}
 	if err := readJSON(r, &in); err != nil {
 		return err
@@ -244,6 +281,16 @@ func (s *Server) handleAdminSettingsUpdate(w http.ResponseWriter, r *http.Reques
 		return err
 	}
 	if err := putInt("extract_max_archive", in.ExtractMaxArchive, 1<<20, extractArchiveHardMax); err != nil {
+		return err
+	}
+	putBool("thumbs_enabled", in.ThumbsEnabled)
+	if err := putInt("thumbs_max_pixels", in.ThumbsMaxPixels, 1<<16, thumbsPixelsHardMax); err != nil {
+		return err
+	}
+	if err := putInt("thumbs_max_file", in.ThumbsMaxFile, 1<<16, thumbsFileHardMax); err != nil {
+		return err
+	}
+	if err := putInt("thumbs_cache_max", in.ThumbsCacheMax, 1<<20, thumbsCacheHardMax); err != nil {
 		return err
 	}
 	if len(vals) > 0 {

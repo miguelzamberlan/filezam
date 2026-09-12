@@ -78,6 +78,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
         <Section title={S.settingsGeneral}>
           <Toggle checked={prefs.showHidden} label={S.prefShowHidden} onChange={(v) => set({ showHidden: v })} />
           <Toggle checked={prefs.showHints} label={S.prefShowHints} onChange={(v) => set({ showHints: v })} />
+          <Toggle checked={prefs.thumbs} label={S.prefThumbs} onChange={(v) => set({ thumbs: v })} />
           <Toggle checked={prefs.confirmDelete} label={S.prefConfirmDelete} onChange={(v) => set({ confirmDelete: v })} />
         </Section>
 

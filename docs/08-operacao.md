@@ -284,6 +284,10 @@ Dimensionamento de disco com links de recebimento: o pior caso por usuário é
 a rede final para o que as sessões inacabadas reservam. Numa instalação com gente de fora enviando,
 defina cota por usuário.
 
+O cache de miniaturas fica em `<DATA_DIR>/thumbs` e entra no dimensionamento do volume de
+configuração, não no de dados: o padrão é no máximo 2 GiB, ajustável em **Configurações do
+sistema**. Apagar a pasta é seguro a qualquer momento — o servidor regenera sob demanda.
+
 ## Subcomandos do binário
 
 | Comando | Uso |
@@ -340,6 +344,7 @@ Logs em JSON no stdout (`docker compose logs -f filezam` ou `journalctl -u filez
 | Pesquisa não acha arquivo copiado por Samba/SSH | o índice só vê mudanças feitas pelo Filezam até a próxima varredura | Aguardar `FILEZAM_INDEX_INTERVAL` ou **Reconstruir índice** na tela Pesquisar (admin) |
 | Pasta `.filezam-trash` no disco | lixeira do Filezam; invisível na interface | Não apagar à mão: use Esvaziar lixeira |
 | Usuário diz que a senha certa não entra | bloqueio de 15 min+ por (usuário, IP) após 10 erros; a resposta é igual à de senha errada | Esperar, ou entrar de outro endereço; ver `login.locked` na auditoria |
+| Miniaturas não aparecem | formato sem decodificador (HEIC, AVIF, RAW, vídeo), imagem acima de `thumbs_max_pixels`, ou recurso desligado | É o comportamento esperado: o arquivo fica com o ícone por tipo. Conferir o interruptor em **Configurações do sistema** e a preferência pessoal em **Preferências** |
 | 507 `drop_full` no link de recebimento | a cota do link acabou, ou a do dono | Criar um link novo, aumentar a cota do dono, ou esperar as sessões inacabadas caírem (2 h por padrão). A cota do link conta **tudo que já entrou**, mesmo que os arquivos tenham sido apagados depois |
 | 409 `not_empty` ao criar um link de recebimento | a pasta escolhida já tem conteúdo (inclusive parte de upload) | Escolher um nome de pasta que ainda não existe; o link cria a pasta |
 | 409 `slug_taken` com um endereço que você mesmo usava | o link foi revogado, e o apelido continua reservado ao dono de propósito | Liberar em **Compartilhamentos → Liberar endereço** |

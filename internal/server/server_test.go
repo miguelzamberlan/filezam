@@ -6,6 +6,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"io"
 	"log/slog"
 	"mime/multipart"
@@ -2336,4 +2339,101 @@ func TestExtractBombFailsJob(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(root, "teamA", "bomba")); !os.IsNotExist(err) {
 		t.Fatalf("destination folder left behind: %v", err)
 	}
+}
+
+// pngBytes gera um PNG de w×h para os testes.
+func pngBytes(t *testing.T, w, h int) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			img.Set(x, y, color.RGBA{uint8(x % 256), uint8(y % 256), 120, 255})
+		}
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+func TestThumbnails(t *testing.T) {
+	admin, s, root := newEnv(t)
+	admin.login("admin", "admin")
+	admin.expect("POST", "/api/auth/password", map[string]string{"current": "admin", "new": "correct horse battery"}, 200)
+	if err := os.WriteFile(filepath.Join(root, "teamA", "foto.png"), pngBytes(t, 600, 400), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Primeira visita gera; a resposta é um JPEG pequeno, guardável pelo navegador.
+	resp, _ := admin.do("GET", "/api/files/thumb?path=teamA/foto.png", nil, nil)
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != 200 || resp.Header.Get("Content-Type") != "image/jpeg" {
+		t.Fatalf("thumb: %d %s", resp.StatusCode, resp.Header.Get("Content-Type"))
+	}
+	if !strings.Contains(resp.Header.Get("Cache-Control"), "max-age=") || resp.Header.Get("ETag") == "" {
+		t.Fatalf("cache headers: %q %q", resp.Header.Get("Cache-Control"), resp.Header.Get("ETag"))
+	}
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("decode thumb: %v", err)
+	}
+	// 600×400 reduzido pelo lado maior: 256×170.
+	if cfg.Width != 256 || cfg.Height != 170 {
+		t.Fatalf("thumb size: %dx%d", cfg.Width, cfg.Height)
+	}
+	// O cache vive no DataDir, nunca na árvore do usuário.
+	if des, _ := os.ReadDir(filepath.Join(root, "teamA")); len(des) != 2 {
+		t.Fatalf("cache leaked into the user's tree: %d entries", len(des))
+	}
+	etag := resp.Header.Get("ETag")
+
+	// Segunda visita vem do cache e revalida com 304.
+	resp2, _ := admin.do("GET", "/api/files/thumb?path=teamA/foto.png", nil, map[string]string{"If-None-Match": etag})
+	resp2.Body.Close()
+	if resp2.StatusCode != 304 {
+		t.Fatalf("revalidation: %d", resp2.StatusCode)
+	}
+
+	// Alterar o arquivo muda a chave, então a miniatura é outra.
+	if err := os.WriteFile(filepath.Join(root, "teamA", "foto.png"), pngBytes(t, 200, 200), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	resp3, _ := admin.do("GET", "/api/files/thumb?path=teamA/foto.png", nil, map[string]string{"If-None-Match": etag})
+	resp3.Body.Close()
+	if resp3.StatusCode != 200 || resp3.Header.Get("ETag") == etag {
+		t.Fatalf("changed file served a stale thumbnail: %d %q", resp3.StatusCode, resp3.Header.Get("ETag"))
+	}
+
+	// O que não é imagem decodificável cai no ícone (404), não em erro.
+	for _, p := range []string{"teamA/pub/doc.txt", "teamA/pub", "teamA/nao-existe.png"} {
+		r, _ := admin.do("GET", "/api/files/thumb?path="+p, nil, nil)
+		r.Body.Close()
+		if r.StatusCode != 404 {
+			t.Errorf("thumb of %s: %d", p, r.StatusCode)
+		}
+	}
+	// Um PNG que declara dimensões absurdas é recusado pelo cabeçalho, sem decodificar.
+	admin.expect("PATCH", "/api/admin/settings", map[string]any{"thumbsMaxPixels": 1 << 16}, 200)
+	if err := os.WriteFile(filepath.Join(root, "teamA", "enorme.png"), pngBytes(t, 900, 900), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r, _ := admin.do("GET", "/api/files/thumb?path=teamA/enorme.png", nil, nil)
+	r.Body.Close()
+	if r.StatusCode != 404 {
+		t.Fatalf("oversized image: %d", r.StatusCode)
+	}
+
+	// Desligar no admin apaga a opção para todos.
+	admin.expect("PATCH", "/api/admin/settings", map[string]any{"thumbsEnabled": false}, 200)
+	r2, _ := admin.do("GET", "/api/files/thumb?path=teamA/foto.png", nil, nil)
+	r2.Body.Close()
+	if r2.StatusCode != 404 {
+		t.Fatalf("disabled: %d", r2.StatusCode)
+	}
+	if cfgOut := admin.expect("GET", "/api/config", nil, 200); cfgOut["thumbsEnabled"] != false {
+		t.Fatalf("config still advertises thumbnails: %v", cfgOut["thumbsEnabled"])
+	}
+	_ = s
 }

@@ -22,7 +22,8 @@ Favorite { id, path, name, createdAt }
 Share    { id, token, slug, mode: "read"|"drop", kind: "dir"|"file", hasPassword, revoked, path, name, createdBy, mine, createdAt, expiresAt, expired, accessCount, lastAccessAt,
            quotaBytes, usedBytes, fileCount, maxFileBytes, maxFiles /*só mode "drop"*/ }
 Settings { slugsEnabled, dropEnabled, dropMaxQuota, dropMaxTtl, dropFileMax, dropMaxFiles, dropMaxLinks, dropStaleAge,
-           extractEnabled, extractMaxBytes, extractMaxEntries, extractMaxArchive }
+           extractEnabled, extractMaxBytes, extractMaxEntries, extractMaxArchive,
+           thumbsEnabled, thumbsMaxPixels, thumbsMaxFile, thumbsCacheMax }
 AdminUser{ id, username, role, scope, mustChangePassword, disabled, lockedUntil, createdAt, updatedAt }
 Audit    { id, ts, userId, username, ip, action, detail /*JSON string*/ }
 ```
@@ -59,6 +60,7 @@ Timestamps: `mtime` em milissegundos; os demais em segundos Unix.
 | GET | `/api/files/info?path=` | U | Propriedades: `{path, entry, totals?: {files, dirs, bytes, partial}, shares?: Share[], favorite?: bool}`. `totals`/`shares`/`favorite` só para pastas; a contagem para em 200 000 entradas ou 15 s (`partial: true`). Shares: os do usuário, ou todos se admin |
 | GET | `/api/files/search?path=&q=&limit=` | U | Pesquisa por nome (substring, sem diferenciar maiúsculas) a partir de `path` (pasta; 409 `not_dir`), dentro do escopo: `{path, q, results: [{dir, entry}], partial, source: "index"\|"walk", indexedAt}`. Com o índice de nomes pronto (`source: index`) a resposta vem do SQLite e cada acerto é conferido no disco (fantasmas somem); senão percorre o disco (`walk`). `dir` é a pasta do item relativa ao escopo. Para em 500 resultados (`limit` ≤ 500), 200 000 entradas visitadas ou 10 s → `partial: true`. Symlinks não são seguidos; nomes `.filezam-*` nunca aparecem. 400 `bad_query` sem `q` (máx. 255 bytes); 429 `busy` acima de 2 pesquisas simultâneas por usuário |
 | GET | `/api/files/disk` | U | `{total, free, used}` em bytes do sistema de arquivos da raiz do escopo (`statfs`; zeros se desconhecido); com cota, também `{quota, quotaUsed}` |
+| GET | `/api/files/thumb?path=&v=` | U | JPEG de no máximo 256 px do lado maior, gerado na primeira vez e guardado em cache. `v` é o `mtime` do arquivo: ele versiona a URL, e por isso a resposta vai com `private, max-age=7d, immutable` — a única resposta de conteúdo que o navegador guarda. 404 `no_thumb` quando o formato não tem decodificador, a imagem passa dos limites ou o recurso está desligado (o cliente cai no ícone); 429 `busy` só depois de esperar por um slot |
 | GET | `/api/files/content?path=&inline=0\|1` | U | Conteúdo com suporte a `Range`; `inline=1` só para tipos permitidos ([03](03-seguranca.md)) |
 | PUT | `/api/files/content?path=&mtime=&overwrite=0\|1&ifMtime=` | U | Upload pequeno (corpo bruto ≤ `chunkSize`) → 201 `{path, entry}`; 409 `exists`, 413 `too_large`, 507 `no_space`. `ifMtime` (ms) é conferido imediatamente antes de publicar e recusa com 409 `modified` se o arquivo mudou desde então — é o que o editor usa para não sobrescrever em silêncio quem salvou primeiro; resolução de 1 ms |
 | POST | `/api/files/batch?dir=&overwrite=` | U | Multipart (ver [05](05-uploads.md#lote)) → `{dir, results:[{path, ok, code?, error?, entry?}]}` |
@@ -226,7 +228,7 @@ Regras de `username`: 2–64 caracteres de `A-Z a-z 0-9 . _ - @`, único sem dis
 | 400 | `bad_json`, `invalid_path` (inclui tamanho de upload fora de `[0, 1 PiB]` e nomes `.filezam-*`), `invalid_name` (inclui caracteres de controle em nomes novos), `bad_query`, `nested`, `root_op`, `bad_index`, `bad_length`, `bad_conflict`, `bad_expiry`, `bad_id`, `bad_meta`, `bad_multipart`, `no_paths`, `too_many`, `too_many_files`, `weak_password`, `bad_archive`, `invalid_slug`, `password_required`, `bad_mode`, `invalid_username`, `invalid_role`, `invalid_scope`, `bad_quota`, `unsupported` | Entrada inválida |
 | 401 | `unauthorized`, `bad_credentials`, `share_locked`, `bad_totp`, `totp_expired` | Sem sessão / credenciais erradas / link com senha pendente / código 2FA inválido ou etapa expirada |
 | 403 | `forbidden`, `csrf`, `feature_disabled`, `password_change_required`, `totp_required`, `scope_unavailable`, `fs_permission` | Sem permissão |
-| 404 | `not_found` | Caminho, job, share, usuário |
+| 404 | `not_found`, `no_thumb` | Caminho, job, share, usuário; `no_thumb` não é erro para o usuário, é o sinal para usar o ícone |
 | 409 | `exists`, `is_dir`, `not_dir`, `not_empty`, `modified`, `slug_taken`, `drop_count_exceeded`, `drop_links_exceeded`, `conflict`, `cross_device`, `upload_in_progress`, `incomplete`, `last_admin`, `self`, `totp_setup_expired`, `totp_not_enabled`, `totp_already_enabled` | Conflito de estado |
 | 411 | `length_required` | Chunk sem `Content-Length` |
 | 413 | `too_large`, `upload_reserve_exceeded`, `drop_file_limit`, `archive_too_large` | Corpo maior que o limite / uploads inacabados do usuário já reservam o teto de espaço / arquivo acima do teto por arquivo do link de envio |

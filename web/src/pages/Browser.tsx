@@ -565,6 +565,8 @@ export default function Browser() {
             focused={ui.focused}
             cutNames={cutNames}
             view={ui.view}
+            thumbs={cfg?.thumbsEnabled !== false && ui.prefs.thumbs !== false}
+            path={path}
             sort={ui.sort}
             onSort={ui.setSort}
             onRowClick={rowClick}

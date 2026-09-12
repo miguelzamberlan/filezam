@@ -4,7 +4,9 @@ import type { Entry } from '../api/types'
 import { formatBytes, formatDate } from '../lib/format'
 import type { Sort, SortKey } from '../lib/naturalSort'
 import { S } from '../strings'
+import { join } from '../lib/paths'
 import { iconFor } from './Icons'
+import Thumb, { canThumb } from './Thumb'
 
 export interface FileListProps {
   entries: Entry[]
@@ -28,6 +30,11 @@ export interface FileListProps {
   onDragStartEntry?: (e: Entry, ev: React.DragEvent) => void
   onDropEntries?: (target: Entry, names: string[]) => void
   onEndReached?: () => void // rolagem chegou perto do fim (listagem paginada pede a próxima página)
+  // Miniaturas de imagem no lugar do ícone. Exige `path` (a pasta da listagem) e só é ligado no
+  // navegador autenticado: o link público limita downloads simultâneos por IP e uma grade de
+  // miniaturas bateria nesse teto.
+  thumbs?: boolean
+  path?: string
 }
 
 // Tipo MIME do arraste interno; o payload é um JSON com os nomes arrastados.
@@ -38,7 +45,7 @@ export const setDragging = (names: string[]) => { dragging = names }
 const ROW = 34
 
 export default function FileList(props: FileListProps) {
-  const { entries, selection, focused, cutNames, view, sort, onSort } = props
+  const { entries, selection, focused, cutNames, view, sort, onSort, thumbs } = props
   const zoom = props.zoom ?? 1
   const zoomStyle = zoom !== 1 ? { zoom } : undefined
   const parentRef = useRef<HTMLDivElement>(null)
@@ -212,7 +219,7 @@ export default function FileList(props: FileListProps) {
                   {...dragProps(e)}
                   {...pressProps(e)}
                 >
-                  <div className="flex h-14 items-center justify-center">{iconFor(e.name, e.type, 40)}</div>
+                  <div className="flex h-14 items-center justify-center">{thumbs && canThumb(e) ? <Thumb entry={e} path={join(props.path ?? '', e.name)} size={56} /> : iconFor(e.name, e.type, 40)}</div>
                   <div className="w-full truncate text-xs">{e.name}</div>
                   <div className="text-[10px] text-neutral-500">{e.type === 'dir' ? S.folder : formatBytes(e.size)}</div>
                 </div>
@@ -247,7 +254,7 @@ export default function FileList(props: FileListProps) {
                 {...dragProps(e)}
                 {...pressProps(e)}
               >
-                <div className="flex w-8 shrink-0 items-center justify-center">{iconFor(e.name, e.type)}</div>
+                <div className="flex w-8 shrink-0 items-center justify-center">{thumbs && canThumb(e) ? <Thumb entry={e} path={join(props.path ?? '', e.name)} size={18} /> : iconFor(e.name, e.type)}</div>
                 <div className={'min-w-0 flex-1 truncate px-2 text-sm ' + (e.nameInvalid ? 'text-red-500' : '')} title={e.name}>
                   {e.name}
                   {e.link && <span className="ml-1 text-xs text-neutral-400">↗</span>}

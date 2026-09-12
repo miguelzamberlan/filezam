@@ -32,6 +32,9 @@ share_uploads(id, share_id → shares CASCADE, sender /*id assinado do visitante
               name /*nome final no disco: o que o dono vê*/, sent_name /*o que o remetente pediu: o único que volta para ele*/,
               size, created_at)  -- índice: (share_id, sender)
 settings(key PRIMARY KEY, value, updated_at)  -- só o que o admin mudou; o resto é padrão de fábrica
+-- O cache de miniaturas NÃO fica no banco: são arquivos em <DATA_DIR>/thumbs, nomeados pelo hash
+-- de (dev, ino, mtime, tamanho, versão), espalhados em 256 subpastas. Podem ser apagados a
+-- qualquer momento; o servidor regenera sob demanda.
 
 uploads(id /*hex 16 bytes*/, user_id → users CASCADE, dir /*base-relativo*/, name, size, mtime,
         chunk_size, received BLOB /*bitset ceil(chunks/8)*/, overwrite,

@@ -20,6 +20,7 @@ Um único processo: servidor HTTP, workers de jobs e tarefas de manutenção. Se
 | `internal/server` | Roteamento, middlewares, handlers, sessões, SPA, auditoria | todos abaixo |
 | `internal/vfs` | **Núcleo de segurança**: normalização de caminhos, `Root`, listagem, pesquisa (`Find`), cópia, movimento, remoção, zip, arquivos `.part` | `os.Root`, `x/sys/unix` |
 | `internal/uploads` | Sessões chunked: bitset, escrita por offset, finalização, limpeza | store, vfs |
+| `internal/thumbs` | Geração e cache em disco de miniaturas (`DataDir/thumbs`) | vfs |
 | `internal/index` | Índice de nomes em SQLite: varredura completa periódica (`WalkEntries`) e ajustes pontuais chamados pelos handlers | store, vfs |
 | `internal/metrics` | Contadores em memória e renderização no formato Prometheus (sem dependências) | — |
 | `internal/jobs` | Registro em memória de jobs com progresso e cancelamento | — |
@@ -100,6 +101,9 @@ README.md README.en.md CONTRIBUTING.md SECURITY.md CODE_OF_CONDUCT.md CLAUDE.md
 | Bytes escritos por extração | `extract_max_bytes` (10 GiB) | contados de verdade, não do cabeçalho |
 | Entradas por arquivo compactado | `extract_max_entries` (50 000) | a cota limita bytes, não inodes |
 | Tamanho do arquivo a extrair | `extract_max_archive` (2 GiB) | único teto antes de o zip ser carregado na memória |
+| Gerações de miniatura por usuário | 4; o excedente espera até 20 s antes de cair no ícone | `thumbSem` |
+| Pixels de uma imagem para miniatura | `thumbs_max_pixels` (50 MP) | lido do cabeçalho, antes de decodificar |
+| Cache de miniaturas em disco | `thumbs_cache_max` (2 GiB) | varredura horária recolhe as mais antigas |
 | Corpo JSON | 1 MiB | `readJSON` |
 | Corpo de chunk / PUT | `ChunkSize` | `MaxBytesReader` |
 | Corpo de lote | `BatchMaxBytes` + 1 MiB | idem |

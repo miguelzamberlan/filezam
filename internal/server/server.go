@@ -18,6 +18,7 @@ import (
 	"github.com/miguelzamberlan/filezam/internal/jobs"
 	"github.com/miguelzamberlan/filezam/internal/metrics"
 	"github.com/miguelzamberlan/filezam/internal/store"
+	"github.com/miguelzamberlan/filezam/internal/thumbs"
 	"github.com/miguelzamberlan/filezam/internal/uploads"
 	"github.com/miguelzamberlan/filezam/internal/vfs"
 )
@@ -46,6 +47,8 @@ type Server struct {
 	dropMu      dropLocks            // serializa a admissão de arquivos por link
 	extractSem  *auth.KeyedSemaphore // uma extração/compactação por usuário
 	archiveSem  auth.Semaphore       // extrações simultâneas no servidor inteiro
+	thumbSem    *auth.KeyedSemaphore // gerações de miniatura simultâneas por usuário
+	thumbs      *thumbs.Cache        // nil quando as miniaturas estão desligadas ou o cache falhou
 	slugMiss    *auth.Limiter        // tentativas malsucedidas com forma de apelido
 	uploadSem   *auth.KeyedSemaphore
 	searchSem   *auth.KeyedSemaphore
@@ -81,6 +84,7 @@ func New(cfg *config.Config, db *store.DB, base *vfs.Root, log *slog.Logger, ver
 		dropSem:     auth.NewKeyedSemaphore(dropClientParallel),
 		extractSem:  auth.NewKeyedSemaphore(1),
 		archiveSem:  auth.NewSemaphore(extractGlobalMax),
+		thumbSem:    auth.NewKeyedSemaphore(4),
 		slugMiss:    auth.NewLimiter(30, 30),
 		uploadSem:   auth.NewKeyedSemaphore(8),
 		searchSem:   auth.NewKeyedSemaphore(2),
@@ -97,6 +101,13 @@ func New(cfg *config.Config, db *store.DB, base *vfs.Root, log *slog.Logger, ver
 	}
 	s.secretKey = key
 	s.pending = newPendingState()
+	// O cache de miniaturas vive no DataDir, fora da árvore do usuário: não entra em backup de
+	// conteúdo, não aparece em listagem nem em zip, e segue o precedente do banco e do secret.key.
+	if tc, err := thumbs.New(filepath.Join(cfg.DataDir, "thumbs"), log); err != nil {
+		log.Warn("thumbnail cache unavailable; thumbnails disabled", "err", err)
+	} else {
+		s.thumbs = tc
+	}
 	s.set.v = defaultSettings()
 	if err := s.loadSettings(bg); err != nil {
 		cancel()
@@ -183,6 +194,11 @@ func (s *Server) StartBackground() {
 		if err := s.db.PruneJobs(ctx, time.Now().Add(-30*24*time.Hour).Unix()); err != nil {
 			s.log.Warn("prune jobs", "err", err)
 		}
+		// A chave do cache muda a cada alteração do arquivo, então as entradas velhas ficam para
+		// trás por construção: a varredura recolhe as mais antigas quando o teto é passado.
+		if s.thumbs != nil {
+			s.thumbs.Prune(s.settings().ThumbsCacheMax)
+		}
 	}
 	if s.indexer != nil {
 		go func() {
@@ -264,6 +280,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.Handle("GET /api/files/disk", user(s.handleDisk))
 	mux.Handle("GET /api/files/search", user(s.handleSearch))
 	mux.Handle("GET /api/files/content", user(s.handleContent))
+	mux.Handle("GET /api/files/thumb", user(s.handleThumb))
 	mux.Handle("PUT /api/files/content", user(s.handlePutContent))
 	mux.Handle("POST /api/files/batch", user(s.handleBatch))
 	mux.Handle("GET /api/files/zip", user(s.handleZip))
@@ -363,6 +380,7 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) error {
 		"dropFileMax":    s.settings().DropFileMax,
 		"dropMaxFiles":   s.settings().DropMaxFiles,
 		"extractEnabled": s.settings().ExtractEnabled,
+		"thumbsEnabled":  s.settings().ThumbsEnabled && s.thumbs != nil,
 		"previewMaxText": 1 << 20,
 		"version":        s.version,
 	})

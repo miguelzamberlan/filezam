@@ -99,6 +99,34 @@ sustenta que isso seja seguro:
   (mitigado pelo teto de tamanho do arquivo e pelos semáforos); `.tar.gz` ainda não é suportado; e
   trocar o arquivo por fora (Samba) durante a leitura faz a extração falhar, sem escapar do sandbox.
 
+## Miniaturas
+
+Gerar miniatura é decodificar imagem vinda de terceiros, e é a única resposta de conteúdo que o
+produto manda o navegador guardar. As duas coisas têm tratamento próprio:
+
+- **Recusa pelo cabeçalho, antes de decodificar.** `image.DecodeConfig` lê só as dimensões; uma
+  imagem declarada como 50000×50000 é recusada por `thumbs_max_pixels` sem nunca alocar o bitmap.
+  Há também um teto de tamanho de arquivo (`thumbs_max_file`).
+- **Só os decodificadores da biblioteca padrão e de `golang.org/x/image`** (JPEG, PNG, GIF, WebP,
+  BMP, TIFF), todos em Go, sem CGO. HEIC, AVIF, RAW, PDF e vídeo exigiriam bibliotecas em C na
+  imagem distroless e ficam de fora: caem no ícone por tipo.
+- **O cache vive no `DataDir`**, nunca na árvore do usuário: não aparece em listagem, zip, cópia ou
+  backup de conteúdo, e segue o precedente do banco e do `secret.key`. A chave é o SHA-256 de
+  `(dev, ino, mtime, tamanho, versão)`, então qualquer alteração do arquivo gera uma chave nova e a
+  invalidação é automática. As entradas velhas ficam para trás e são recolhidas pela varredura
+  horária quando o cache passa de `thumbs_cache_max`.
+- **Cabeçalhos de cache**: esta é a exceção ao `no-store` que vale para todo o resto do conteúdo. A
+  resposta vai com `private, max-age=7d, immutable` **porque a URL carrega o `mtime`** (`?v=`) e
+  muda junto com o arquivo. `private` impede proxy compartilhado; a miniatura fica no cache do
+  navegador de quem tem acesso, como a imagem original já ficaria se fosse aberta. É o que faz a
+  segunda visita a uma pasta de fotos não gerar requisição nenhuma.
+- **Concorrência**: no máximo 4 gerações por usuário, e a requisição **espera** por um slot (até
+  20 s) em vez de receber 429. Um `<img>` que recebe erro não tenta de novo, então recusar deixaria
+  o ícone congelado na tela — a mesma razão pela qual o download público espera.
+- **Só no navegador autenticado.** Links públicos não têm miniatura: o teto de 2 downloads
+  simultâneos por IP seria atingido por uma grade inteira.
+- Desligável pelo administrador, e cada usuário ainda pode desligar nas próprias preferências.
+
 ## Cabeçalhos HTTP
 
 Em todas as respostas: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: same-origin`, `Permissions-Policy` restritiva, `Cross-Origin-Opener-Policy: same-origin`, e `Strict-Transport-Security` quando a conexão é HTTPS (direta ou por proxy confiável).

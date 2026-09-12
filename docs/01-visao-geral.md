@@ -106,6 +106,19 @@ ser juntado ao destino, porque a ordem inversa colapsaria `..` contra a pasta de
 Extrair "na pasta atual" foi descartado: obrigaria a resolver colisão com o que o usuário já tem, e é
 justamente a classe de problema que a pasta nova elimina de saída.
 
+### ADR-18 · Miniaturas sob demanda, com cache em disco
+
+Servir a imagem original reduzida por CSS baixaria uma pasta inteira de fotos (200 × 5 MB = 1 GB)
+para mostrar oito quadradinhos. Gerar tudo antecipadamente no indexador gastaria CPU com o que
+ninguém vai olhar e transformaria o primeiro scan de um HD cheio de fotos numa operação de horas —
+o walk de hoje é `lstat`-only e barato, e abrir e decodificar arquivos ali mudaria essa natureza.
+
+Sobra gerar sob demanda: só o que a virtualização da listagem mostra, guardado em disco no
+`DataDir` com a chave derivada de `(dev, ino, mtime, tamanho)`, que dá invalidação automática. A
+resposta é a única do produto que o navegador guarda, e isso só é seguro porque a URL carrega o
+`mtime`. O recurso é desligável pelo administrador e por cada usuário, porque velocidade é a
+prioridade declarada do projeto e nem toda instalação quer pagar essa CPU.
+
 ### ADR-10 · Container distroless sem root e sem `chown` no entrypoint
 
 Não há shell na imagem; o healthcheck é o subcomando `healthcheck` do próprio binário. O app roda como `PUID:PGID` e testa a gravação em `/data` e `/config` na inicialização. Como o Docker cria bind mounts inexistentes como `root`, o compose traz um serviço `init` (Alpine, executa uma vez) que ajusta `/config` e, só se vazia, `/data`.

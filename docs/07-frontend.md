@@ -100,6 +100,20 @@ Estado na URL (`?path=&q=`), consulta `['search', path, q]` (staleTime 30 s). Mo
 
 Trash: consulta `['trash']`, seleção por checkbox, ações restaurar/excluir de vez/esvaziar (`dialogs.confirm` nas permanentes), invalida `['list']`, `['disk']` e `['trash']`. PublicShare: `info.locked` mostra o formulário de senha (`POST unlock` grava o cookie; depois invalida `['public', token]`); `kind: file` mostra um cartão com download e preview em vez da listagem. Travado, a resposta não traz o nome, então o cabeçalho cai em `S.appName`.
 
+## Miniaturas (`components/Thumb.tsx`)
+
+O ícone por tipo é renderizado sempre e a miniatura entra por cima quando carrega: a listagem não
+"pula" enquanto as imagens chegam, e qualquer falha (formato sem decodificador, imagem grande
+demais, recurso desligado) simplesmente deixa o ícone à mostra, sem estado de erro na interface.
+
+`loading="lazy"` mais a virtualização do `FileList` fazem com que só o que está na tela seja
+pedido — rolar uma pasta com milhares de fotos não dispara milhares de requisições. A URL carrega o
+`mtime`, então na segunda visita o navegador serve do próprio cache sem tocar no servidor.
+
+As miniaturas só são ligadas no navegador autenticado (`thumbs` + `path` no `FileList`); o
+`PublicShare` não as usa. Além do interruptor do administrador, cada pessoa pode desligar em
+**Preferências**, para quem prefere a listagem mais enxuta possível.
+
 ## Operações de arquivo compactado
 
 **Extrair aqui** e **Compactar em .zip** no menu de contexto — o primeiro condicionado por extensão

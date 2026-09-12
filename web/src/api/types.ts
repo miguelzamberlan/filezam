@@ -70,6 +70,7 @@ export interface AppConfig {
   dropFileMax: number
   dropMaxFiles: number
   extractEnabled: boolean
+  thumbsEnabled: boolean
 }
 
 export interface Settings {
@@ -81,6 +82,14 @@ export interface Settings {
   dropMaxFiles: number
   dropMaxLinks: number
   dropStaleAge: number
+  extractEnabled: boolean
+  extractMaxBytes: number
+  extractMaxEntries: number
+  extractMaxArchive: number
+  thumbsEnabled: boolean
+  thumbsMaxPixels: number
+  thumbsMaxFile: number
+  thumbsCacheMax: number
 }
 
 export type JobType = 'copy' | 'move' | 'delete' | 'extract' | 'archive'

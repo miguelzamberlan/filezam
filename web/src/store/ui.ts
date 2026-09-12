@@ -10,6 +10,7 @@ export interface Clipboard {
 export interface Prefs {
   showHidden: boolean
   showHints: boolean
+  thumbs: boolean // miniaturas de imagem na listagem; quem prioriza velocidade pode desligar
   confirmDelete: boolean
   zoom: number // fator aplicado à listagem (CSS zoom); 1 = padrão
   theme: 'system' | 'light' | 'dark'
@@ -22,7 +23,7 @@ export interface Prefs {
 export const ZOOM_STEPS = [0.85, 1, 1.15, 1.3, 1.5, 1.75, 2]
 
 const defaultPrefs: Prefs = {
-  showHidden: false, showHints: true, confirmDelete: true, zoom: 1,
+  showHidden: false, showHints: true, thumbs: true, confirmDelete: true, zoom: 1,
   theme: 'system', lang: 'auto', accent: '#2563eb', selection: '#3b82f6', focus: '#3b82f6',
 }
 

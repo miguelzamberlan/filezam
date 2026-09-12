@@ -15,6 +15,7 @@
 - **Retomada de upload só soltando o mesmo arquivo de novo** (até 24 h): o navegador não guarda o `File`, e a retomada automática foi descartada (ver Decisões).
 - **Listagem paginada só na ordem do servidor**: enquanto faltam páginas, o filtro da pasta e `Ctrl+A` só alcançam o que já foi carregado.
 - **Índice de nomes não vê mudanças externas** (Samba, SSH) até a próxima varredura completa ou um "Reconstruir índice".
+- **Miniaturas só de imagem, e só de alguns formatos**: HEIC, AVIF, RAW, PDF e vídeo exigiriam bibliotecas em C, incompatíveis com o binário estático e a imagem distroless. Links públicos também não têm miniatura, para não bater no teto de downloads simultâneos por IP.
 - **`.tar.gz` não é extraído**: só `.zip`. O tar tem uma superfície própria (arquivos esparsos, entradas puladas que o leitor descomprime para descartar, hardlinks) que precisa dos seus próprios limites e testes.
 - **Diretório central na memória**: o `archive/zip` carrega o índice do arquivo inteiro antes de qualquer filtro; um `.zip` só de cabeçalhos amplifica o uso de RAM. Contido pelo teto de tamanho do arquivo e pelos semáforos, não eliminado.
 - **Cota do link de recebimento não é devolvida**: ela mede o total que já entrou pelo link, não o que está ocupado agora. Apagar os arquivos recebidos não libera espaço no link — o que impede o link de virar um ralo infinito, mas significa que um link muito usado precisa ser recriado.

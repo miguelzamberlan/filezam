@@ -39,6 +39,7 @@ It is a personal, free and open-source project. It fits home servers, small offi
 - **Trash** with configurable retention and restore to the original place; `Shift+Del` deletes permanently.
 - **Previews** for images, video, audio, PDF, text and rendered Markdown.
 - **Serious uploads**: multi-GB files in parallel resumable chunks, whole folders by drag and drop, thousands of small files batched, all with a progress panel, pause and retry.
+- **Thumbnails**: photo folders show a preview of each image, generated on demand and cached. Can be turned off per installation and per person.
 - **Extract and compress**: unpack a `.zip` into a new folder from the context menu, or zip the current selection. Extraction never overwrites what is already there and refuses entries that try to write outside the folder.
 - **Built-in editor**: edit text, markdown and config files in the browser, with a live preview for `.md` and protection against two people overwriting each other.
 - **Public links**: share a folder or a file read-only with an expiry, optional password, access count and instant revocation. The address can be a name you pick (`/s/budget-2026`), which then requires a password.
