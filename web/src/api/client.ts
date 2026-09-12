@@ -1,5 +1,5 @@
 import type {
-  AdminUser, AppConfig, AuditEntry, Conflict, DiskUsage, Entry, EntryInfo, Favorite, IndexStatus, Job, JobRecord, ListPage, Listing, PublicInfo, SearchResult, Share, TrashItem, UploadSession, User,
+  AdminUser, AppConfig, AuditEntry, Conflict, DiskUsage, Entry, EntryInfo, Favorite, IndexStatus, Job, JobRecord, ListPage, Listing, PublicInfo, SearchResult, Settings, Share, TrashItem, UploadSession, User,
 } from './types'
 
 export class ApiError extends Error {
@@ -136,15 +136,27 @@ export const Api = {
 
   // shares
   shares: () => api<{ shares: Share[]; now: number }>('GET', '/api/shares'),
-  createShare: (path: string, expiresIn: number, name?: string, password?: string) =>
-    api<{ share: Share; token: string; url: string }>('POST', '/api/shares', { path, expiresIn, name: name ?? '', ...(password ? { password } : {}) }),
-  deleteShare: (id: number) => api<{ ok: true }>('DELETE', '/api/shares/' + id),
+  createShare: (opts: { path: string; expiresIn: number; name?: string; password?: string; slug?: string; mode?: 'read' | 'drop'; quotaBytes?: number; maxFileBytes?: number; maxFiles?: number }) =>
+    api<{ share: Share; token: string; url: string }>('POST', '/api/shares', {
+      path: opts.path,
+      expiresIn: opts.expiresIn,
+      name: opts.name ?? '',
+      ...(opts.password ? { password: opts.password } : {}),
+      ...(opts.slug ? { slug: opts.slug } : {}),
+      ...(opts.mode === 'drop' ? { mode: 'drop', quotaBytes: opts.quotaBytes, maxFileBytes: opts.maxFileBytes, maxFiles: opts.maxFiles } : {}),
+    }),
+  // purge libera o apelido de vez; sem ele um link com apelido é só revogado e o endereço
+  // continua reservado a quem o criou.
+  deleteShare: (id: number, purge = false) => api<{ ok: true }>('DELETE', '/api/shares/' + id + (purge ? '?purge=1' : '')),
 
   // trash
   trash: () => api<{ items: TrashItem[]; retention: number }>('GET', '/api/trash'),
   trashRestore: (ids: string[]) => api<{ restored: { id: string; path: string }[]; failed: { id: string; code: string }[] }>('POST', '/api/trash/restore', { ids }),
   trashDelete: (ids: string[]) => api<{ deleted: number }>('POST', '/api/trash/delete', { ids }),
   trashEmpty: () => api<{ deleted: number }>('POST', '/api/trash/empty'),
+
+  adminSettings: () => api<{ settings: Settings; dropTtlHardMax: number }>('GET', '/api/admin/settings'),
+  adminUpdateSettings: (patch: Partial<Settings>) => api<{ settings: Settings; dropTtlHardMax: number }>('PATCH', '/api/admin/settings', patch),
 
   // admin index
   adminIndex: () => api<IndexStatus>('GET', '/api/admin/index'),
@@ -156,6 +168,12 @@ export const Api = {
   publicList: (token: string, path: string) => api<Listing>('GET', `/api/public/${token}/list` + q({ path })),
   publicContentUrl: (token: string, path: string, inline = false) =>
     `/api/public/${token}/content` + q({ path, inline: inline ? 1 : undefined }),
+  // Envio anônimo. Os blocos e o PUT único passam pelo XHR (progresso), não por estas funções.
+  dropCreate: (token: string, name: string, size: number, mtime: number | null) =>
+    api<UploadSession>('POST', `/api/public/${token}/uploads`, { name, size, mtime }),
+  dropComplete: (token: string, id: string) => api<{ name: string; size: number }>('POST', `/api/public/${token}/uploads/${id}/complete`),
+  dropAbort: (token: string, id: string) => api<{ ok: true }>('DELETE', `/api/public/${token}/uploads/${id}`),
+
   publicZipUrl: (token: string, paths: string[]) => {
     const sp = new URLSearchParams()
     for (const p of paths) sp.append('path', p)

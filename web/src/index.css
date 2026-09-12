@@ -68,6 +68,20 @@ button, [role="button"] {
   @apply w-full rounded-md border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900
     px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-focus focus:border-transparent;
 }
+/* barra de consumo de um link de recebimento e a zona de soltar da página pública */
+@utility meter {
+  @apply h-2 w-full overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-800;
+}
+@utility meter-fill {
+  @apply h-full rounded-full bg-accent transition-[width] duration-300;
+}
+@utility dropzone {
+  @apply flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed
+    border-neutral-300 dark:border-neutral-700 px-6 py-10 text-center text-sm text-neutral-500 transition;
+}
+@utility dropzone-active {
+  @apply border-accent bg-accent/5;
+}
 @utility card {
   @apply rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-sm;
 }

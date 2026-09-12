@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/miguelzamberlan/filezam/internal/jobs"
 	"net/http"
@@ -36,6 +37,10 @@ type quotaCache struct {
 type jobsJob = jobs.Job
 
 var errQuota = errorf(http.StatusInsufficientStorage, "quota_exceeded", "disk quota exceeded")
+
+// isQuotaErr reports whether err is the owner's quota being full. O caminho público troca esse
+// erro pelo genérico do link: o estado da conta do dono não é assunto de um visitante anônimo.
+func isQuotaErr(err error) bool { return errors.Is(err, errQuota) }
 
 // usage returns the bytes the user currently occupies (cached).
 func (s *Server) usage(ctx context.Context, u *store.User) (int64, error) {

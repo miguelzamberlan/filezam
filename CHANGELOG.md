@@ -6,6 +6,13 @@ Todas as mudanças relevantes do Filezam ficam registradas aqui. O formato segue
 
 ### Adicionado
 - **Editor de texto e markdown**: corrija um `.txt`, `.md` ou arquivo de configuração direto no navegador, sem baixar e reenviar. Arquivos `.md` mostram a prévia formatada ao lado enquanto você digita. Se alguém salvar o mesmo arquivo enquanto você edita, o Filezam avisa e **não** apaga o trabalho da outra pessoa — o seu texto continua na tela para você copiar.
+- **Endereço personalizado no link público**: em vez do token aleatório, o link pode ter um apelido escolhido por quem o cria (`/s/orcamento-2026`), único em toda a instalação. Como um apelido é fácil de adivinhar, ele **exige senha** — o sigilo do link passa a morar nela. Revogar um link com apelido não devolve o endereço para outras pessoas: ele continua reservado a quem o criou, até ser liberado de propósito em **Compartilhamentos**.
+- **Link público para receber arquivos**: uma caixa de entrada que qualquer pessoa, sem conta, usa para enviar arquivos para uma pasta sua. A pasta é criada na hora e precisa estar vazia; cota e vencimento (no máximo 30 dias) são obrigatórios. Quem envia não lista nem baixa nada — vê apenas os próprios envios — e nenhum arquivo existente é sobrescrito: um nome repetido vira `nome (1).ext`.
+- **Administração → Configurações do sistema**: liga e desliga os dois recursos para todos os usuários e define os tetos dos links de recebimento (cota, validade, tamanho por arquivo, número de arquivos, links por usuário). O link de recebimento vem **desligado** por padrão.
+
+### Alterado
+- Um link público protegido por senha não revela mais o nome do item enquanto não for destravado.
+- Desligar um dos dois recursos em **Configurações do sistema** vale também para os links que já existem, e não só para a criação de novos.
 
 ## [1.0.0] - 2026-09-10
 

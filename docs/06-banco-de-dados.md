@@ -25,12 +25,19 @@ sessions(id /*hex sha256 do token*/, user_id → users ON DELETE CASCADE, create
 favorites(id, user_id → users CASCADE, path /*base-relativo*/, name, created_at, UNIQUE(user_id,path))
 
 shares(id, token_hash UNIQUE, token /*em claro, 002; '' nos links anteriores*/, kind /*'dir'|'file', 003*/, password_hash /*argon2id ou '', 003*/, dev, ino /*identidade do item, 006*/,
+       slug /*apelido, 011; '' = só por token*/, mode /*'read'|'drop', 011*/, quota_bytes, max_file_bytes, max_files /*tetos do link de envio, 011*/,
        path /*base-relativo*/, name, created_by → users CASCADE,
-       created_at, expires_at, revoked_at, access_count, last_access_at)   -- índice: expires_at
+       created_at, expires_at, revoked_at, access_count, last_access_at)   -- índices: expires_at; slug UNIQUE parcial (WHERE slug <> '')
+share_uploads(id, share_id → shares CASCADE, sender /*id assinado do visitante*/,
+              name /*nome final no disco: o que o dono vê*/, sent_name /*o que o remetente pediu: o único que volta para ele*/,
+              size, created_at)  -- índice: (share_id, sender)
+settings(key PRIMARY KEY, value, updated_at)  -- só o que o admin mudou; o resto é padrão de fábrica
 
 uploads(id /*hex 16 bytes*/, user_id → users CASCADE, dir /*base-relativo*/, name, size, mtime,
-        chunk_size, received BLOB /*bitset ceil(chunks/8)*/, overwrite, created_at, updated_at)
-        -- UNIQUE(user_id,dir,name) desde a 010 (antes UNIQUE(dir,name)); índice updated_at
+        chunk_size, received BLOB /*bitset ceil(chunks/8)*/, overwrite,
+        share_id /*link de envio dono da sessão, 011; 0 = upload autenticado*/, sender /*visitante anônimo, 011*/, sent_name /*nome pedido, 011*/,
+        created_at, updated_at)
+        -- UNIQUE(user_id,dir,name) desde a 010 (antes UNIQUE(dir,name)); índices updated_at, share_id
 
 audit_log(id, ts, user_id, username, ip, action, detail /*JSON*/)   -- índice: ts
 trash(id /*hex 16 bytes*/, user_id → users CASCADE, trash_dir /*base-relativo: <escopo>/.filezam-trash*/, name, path /*original, base-relativo*/,
@@ -49,6 +56,7 @@ Migrações aplicadas depois de `001_init.sql`:
 | 003 | `003_share_file_password.sql` | `shares.kind` (`dir`/`file`) e `shares.password_hash` (Argon2id, `''` = sem senha) |
 | 004 | `004_trash.sql` | Tabela `trash(id, user_id → users CASCADE, trash_dir, name, path, type, size, deleted_at)`: itens da lixeira com o caminho original base-relativo |
 | 006 | `006_share_inode.sql` | `shares.dev`, `shares.ino`: identidade do item compartilhado (0 = desconhecida) |
+| 011 | `011_settings_slug_drop.sql` | Tabela `settings` (configurações globais do admin); `shares.slug` com índice único parcial, `shares.mode` e os tetos do link de envio; tabela `share_uploads` (recibo de cada arquivo recebido, com o nome no disco e o nome pedido); `uploads.share_id`/`uploads.sender`/`uploads.sent_name` |
 | 007 | `007_user_quota.sql` | `users.quota` (bytes, 0 = sem limite) |
 | 009 | `009_totp.sql` | `users.totp_secret` (cifrado), `totp_enabled_at`, `totp_counter`, `totp_recovery` (JSON de hashes) |
 | 008 | `008_jobs.sql` | Tabela `jobs(id, user_id → users CASCADE, type, label, state, done, total, bytes_done, bytes_total, error, warnings, started_at, finished_at)`: histórico de operações |
@@ -60,7 +68,9 @@ Todos os timestamps são segundos Unix, exceto `uploads.mtime` (ms, vindo do cli
 ## Convenções
 
 - Caminhos gravados são **base-relativos** (`vfs.Join(user.Scope, p)`), para sobreviverem a mudanças de escopo do usuário. A leitura converte para escopo-relativo e descarta o que ficou fora.
-- Nunca grave senhas ou tokens de sessão em claro (`auth.HashToken`). Segredos TOTP vão cifrados com `auth.Seal` e a chave de `<DataDir>/secret.key` (ou `FILEZAM_SECRET_KEY`): **o backup precisa levar o `secret.key` junto com o banco**, senão o 2FA de todos deixa de validar. A única exceção é `shares.token`, gravado em claro de propósito para permitir recopiar o link ([03](03-seguranca.md#links-públicos)); a consulta pública continua sendo por `token_hash`.
+- Nunca grave senhas ou tokens de sessão em claro (`auth.HashToken`). Segredos TOTP vão cifrados com `auth.Seal` e a chave de `<DataDir>/secret.key` (ou `FILEZAM_SECRET_KEY`): **o backup precisa levar o `secret.key` junto com o banco**, senão o 2FA de todos deixa de validar. A cota de um link de envio é **o total recebido**, somado de `share_uploads` mais as sessões abertas, e não "o que está ocupado agora": o dono apagar arquivos não devolve cota. É o que impede o link de virar um ralo infinito e evita ter que varrer o disco a cada envio.
+
+A única exceção é `shares.token`, gravado em claro de propósito para permitir recopiar o link ([03](03-seguranca.md#links-públicos)); a consulta pública continua sendo por `token_hash`.
 - `RecordLoginFailure` aplica o bloqueio progressivo; `RecordLoginSuccess` zera.
 - `SetTOTPCounter` (`WHERE totp_counter < ?`) e `ConsumeTOTPRecovery` (`WHERE totp_recovery = ?`) devolvem se a linha mudou: são o anti-replay do 2FA, por isso o resultado nunca é ignorado.
 - `ListStaleUploads`, `PurgeExpiredSessions` e `PruneAudit` são chamados pela tarefa de fundo.

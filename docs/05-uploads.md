@@ -79,6 +79,31 @@ O navegador não persiste objetos `File`. Fluxo:
 - Na listagem de um diretório, partes `.filezam-upload-*.part` cujo id não existe na tabela **e cujo mtime está parado há mais de `uploads.OrphanGrace` (15 min)** são apagadas (cobre perda do banco, crash, etc.). A carência existe porque `PUT` único e lote gravam a parte sem linha no banco: enquanto o corpo chega o mtime avança, e sem ela uma listagem da mesma pasta (de outro usuário, ou o refetch da própria interface) apagaria um upload em andamento e o `Finalize` falharia com 404.
 - Exclusão de usuário remove as partes das sessões dele antes do cascade.
 
+## Envio público (link de recebimento)
+
+Um link `mode = drop` aceita envio de quem não tem conta, por um subconjunto deliberadamente menor
+do protocolo: **sem lote multipart e sem estrutura de pastas**. O cliente é o `dropUploader.ts`, não
+o `UploadManager` — ele não tem conflito, sobrescrita, retomada nem caminhada de pastas, que é
+justamente o que a página pública não deve oferecer.
+
+| Tamanho | Modo |
+|---|---|
+| ≤ `chunkSize` | `PUT /api/public/{token}/content?name=` (corpo bruto) |
+| > `chunkSize` | sessão em blocos em `/api/public/{token}/uploads`, idêntica à autenticada |
+
+Diferenças em relação ao caminho autenticado:
+
+- O nome vai por `?name=` ou no JSON e passa por `ValidName`; não existe `dir`.
+- `overwrite` é sempre falso e o servidor desvia o nome quando preciso, olhando o disco e as sessões
+  em voo do link. O `{name}` devolvido é sempre o **pedido**, nunca o que foi gravado: revelar o
+  desvio faria do envio um teste de existência de nome numa pasta que o link não deixa ler.
+- A sessão é gravada com o `user_id` do **dono do link** (para a reserva de disco continuar valendo)
+  mas é autorizada pelo par `(share_id, sender)`, e fica invisível em `GET /api/uploads`.
+- Sessões abandonadas de link de envio caem em `drop_stale_age` (2 h por padrão), não nas 24 h de
+  `FILEZAM_UPLOAD_STALE`; `CleanupStale` aplica os dois cortes na mesma varredura.
+- Admissão (cota, teto por arquivo, contagem, nome livre) acontece sob um mutex por link antes de
+  qualquer byte tocar o disco.
+
 ## Conflitos (cliente, `upload/manager.ts`)
 
 Um 409 `exists` põe o item em estado `conflict` e abre o diálogo "Substituir / Pular / Manter ambos / Cancelar" com "Aplicar a todos". Os diálogos são serializados numa fila para que "aplicar a todos" valha para os itens seguintes. "Manter ambos" gera `nome (n).ext` considerando os nomes já na fila para o mesmo diretório. A escolha padrão é zerada a cada nova ação de soltar/selecionar.

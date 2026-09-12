@@ -10,6 +10,7 @@ import Trash from './pages/Trash'
 import Jobs from './pages/Jobs'
 import Account from './pages/Account'
 import Setup2FA from './pages/Setup2FA'
+import AdminSettings from './pages/AdminSettings'
 import AdminUsers from './pages/AdminUsers'
 import AdminAudit from './pages/AdminAudit'
 import PublicShare from './pages/PublicShare'
@@ -78,6 +79,7 @@ export default function App() {
           <Route path="account" element={<Account />} />
           <Route path="admin/users" element={<AdminUsers />} />
           <Route path="admin/audit" element={<AdminAudit />} />
+          <Route path="admin/settings" element={<AdminSettings />} />
           <Route path="*" element={<Navigate to="/b" replace />} />
         </Route>
       </Routes>

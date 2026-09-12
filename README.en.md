@@ -40,7 +40,8 @@ It is a personal, free and open-source project. It fits home servers, small offi
 - **Previews** for images, video, audio, PDF, text and rendered Markdown.
 - **Serious uploads**: multi-GB files in parallel resumable chunks, whole folders by drag and drop, thousands of small files batched, all with a progress panel, pause and retry.
 - **Built-in editor**: edit text, markdown and config files in the browser, with a live preview for `.md` and protection against two people overwriting each other.
-- **Public links**: share a folder or a file read-only with an expiry, optional password, access count and instant revocation.
+- **Public links**: share a folder or a file read-only with an expiry, optional password, access count and instant revocation. The address can be a name you pick (`/s/budget-2026`), which then requires a password.
+- **Drop links**: a public inbox where people without an account send files into a folder of yours, with a mandatory quota and expiry. Senders never see or download what is already there.
 - **Two-factor authentication** (TOTP) with recovery codes and "trust this device for 30 days"; optionally mandatory for admins.
 - **Administration**: users with disk quotas and 2FA reset, audit log, progressive brute-force lockout, job history, Prometheus metrics.
 - **UI**: Portuguese or English, light/dark/system theme, custom colors, list zoom, per-type icons, drag and drop to move, paginated listing for huge folders, keyboard shortcuts, comfortable on phones.

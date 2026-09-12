@@ -12,9 +12,11 @@ import Breadcrumb from '../components/Breadcrumb'
 import Preview, { previewKind } from '../components/Preview'
 import ContextMenu from '../components/ContextMenu'
 import { IDownload, ISpinner, IArrowUp, IEye, IKey, iconFor } from '../components/Icons'
+import PublicDrop from './PublicDrop'
 
-// Página pública de um link: pasta (listagem somente leitura) ou arquivo único (cartão com
-// download/preview). Links com senha mostram o formulário até o unlock gravar o cookie.
+// Página pública de um link: pasta (listagem somente leitura), arquivo único (cartão com
+// download/preview) ou caixa de recebimento (PublicDrop, só envio). Links com senha mostram o
+// formulário até o unlock gravar o cookie — e, travados, o servidor nem conta o nome do item.
 export default function PublicShare() {
   const { token = '', '*': rest = '' } = useParams()
   const path = decodePath(rest)
@@ -23,7 +25,7 @@ export default function PublicShare() {
   const info = useQuery({ queryKey: ['public', token], queryFn: () => Api.publicInfo(token), retry: false })
   const locked = !!info.data?.locked
   const isDir = info.data?.kind !== 'file'
-  const list = useQuery({ queryKey: ['public', token, 'list', path], queryFn: () => Api.publicList(token, path), enabled: info.isSuccess && !locked && isDir, retry: false })
+  const list = useQuery({ queryKey: ['public', token, 'list', path], queryFn: () => Api.publicList(token, path), enabled: info.isSuccess && !locked && isDir && info.data?.mode !== 'drop', retry: false })
   const [sort, setSort] = useState<Sort>({ key: 'name', dir: 'asc' })
   const [selection, setSelection] = useState<Set<string>>(new Set())
   const [focused, setFocused] = useState<string | null>(null)
@@ -38,7 +40,7 @@ export default function PublicShare() {
     setPreview(null)
   }, [path])
   useEffect(() => {
-    if (info.data) document.title = info.data.name + ' · ' + S.appName
+    if (info.data?.name) document.title = info.data.name + ' · ' + S.appName
   }, [info.data])
 
   const go = (p: string) => navigate(`/s/${token}` + (p ? '/' + encodePath(p) : ''))
@@ -92,7 +94,7 @@ export default function PublicShare() {
     return (
       <div className="flex h-full items-center justify-center p-4">
         <form className="card w-full max-w-sm p-6" onSubmit={unlock}>
-          <div className="flex items-center gap-2"><img src="/favicon.svg" alt="" className="h-6 w-6" /><h1 className="text-lg font-semibold">{info.data?.name}</h1></div>
+          <div className="flex items-center gap-2"><img src="/favicon.svg" alt="" className="h-6 w-6" /><h1 className="text-lg font-semibold">{info.data?.name ?? S.appName}</h1></div>
           <p className="mt-3 flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400"><IKey size={16} /> {S.sharePasswordRequired}</p>
           <input className="input mt-3" type="password" autoFocus value={password} onChange={(e) => setPassword(e.target.value)} placeholder={S.password} />
           {unlockErr && <p className="mt-2 text-sm text-red-600">{unlockErr}</p>}
@@ -101,9 +103,10 @@ export default function PublicShare() {
       </div>
     )
   }
+  if (info.data?.mode === 'drop') return <PublicDrop token={token} info={info.data} />
   if (!isDir && info.data) {
     const d = info.data
-    const entry: Entry = { name: d.fileName ?? d.name, type: 'file', size: d.size ?? 0, mtime: d.mtime ?? 0 }
+    const entry: Entry = { name: d.fileName ?? d.name ?? '', type: 'file', size: d.size ?? 0, mtime: d.mtime ?? 0 }
     const canPreview = !!previewKind(entry)
     return (
       <div className="flex h-full items-center justify-center p-4">

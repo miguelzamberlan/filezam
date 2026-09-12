@@ -62,6 +62,24 @@ export interface AppConfig {
   require2fa: boolean
   previewMaxText: number
   version: string
+  // Ligados pelo administrador em Configurações; desligados, a interface nem oferece a opção.
+  slugsEnabled: boolean
+  dropEnabled: boolean
+  dropMaxTtl: number // segundos; nunca passa de 30 dias
+  dropMaxQuota: number
+  dropFileMax: number
+  dropMaxFiles: number
+}
+
+export interface Settings {
+  slugsEnabled: boolean
+  dropEnabled: boolean
+  dropMaxQuota: number
+  dropMaxTtl: number
+  dropFileMax: number
+  dropMaxFiles: number
+  dropMaxLinks: number
+  dropStaleAge: number
 }
 
 export interface Job {
@@ -106,8 +124,16 @@ export interface Favorite {
 export interface Share {
   id: number
   token: string
+  slug: string
+  mode: 'read' | 'drop'
   kind: 'dir' | 'file'
   hasPassword: boolean
+  revoked: boolean
+  quotaBytes: number
+  usedBytes: number
+  fileCount: number
+  maxFileBytes: number
+  maxFiles: number
   path: string
   name: string
   createdBy: string
@@ -167,15 +193,33 @@ export interface SearchResult {
   indexedAt?: number | null // unix s
 }
 
+// Travado, a resposta traz só kind/mode/expiresAt/now: nome e limites só depois do unlock,
+// senão um apelido adivinhado já contaria o que existe do outro lado.
 export interface PublicInfo {
-  name: string
+  name?: string
   kind: 'dir' | 'file'
+  mode: 'read' | 'drop'
   expiresAt: number
   now: number
   locked: boolean
   size?: number
   mtime?: number
   fileName?: string
+  // Só no modo drop, destravado.
+  quotaBytes?: number
+  usedBytes?: number
+  fileCount?: number
+  maxFileBytes?: number
+  maxFiles?: number
+  chunkSize?: number
+  maxParallel?: number
+  mine?: DropUpload[]
+}
+
+export interface DropUpload {
+  name: string
+  size: number
+  at: number
 }
 
 export interface TrashItem {

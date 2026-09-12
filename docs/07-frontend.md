@@ -18,13 +18,14 @@ web/src/
   store/ui.ts         zustand: seleção, âncora, foco, clipboard, ordenação, visão, filtro
   store/jobs.ts       zustand: jobs acompanhados pelos toasts
   upload/manager.ts   UploadManager (sem React) — fila, modos, slots, retries, conflitos, retomada
+  upload/dropUploader.ts  Fila do link público de recebimento — sem pastas, lote, sobrescrita nem retomada
   upload/scheduler.ts funções puras (classify, pickBatch, backoffMs, chunkRange) — testadas
   upload/walk.ts      travessia de DataTransfer/FileList
   upload/xhr.ts       XMLHttpRequest com progresso → Promise
   components/         Shell, FileList, Breadcrumb, Toolbar (dentro de Browser), ContextMenu,
                       Preview, Markdown (lazy), ShareDialog, InfoDialog (propriedades), SettingsDialog, DiskBar,
                       UploadPanel, JobToasts, dialogs (prompt/confirm/conflict/toast), Icons
-  pages/              Login, ChangePassword, Browser, Shares, AdminUsers, AdminAudit, PublicShare
+  pages/              Login, ChangePassword, Browser, Shares, AdminUsers, AdminAudit, AdminSettings, PublicShare, PublicDrop
   components/Editor.tsx   Editor de texto e markdown (fora do Preview, ver abaixo)
 ```
 
@@ -41,13 +42,13 @@ web/src/
 | `/account` | Account (trocar senha; 2FA: ativar com `TotpSetup`, desativar, novos códigos de recuperação) | idem |
 | `/jobs` | Jobs ("Operações": em andamento com progresso e cancelamento + histórico de 30 dias vindo de `/api/jobs/history`; polling de 1 s só enquanto há job rodando) | idem |
 | `/shares`, `/admin/users`, `/admin/audit` | idem | idem (admin para `/admin/*`; a API também valida) |
-| `/s/:token/*` | PublicShare | — |
+| `/s/:token/*` | PublicShare (ramifica para PublicDrop quando `mode: drop`) | — |
 
 `Protected` redireciona para `/login` sem sessão, para `/change-password` quando `mustChangePassword` e para `/setup-2fa` quando `totpRequired`. Login em duas etapas: `Api.login` pode devolver `{totpRequired, token}`; a tela troca para o campo de código (app ou recuperação) com "Confiar neste dispositivo por 30 dias" e chama `Api.loginTOTP`. `TotpSetup` gera o QR com a biblioteca `qrcode` como `data:` URL numa `<img>` (nada de SVG injetado).
 
 ## Estado
 
-- **Servidor** (TanStack Query): `['me']`, `['config']` (staleTime ∞), `['list', path, sortKey, sortDir, showHidden]` (`useInfiniteQuery`, páginas de `LIST_PAGE` = 2000 entradas via `GET /api/files?limit=&offset=&sort=&dir=&hidden=`; `useInvalidateDirs` invalida pelo prefixo `['list', path]`), `['favorites']`, `['shares']`, `['admin-users']`, `['admin-dirs', path]`, `['job', id]` (refetch 500 ms enquanto `running`), `['public', token, ...]`. Mutações invalidam as chaves afetadas; `useInvalidateDirs(dirs)` é o ponto único para listagens.
+- **Servidor** (TanStack Query): `['me']`, `['config']` (staleTime ∞), `['list', path, sortKey, sortDir, showHidden]` (`useInfiniteQuery`, páginas de `LIST_PAGE` = 2000 entradas via `GET /api/files?limit=&offset=&sort=&dir=&hidden=`; `useInvalidateDirs` invalida pelo prefixo `['list', path]`), `['favorites']`, `['shares']`, `['admin-users']`, `['admin-dirs', path]`, `['settings']`, `['job', id]` (refetch 500 ms enquanto `running`), `['public', token, ...]`. Mutações invalidam as chaves afetadas; `useInvalidateDirs(dirs)` é o ponto único para listagens.
 - **UI** (zustand `useUI`): `selection: Set<string>` de nomes na pasta atual, `anchor`/`focused` para Shift/teclado, `clipboard {op: copy|cut, dir, names}`, `sort`, `view`, `filter` e `prefs` (persistidos em `localStorage`: `sort`, `view`, `prefs`).
 - **Preferências** (`prefs`, editadas em `SettingsDialog` pela engrenagem do rodapé): `showHidden` (arquivos iniciados por ponto; o servidor sempre os lista, o filtro é no cliente e o rodapé mostra "N ocultos"), `showHints` (dicas de atalhos), `confirmDelete`, `zoom` (fator da listagem, passos em `ZOOM_STEPS`; botões −/%/+ na barra do Browser e seleção em Configurações). `lang` e `theme` (`system`/`light`/`dark`; o diálogo usa subcomponentes definidos fora dele, senão o `<input type="color">` seria remontado a cada mudança e o seletor nativo fecharia no meio do arraste: `lib/theme.ts` põe a classe `.dark` no `<html>` e `color-scheme`; o Tailwind usa `@custom-variant dark (&:where(.dark, .dark *))`, nunca a media query direto) e `accent`/`selection`/`focus` (hex; viram as variáveis `--accent`/`--selection`/`--focus` no `<html>`, expostas como `bg-accent`, `text-accent`, `ring-focus` etc. via `@theme inline`; `row-selected`, `nav-active` e `btn-primary` derivam tons com `color-mix`, então uma cor serve para os dois temas). `uploadPanelOpen` e `sidebarOpen` (não persistidos) controlam a lista do painel de envios e o menu lateral em telas estreitas; o item **Uploads** do menu lateral expande o painel ou, sem envios, explica como enviar. Novas preferências: adicionar em `Prefs`/`defaultPrefs` em `store/ui.ts`, uma linha no `SettingsDialog` e o texto em `i18n/pt-BR.ts` e `i18n/en.ts`.
 - **Uploads**: fora do React; `useUploads()` lê o snapshot via `useSyncExternalStore`.
@@ -95,6 +96,10 @@ Estado na URL (`?path=&q=`), consulta `['search', path, q]` (staleTime 30 s). Mo
 
 `DiskBar` mostra a cota do usuário (`quota`/`quotaUsed` de `/api/files/disk`) quando existe, senão o disco do escopo. No formulário de usuário o admin informa a cota em GB (convertida para bytes; vazio = sem limite). `quota_exceeded` (507) é traduzido como os demais códigos.
 
+## Página Trash (`pages/Trash.tsx`) e PublicShare
+
+Trash: consulta `['trash']`, seleção por checkbox, ações restaurar/excluir de vez/esvaziar (`dialogs.confirm` nas permanentes), invalida `['list']`, `['disk']` e `['trash']`. PublicShare: `info.locked` mostra o formulário de senha (`POST unlock` grava o cookie; depois invalida `['public', token]`); `kind: file` mostra um cartão com download e preview em vez da listagem. Travado, a resposta não traz o nome, então o cabeçalho cai em `S.appName`.
+
 ## Editor (`components/Editor.tsx`)
 
 Edita os mesmos tipos de texto que o preview mostra, até `previewMaxText` (1 MiB) — acima disso a
@@ -102,8 +107,9 @@ opção fica desabilitada, porque salvar um texto truncado destruiria o arquivo.
 ao lado reusando o `Markdown` (o mesmo chunk lazy do preview); em tela estreita, alterna.
 
 **Vive fora do `Preview` de propósito.** O `Preview` registra `keydown` em *capture* no `window`
-para navegar entre arquivos com as setas e fechar com `Escape`; dentro dele, digitar num `textarea`
-seria impossível. O `Browser` também trata `editing` como os outros modais no guard do `onKeyDown`.
+para navegar entre arquivos com as setas e fechar com `Escape` (`Preview.tsx:60-71`); dentro dele,
+digitar num `textarea` seria impossível. O `Browser` também trata `editing` como os outros modais no
+guard do `onKeyDown`.
 
 Abre por: **Editar** no menu de contexto (`F4`), botão no cabeçalho do preview de texto, ou `F4` na
 listagem. Não aparece no `PublicShare`, que é somente leitura.
@@ -113,9 +119,30 @@ texto digitado **permanece na tela** e o usuário é avisado de que alguém salv
 descartado automaticamente. `dialogs.confirm` ao fechar sujo, e `beforeunload` enquanto houver
 alteração pendente.
 
-## Página Trash (`pages/Trash.tsx`) e PublicShare
+## PublicDrop (`pages/PublicDrop.tsx`) e `upload/dropUploader.ts`
 
-Trash: consulta `['trash']`, seleção por checkbox, ações restaurar/excluir de vez/esvaziar (`dialogs.confirm` nas permanentes), invalida `['list']`, `['disk']` e `['trash']`. PublicShare: `info.locked` mostra o formulário de senha (`POST unlock` grava o cookie; depois invalida `['public', token]`); `kind: file` mostra um cartão com download e preview em vez da listagem.
+Página de um link de recebimento: barra de cota, contador de arquivos, zona de soltar, a fila do
+envio e a lista dos **próprios** envios (`info.mine`, que vem do servidor pelo cookie do remetente).
+Não lista nem baixa nada.
+
+O envio usa uma fila própria, e não o `UploadManager`. O gerenciador autenticado tem 550 linhas de
+lote multipart, diálogo de conflito, caminhada de pastas, retomada de sessões pendentes e
+`Api.uploadList`/`uploadAbort` fixos — nada disso existe aqui, e ele é um singleton configurado
+dentro de `<Protected>`. O `dropUploader` tem duas rotas (PUT único abaixo de `chunkSize`, sessão em
+blocos acima), 2 arquivos em paralelo, `xhrSend` para progresso e `chunkRange` reaproveitado do
+`scheduler`; erros do próprio link (`drop_full`, `drop_file_limit`, `drop_count_exceeded`,
+`share_locked`) nunca entram em retry. Cada arquivo concluído invalida `['public', token]`, e é o
+servidor que devolve cota, contagem e lista atualizadas.
+
+Só arquivos soltos entram: uma pasta arrastada é ignorada, porque o link é plano e achatá-la só
+geraria colisões de nome. A configuração do cliente (`chunkSize`, `maxParallel`, `maxFileBytes`) vem
+do próprio `GET /api/public/{token}`, já que `/api/config` exige sessão.
+
+## AdminSettings (`pages/AdminSettings.tsx`)
+
+Interruptores de endereço personalizado e link de recebimento, mais os tetos deste último. Cada
+mudança é um `PATCH` imediato que invalida `['settings']` e `['config']` — a segunda porque
+`ShareDialog` esconde o que estiver desligado.
 
 ## Diálogos e toasts (`components/dialogs.tsx`)
 

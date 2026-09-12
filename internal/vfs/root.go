@@ -3,6 +3,7 @@ package vfs
 import (
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -275,6 +276,22 @@ func (r *Root) MoveTo(src, dst string, overwrite bool) (string, error) {
 		return "", MapError(err)
 	}
 	return dst, nil
+}
+
+// IsEmpty reports whether the directory p holds nothing at all. Partes de upload e a lixeira
+// (o prefixo reservado) contam como conteúdo: um link de envio não pode apontar para uma pasta
+// onde já existe qualquer coisa, visível ao usuário ou não.
+func (r *Root) IsEmpty(p string) (bool, error) {
+	f, err := r.r.Open(osPath(p))
+	if err != nil {
+		return false, MapError(err)
+	}
+	defer f.Close()
+	names, err := f.Readdirnames(1)
+	if err != nil && err != io.EOF {
+		return false, MapError(err)
+	}
+	return len(names) == 0, nil
 }
 
 // UniqueName finds "name (n).ext" that does not exist in dir.

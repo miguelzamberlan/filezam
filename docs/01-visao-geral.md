@@ -14,7 +14,9 @@ Funcionais:
 - Cada usuário acessa a raiz inteira **ou** uma subpasta específica (escopo). Não existem pastas *home* automáticas.
 - Primeiro início cria um admin padrão com troca de senha obrigatória.
 - Navegar, criar pasta, renomear, copiar, recortar/colar (mover), excluir, baixar arquivo ou ZIP, favoritos, visualizar (imagem, vídeo, áudio, PDF, texto).
-- Compartilhar uma **pasta ou um arquivo** por link público somente leitura com prazo de validade, senha opcional e revogação.
+- Compartilhar uma **pasta ou um arquivo** por link público somente leitura com prazo de validade, senha opcional e revogação. O endereço pode ser um apelido escolhido pelo usuário (`/s/orcamento-2026`), e nesse caso a senha é obrigatória.
+- Receber arquivos de quem não tem conta, por um link público de envio apontado para uma pasta vazia e dedicada, com cota e vencimento obrigatórios.
+- O administrador liga, desliga e limita esses dois recursos numa tela de configurações globais.
 - Lixeira com retenção configurável e restauração ao local original.
 - Pesquisa por nome em todas as subpastas do escopo, servida por um índice em SQLite atualizado por varreduras periódicas e pelas próprias operações do app.
 - Interface em pt-BR e inglês.
@@ -74,6 +76,24 @@ Copiar/mover/excluir rodam em goroutines; o handler espera até 300 ms ("sync-or
 ### ADR-9 · Links públicos por caminho, token com hash
 
 O share guarda o caminho base-relativo e o SHA-256 do token (256 bits). Excluir, mover ou renomear o item pelo app revoga o link (e os links de tudo que estiver dentro dele); para mudanças feitas por fora, o `dev`/`inode` gravado na criação faz o link parar de responder. Seguir o item para o novo caminho foi descartado: o link publicaria um lugar que quem o criou não escolheu. A resposta para token inexistente, expirado ou revogado é sempre o mesmo 404.
+
+### ADR-13 · Apelido de link com senha obrigatória, e que não volta ao pool
+
+Um endereço escolhido pelo usuário é adivinhável, ao contrário do token de 256 bits, então o sigilo passa a morar na senha, que vira obrigatória — em vez de embutir um sufixo aleatório, que devolveria um endereço que ninguém consegue ditar por telefone, que era o motivo do recurso. Contra varredura: link travado não revela sequer o nome do item, e só a tentativa **errada** consome o balde de 30/min por IP. Revogar um link com apelido marca `revoked_at` em vez de apagar a linha: liberar o endereço deixaria outra pessoa assumir um link já divulgado e passar a receber o que era destinado a quem o criou. O dono libera de propósito com `?purge=1`.
+
+### ADR-14 · Link de envio como um modo de `shares`, não uma entidade nova
+
+O link de recebimento (`mode = drop`) reaproveita dez pontos já prontos e testados: resolução de token com rate limit e filtros de expirado/revogado/dono desativado, o sandbox `base.Sub` com conferência de `dev`/`inode`, a senha Argon2 com cookie HMAC, a revogação ao mover/apagar/renomear, a revogação ao estreitar escopo, o CASCADE do usuário, a tela **Compartilhamentos**, a montagem da URL, o mascaramento de token no log e a rota `/s/:token`. Uma tabela paralela duplicaria os dez. Só os recibos ganham tabela própria (`share_uploads`), por terem cardinalidade e ciclo de vida diferentes — e são a fonte única da cota, em vez de contadores denormalizados que precisariam ser mantidos em sincronia sob corrida.
+
+Consequência assumida: escrita anônima passa a existir no produto. Ela nasce desligada, exige cota e vencimento de no máximo 30 dias, aponta só para pasta vazia criada no ato, nunca sobrescreve e não permite leitura nenhuma.
+
+### ADR-15 · Fila de envio própria na página pública
+
+A página pública usa `upload/dropUploader.ts`, e não o `UploadManager`. O gerenciador autenticado carrega lote multipart, diálogo de conflito, caminhada de pastas, retomada de sessões pendentes e chamadas fixas a `/api/uploads` — tudo o que o link público **não deve** oferecer — e é um singleton configurado dentro de `<Protected>`. Injetar endpoints nele manteria 100% desse código e acrescentaria indireção; a fila própria tem cerca de 150 linhas e é testável isoladamente.
+
+### ADR-16 · Configurações globais no banco, não em variável de ambiente
+
+Os interruptores e os tetos dos links de envio ficam na tabela `settings`, editáveis pelo admin sem reiniciar o serviço — é ele quem decide, na operação, se a instalação aceita escrita anônima e com que limites. Isso não amplia o que um admin comprometido consegue fazer, já que ele podia alterar escopo e cota de qualquer conta. O que não é configurável é o teto de 30 dias do vencimento: está no código e o painel só encurta.
 
 ### ADR-10 · Container distroless sem root e sem `chown` no entrypoint
 

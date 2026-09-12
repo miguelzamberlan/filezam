@@ -39,6 +39,14 @@ var (
 	errTOTPRequired = errorf(http.StatusForbidden, "totp_required", "two-factor authentication must be set up first")
 	// errModified: alguém gravou o arquivo enquanto ele estava aberto no editor.
 	errModified = errorf(http.StatusConflict, "modified", "the file changed since it was opened")
+
+	// Links de envio. drop_full cobre tanto a cota do link quanto a do dono: distinguir as
+	// duas contaria a um visitante anônimo como anda a conta de quem criou o link.
+	errPasswordRequired = errorf(http.StatusBadRequest, "password_required", "a custom address requires a password")
+	errNotEmpty         = errorf(http.StatusConflict, "not_empty", "the destination folder already has content")
+	errDropFull         = errorf(http.StatusInsufficientStorage, "drop_full", "this link has no space left")
+	errDropFileLimit    = errorf(http.StatusRequestEntityTooLarge, "drop_file_limit", "file above the per-file limit of this link")
+	errDropCount        = errorf(http.StatusConflict, "drop_count_exceeded", "this link reached its file limit")
 )
 
 // toAPIError maps domain errors to API errors.

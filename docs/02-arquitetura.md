@@ -86,7 +86,13 @@ README.md README.en.md CONTRIBUTING.md SECURITY.md CODE_OF_CONDUCT.md CLAUDE.md
 | Tentativas de login por (usuário, IP) | 5/min, burst 5 | `loginUser` |
 | Troca de senha e ativação do 2FA | mesmos limites e semáforo do login | `handleChangePassword`, `handleTOTPEnable` |
 | Uploads simultâneos por usuário (PUT, lote ou chunk) | 8 | `uploadSem` → 429 |
-| Requisições públicas por IP | 120/min | `publicIP` |
+| Requisições públicas de **leitura** por IP | 120/min | `publicIP` |
+| Requisições públicas de **escrita** por IP | 900/min, burst 240 | `dropIP` — o balde de leitura mataria um envio legítimo de algumas dezenas de arquivos, já que cada arquivo em blocos custa três requisições; o custo real fica limitado por bytes e cota |
+| Envios anônimos simultâneos por IP | 2; mesma espera de 30 s dos downloads | `dropSem` |
+| Tentativas malsucedidas com forma de apelido, por IP | 30/min | `slugMiss` — cobrado só no erro, então quem tem o endereço certo nunca paga |
+| Sessões de envio abertas por (link, remetente) | 8 | `dropOpenPerSender` → 409 `drop_count_exceeded` |
+| Bytes de um link de envio | `quota_bytes` do link, contando as sessões abertas | `ShareUsage` → 507 `drop_full` |
+| Links de envio ativos por usuário | `drop_max_links` (20) | `CountActiveDropLinks` |
 | Downloads/zips públicos simultâneos por IP | 2; o excedente espera um slot até 30 s, depois 429 `busy` | `publicDL`, `publicWait` |
 | Zips públicos simultâneos no servidor inteiro | 4 (`publicZipMax`); mesma espera | `publicZip` |
 | Corpo JSON | 1 MiB | `readJSON` |

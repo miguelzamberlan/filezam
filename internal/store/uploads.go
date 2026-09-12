@@ -16,16 +16,20 @@ type Upload struct {
 	ChunkSize int64
 	Received  []byte
 	Overwrite bool
+	ShareID   int64  // link de envio dono da sessão (migração 011); 0 = upload autenticado
+	Sender    string // visitante anônimo que abriu a sessão; vazio fora do modo drop
+	SentName  string // nome que o visitante pediu, quando difere de Name; vazio fora do modo drop
 	CreatedAt int64
 	UpdatedAt int64
 }
 
-const uploadCols = `id, user_id, dir, name, size, mtime, chunk_size, received, overwrite, created_at, updated_at`
+// uploadCols e scanUpload mudam sempre juntos.
+const uploadCols = `id, user_id, dir, name, size, mtime, chunk_size, received, overwrite, share_id, sender, sent_name, created_at, updated_at`
 
 func scanUpload(row interface{ Scan(...any) error }) (*Upload, error) {
 	var u Upload
 	var mt sql.NullInt64
-	if err := row.Scan(&u.ID, &u.UserID, &u.Dir, &u.Name, &u.Size, &mt, &u.ChunkSize, &u.Received, &u.Overwrite, &u.CreatedAt, &u.UpdatedAt); err != nil {
+	if err := row.Scan(&u.ID, &u.UserID, &u.Dir, &u.Name, &u.Size, &mt, &u.ChunkSize, &u.Received, &u.Overwrite, &u.ShareID, &u.Sender, &u.SentName, &u.CreatedAt, &u.UpdatedAt); err != nil {
 		return nil, mapErr(err)
 	}
 	if mt.Valid {
@@ -38,8 +42,8 @@ func scanUpload(row interface{ Scan(...any) error }) (*Upload, error) {
 func (db *DB) CreateUpload(ctx context.Context, u *Upload) error {
 	now := db.now()
 	u.CreatedAt, u.UpdatedAt = now, now
-	_, err := db.w.ExecContext(ctx, `INSERT INTO uploads(`+uploadCols+`) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
-		u.ID, u.UserID, u.Dir, u.Name, u.Size, nullInt(u.Mtime), u.ChunkSize, u.Received, u.Overwrite, u.CreatedAt, u.UpdatedAt)
+	_, err := db.w.ExecContext(ctx, `INSERT INTO uploads(`+uploadCols+`) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		u.ID, u.UserID, u.Dir, u.Name, u.Size, nullInt(u.Mtime), u.ChunkSize, u.Received, u.Overwrite, u.ShareID, u.Sender, u.SentName, u.CreatedAt, u.UpdatedAt)
 	return mapErr(err)
 }
 
@@ -49,18 +53,22 @@ func (db *DB) GetUpload(ctx context.Context, id string) (*Upload, error) {
 }
 
 // ReservedBytes sums the declared sizes of the user's open sessions (pre-allocated on disk).
+// Inclui de propósito as sessões dos links de envio dele: elas ocupam o mesmo disco, e este é
+// o teto de último recurso.
 func (db *DB) ReservedBytes(ctx context.Context, userID int64) (int64, error) {
 	var n int64
 	err := db.r.QueryRowContext(ctx, `SELECT COALESCE(SUM(size),0) FROM uploads WHERE user_id=?`, userID).Scan(&n)
 	return n, err
 }
 
-// ListUploads lists sessions of a user (userID<=0: all).
+// ListUploads lists a user's own sessions (userID<=0: all). Sessões de links de envio ficam
+// de fora: quem as abriu foi um visitante anônimo, e a interface do dono aborta toda pendência
+// que enxerga — listá-las cancelaria envios em andamento de terceiros.
 func (db *DB) ListUploads(ctx context.Context, userID int64) ([]*Upload, error) {
-	q := `SELECT ` + uploadCols + ` FROM uploads`
+	q := `SELECT ` + uploadCols + ` FROM uploads WHERE share_id=0`
 	var args []any
 	if userID > 0 {
-		q += ` WHERE user_id=?`
+		q += ` AND user_id=?`
 		args = append(args, userID)
 	}
 	q += ` ORDER BY created_at`
@@ -80,9 +88,12 @@ func (db *DB) ListUploads(ctx context.Context, userID int64) ([]*Upload, error) 
 	return out, rows.Err()
 }
 
-// ListStaleUploads returns sessions not updated since the given time.
-func (db *DB) ListStaleUploads(ctx context.Context, before int64) ([]*Upload, error) {
-	rows, err := db.r.QueryContext(ctx, `SELECT `+uploadCols+` FROM uploads WHERE updated_at<?`, before)
+// ListStaleUploads returns sessions abandoned past their cutoff. Sessões de links de envio
+// têm prazo mais curto (dropBefore): elas seguram a cota do link, e um visitante hostil a
+// esgotaria por um dia inteiro com sessões que nunca conclui.
+func (db *DB) ListStaleUploads(ctx context.Context, before, dropBefore int64) ([]*Upload, error) {
+	rows, err := db.r.QueryContext(ctx, `SELECT `+uploadCols+` FROM uploads
+		WHERE (share_id=0 AND updated_at<?1) OR (share_id<>0 AND updated_at<?2)`, before, dropBefore)
 	if err != nil {
 		return nil, err
 	}

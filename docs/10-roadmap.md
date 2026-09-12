@@ -15,6 +15,9 @@
 - **Retomada de upload só soltando o mesmo arquivo de novo** (até 24 h): o navegador não guarda o `File`, e a retomada automática foi descartada (ver Decisões).
 - **Listagem paginada só na ordem do servidor**: enquanto faltam páginas, o filtro da pasta e `Ctrl+A` só alcançam o que já foi carregado.
 - **Índice de nomes não vê mudanças externas** (Samba, SSH) até a próxima varredura completa ou um "Reconstruir índice".
+- **Cota do link de recebimento não é devolvida**: ela mede o total que já entrou pelo link, não o que está ocupado agora. Apagar os arquivos recebidos não libera espaço no link — o que impede o link de virar um ralo infinito, mas significa que um link muito usado precisa ser recriado.
+- **Apelido fica preso ao dono**: um endereço personalizado revogado continua reservado a quem o criou até ele liberar de propósito (ou até a conta ser excluída). É o que impede o sequestro de um endereço já divulgado, ao custo de apelidos "presos" em instalações com muita rotatividade.
+- **Link de recebimento não notifica**: quem recebe precisa abrir a pasta para saber que chegou algo.
 - **Lixeira sem cota**: itens excluídos continuam ocupando disco até a retenção vencer; entre dispositivos a exclusão vira cópia + remoção.
 - **Move com "substituir" entre pastas** faz merge quando ambos são pastas (copia + apaga origem); entre dispositivos vira cópia + exclusão sem progresso de bytes.
 - **Nomes com UTF-8 inválido** aparecem em vermelho e não podem ser manipulados.
@@ -54,12 +57,13 @@ Não verificado manualmente antes do lançamento: o item 15 do checklist de [09]
 
 ## Próximos passos sugeridos (ordem de valor)
 
-1. Retomar jobs interrompidos por reinício a partir do histórico.
-2. Chaves de acesso (WebAuthn/passkeys) como alternativa ao TOTP; revogação individual de dispositivos confiáveis.
+1. Avisar o dono quando chega arquivo num link de recebimento (hoje ele precisa ir olhar a pasta).
+2. Retomar jobs interrompidos por reinício a partir do histórico.
+3. Chaves de acesso (WebAuthn/passkeys) como alternativa ao TOTP; revogação individual de dispositivos confiáveis.
 
 ## Feito
 
-Lixeira com retenção, índice de nomes em SQLite, link de arquivo único e senha no link, arrastar e soltar interno, listagem paginada, interface em inglês, histórico de operações persistido, métricas Prometheus, cota de disco por usuário com limites de zips/jobs, link amarrado ao inode e bloqueio de login silencioso por (usuário, IP) e verificação em duas etapas TOTP com códigos de recuperação e dispositivo confiável (setembro de 2026). Versão 1.0.0 pública (2026-09-10): revisão de segurança, validação em produção e pendências da auditoria resolvidas.
+Lixeira com retenção, índice de nomes em SQLite, link de arquivo único e senha no link, arrastar e soltar interno, listagem paginada, interface em inglês, histórico de operações persistido, métricas Prometheus, cota de disco por usuário com limites de zips/jobs, link amarrado ao inode e bloqueio de login silencioso por (usuário, IP) e verificação em duas etapas TOTP com códigos de recuperação e dispositivo confiável (setembro de 2026). Versão 1.0.0 pública (2026-09-10): revisão de segurança, validação em produção e pendências da auditoria resolvidas. Endereço personalizado no link público (com senha obrigatória) e link público de recebimento de arquivos, com tela de configurações globais do administrador (setembro de 2026).
 
 ## Decisões e ideias descartadas
 

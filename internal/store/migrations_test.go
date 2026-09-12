@@ -39,6 +39,57 @@ func TestUpgradeFrom001(t *testing.T) {
 	if len(shares) != 1 || shares[0].TokenHash != "h1" || shares[0].Token != "" || shares[0].Kind != "dir" || shares[0].PasswordHash != "" {
 		t.Fatalf("shares after upgrade: %+v", shares)
 	}
+	if shares[0].Slug != "" || shares[0].Mode != "read" {
+		t.Fatalf("share defaults after 011: %+v", shares[0])
+	}
+}
+
+// O índice de apelido é parcial: links sem apelido guardam ” e precisam coexistir, enquanto
+// dois apelidos iguais têm de colidir mesmo com um deles já revogado.
+func TestSlugUniqueIndexIsPartial(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "s.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	ctx := context.Background()
+	if _, err := db.w.ExecContext(ctx, `INSERT INTO users(id, username, password_hash, role, created_at, updated_at) VALUES(1,'x','h','admin',0,0)`); err != nil {
+		t.Fatal(err)
+	}
+	exp := time.Now().Add(time.Hour).Unix()
+	mk := func(hash, slug string) error {
+		_, err := db.CreateShare(ctx, &Share{TokenHash: hash, Slug: slug, Path: "a", Name: "a", CreatedBy: 1, ExpiresAt: exp})
+		return err
+	}
+	if err := mk("h1", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := mk("h2", ""); err != nil {
+		t.Fatalf("two empty slugs must coexist: %v", err)
+	}
+	if err := mk("h3", "vendas"); err != nil {
+		t.Fatal(err)
+	}
+	if err := mk("h4", "vendas"); err != ErrConflict {
+		t.Fatalf("duplicate slug: want ErrConflict, got %v", err)
+	}
+	sh, err := db.GetActiveShareBySlug(ctx, "vendas")
+	if err != nil || sh.TokenHash != "h3" {
+		t.Fatalf("lookup by slug: %+v %v", sh, err)
+	}
+	// Revogado some da consulta pública mas continua reservando o apelido.
+	if err := db.RevokeShare(ctx, sh.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.GetActiveShareBySlug(ctx, "vendas"); err != ErrNotFound {
+		t.Fatalf("revoked slug still resolves: %v", err)
+	}
+	if taken, _ := db.SlugTaken(ctx, "vendas"); !taken {
+		t.Fatal("revoked slug returned to the pool")
+	}
+	if err := mk("h5", "vendas"); err != ErrConflict {
+		t.Fatalf("revoked slug reclaimed: %v", err)
+	}
 }
 
 func TestIndexLikeEscape(t *testing.T) {

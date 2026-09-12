@@ -39,8 +39,12 @@ type Server struct {
 	loginSem    auth.Semaphore
 	publicIP    *auth.Limiter
 	publicDL    *auth.KeyedSemaphore
-	publicWait  time.Duration  // quanto uma requisição pública espera por um slot de publicDL
-	publicZip   auth.Semaphore // zips públicos simultâneos no servidor inteiro
+	publicWait  time.Duration        // quanto uma requisição pública espera por um slot de publicDL
+	publicZip   auth.Semaphore       // zips públicos simultâneos no servidor inteiro
+	dropIP      *auth.Limiter        // escrita anônima: balde próprio, o de leitura é apertado demais
+	dropSem     *auth.KeyedSemaphore // envios anônimos simultâneos por IP
+	dropMu      dropLocks            // serializa a admissão de arquivos por link
+	slugMiss    *auth.Limiter        // tentativas malsucedidas com forma de apelido
 	uploadSem   *auth.KeyedSemaphore
 	searchSem   *auth.KeyedSemaphore
 	shareUnlock *auth.Limiter        // tentativas de senha por link
@@ -49,7 +53,8 @@ type Server struct {
 	secretKey   []byte               // cifra dos segredos TOTP e HMAC do cookie de dispositivo confiável
 	pending     pendingState         // logins à espera do código TOTP e cadastros em andamento
 	quota       quotaCache
-	adminMu     sync.Mutex // serializa alterações de usuários: a checagem de "último admin" não é atômica no banco
+	set         settingsCache // configurações globais editadas pelo admin (migração 011)
+	adminMu     sync.Mutex    // serializa alterações de usuários: a checagem de "último admin" não é atômica no banco
 
 	bg     context.Context
 	cancel context.CancelFunc
@@ -70,6 +75,9 @@ func New(cfg *config.Config, db *store.DB, base *vfs.Root, log *slog.Logger, ver
 		publicDL:    auth.NewKeyedSemaphore(2),
 		publicWait:  30 * time.Second,
 		publicZip:   auth.NewSemaphore(publicZipMax),
+		dropIP:      auth.NewLimiter(900, 240),
+		dropSem:     auth.NewKeyedSemaphore(dropClientParallel),
+		slugMiss:    auth.NewLimiter(30, 30),
 		uploadSem:   auth.NewKeyedSemaphore(8),
 		searchSem:   auth.NewKeyedSemaphore(2),
 		shareUnlock: auth.NewLimiter(5, 5),
@@ -85,6 +93,11 @@ func New(cfg *config.Config, db *store.DB, base *vfs.Root, log *slog.Logger, ver
 	}
 	s.secretKey = key
 	s.pending = newPendingState()
+	s.set.v = defaultSettings()
+	if err := s.loadSettings(bg); err != nil {
+		cancel()
+		return nil, err
+	}
 	if cfg.IndexInterval > 0 {
 		s.indexer = index.New(db, base, log, cfg.IndexInterval)
 	}
@@ -155,7 +168,7 @@ func (s *Server) StartBackground() {
 	run := func() {
 		ctx, cancel := context.WithTimeout(s.bg, 5*time.Minute)
 		defer cancel()
-		s.uploads.CleanupStale(ctx, s.base, s.cfg.UploadStaleAge)
+		s.uploads.CleanupStale(ctx, s.base, s.cfg.UploadStaleAge, time.Duration(s.settings().DropStaleAge)*time.Second)
 		if err := s.db.PurgeExpiredSessions(ctx); err != nil {
 			s.log.Warn("purge sessions", "err", err)
 		}
@@ -287,11 +300,21 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.Handle("GET /api/public/{token}/zip", s.h(s.handlePublicZip))
 	mux.Handle("POST /api/public/{token}/unlock", chain(s.h(s.handlePublicUnlock), s.csrf))
 
+	// Envio anônimo: mesmo padrão do unlock — CSRF sem sessão. A autorização é o token (ou o
+	// apelido mais a senha) e o modo do link, nunca um middleware de usuário.
+	mux.Handle("PUT /api/public/{token}/content", chain(s.h(s.handleDropPut), s.csrf))
+	mux.Handle("POST /api/public/{token}/uploads", chain(s.h(s.handleDropUploadCreate), s.csrf))
+	mux.Handle("PUT /api/public/{token}/uploads/{id}", chain(s.h(s.handleDropUploadChunk), s.csrf))
+	mux.Handle("POST /api/public/{token}/uploads/{id}/complete", chain(s.h(s.handleDropUploadComplete), s.csrf))
+	mux.Handle("DELETE /api/public/{token}/uploads/{id}", chain(s.h(s.handleDropUploadAbort), s.csrf))
+
 	mux.Handle("GET /api/admin/users", admin(s.handleAdminUsers))
 	mux.Handle("POST /api/admin/users", admin(s.handleAdminUserCreate))
 	mux.Handle("PATCH /api/admin/users/{id}", admin(s.handleAdminUserUpdate))
 	mux.Handle("DELETE /api/admin/users/{id}", admin(s.handleAdminUserDelete))
 	mux.Handle("POST /api/admin/users/{id}/totp/reset", admin(s.handleAdminTOTPReset))
+	mux.Handle("GET /api/admin/settings", admin(s.handleAdminSettings))
+	mux.Handle("PATCH /api/admin/settings", admin(s.handleAdminSettingsUpdate))
 	mux.Handle("GET /api/admin/dirs", admin(s.handleAdminDirs))
 	mux.Handle("GET /api/admin/audit", admin(s.handleAdminAudit))
 	mux.Handle("GET /api/admin/index", admin(s.handleAdminIndex))
@@ -327,6 +350,12 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) error {
 		"publicUrl":      s.cfg.PublicURL,
 		"trashRetention": int64(s.cfg.TrashRetention.Seconds()),
 		"require2fa":     s.cfg.Require2FA,
+		"slugsEnabled":   s.settings().SlugsEnabled,
+		"dropEnabled":    s.settings().DropEnabled,
+		"dropMaxTtl":     s.dropMaxTTL(),
+		"dropMaxQuota":   s.settings().DropMaxQuota,
+		"dropFileMax":    s.settings().DropFileMax,
+		"dropMaxFiles":   s.settings().DropMaxFiles,
 		"previewMaxText": 1 << 20,
 		"version":        s.version,
 	})

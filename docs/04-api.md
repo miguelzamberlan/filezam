@@ -19,7 +19,9 @@ Job      { id, type: "copy"|"move"|"delete", state: "running"|"done"|"failed"|"c
            done, total, bytesDone, bytesTotal, current?, error?, warnings?: [], startedAt, finishedAt?, dirs?: [] }
 Upload   { id, dir, name, size, mtime, chunkSize, chunks, received: [int], overwrite, createdAt, updatedAt }
 Favorite { id, path, name, createdAt }
-Share    { id, token, kind: "dir"|"file", hasPassword, path, name, createdBy, mine, createdAt, expiresAt, expired, accessCount, lastAccessAt }
+Share    { id, token, slug, mode: "read"|"drop", kind: "dir"|"file", hasPassword, revoked, path, name, createdBy, mine, createdAt, expiresAt, expired, accessCount, lastAccessAt,
+           quotaBytes, usedBytes, fileCount, maxFileBytes, maxFiles /*só mode "drop"*/ }
+Settings { slugsEnabled, dropEnabled, dropMaxQuota, dropMaxTtl, dropFileMax, dropMaxFiles, dropMaxLinks, dropStaleAge }
 AdminUser{ id, username, role, scope, mustChangePassword, disabled, lockedUntil, createdAt, updatedAt }
 Audit    { id, ts, userId, username, ip, action, detail /*JSON string*/ }
 ```
@@ -31,7 +33,7 @@ Timestamps: `mtime` em milissegundos; os demais em segundos Unix.
 | Método | Rota | Auth | Descrição |
 |---|---|---|---|
 | GET | `/api/health` | - | `{ok:true, version}`; 503 `db`/`root` se banco ou raiz indisponíveis |
-| GET | `/api/config` | S | `{chunkSize, batchMaxFiles, batchMaxBytes, batchFileMax, maxParallel, shareMaxTtl, publicUrl, trashRetention, require2fa, previewMaxText, version}` (`trashRetention` em segundos; `0` = lixeira desativada) (`publicUrl` = `FILEZAM_PUBLIC_URL`, `""` quando não definido; `require2fa` = `FILEZAM_REQUIRE_2FA_ADMINS`) |
+| GET | `/api/config` | S | `{chunkSize, batchMaxFiles, batchMaxBytes, batchFileMax, maxParallel, shareMaxTtl, publicUrl, trashRetention, require2fa, previewMaxText, version, slugsEnabled, dropEnabled, dropMaxTtl, dropMaxQuota, dropFileMax, dropMaxFiles}` (`trashRetention` em segundos; `0` = lixeira desativada) (`publicUrl` = `FILEZAM_PUBLIC_URL`, `""` quando não definido; `require2fa` = `FILEZAM_REQUIRE_2FA_ADMINS`) |
 
 ## Autenticação
 
@@ -113,23 +115,79 @@ Itens mais antigos que `FILEZAM_TRASH_RETENTION` são apagados pela varredura ho
 
 | Método | Rota | Auth | Descrição |
 |---|---|---|---|
-| GET | `/api/shares` | U | `{shares, now}`; admin vê todos, usuário só os seus. `share.token` permite recopiar o link (`""` em links criados antes da migração 002) |
-| POST | `/api/shares` | U | `{path, expiresIn /*s*/, name?, password?}` → 201 `{share, token, url}`. `path` pode ser pasta (`kind: dir`) ou arquivo (`kind: file`); `password` opcional com 4–256 caracteres (400 `weak_password`), guardada como Argon2id. `url` usa `FILEZAM_PUBLIC_URL` ou o host da requisição; a interface web monta o link a partir de `token` + origem do navegador. 400 `bad_expiry`, 409 `not_dir` |
-| DELETE | `/api/shares/{id}` | U | Dono ou admin → `{ok}` |
+| GET | `/api/shares` | U | `{shares, now}`; admin vê todos, usuário só os seus. `share.token` permite recopiar o link (`""` em links criados antes da migração 002). Links revogados só aparecem quando têm apelido, com `revoked: true`, para o dono ver o endereço que segue reservado a ele |
+| POST | `/api/shares` | U | `{path, expiresIn /*s*/, name?, password?, slug?, mode?, quotaBytes?, maxFileBytes?, maxFiles?}` → 201 `{share, token, url}`. `path` pode ser pasta (`kind: dir`) ou arquivo (`kind: file`); `password` opcional com 4–256 caracteres (400 `weak_password`), guardada como Argon2id. `url` usa `FILEZAM_PUBLIC_URL` ou o host da requisição; a interface web monta o link a partir de `slug \|\| token` + origem do navegador. 400 `bad_expiry`, 409 `not_dir` |
+| DELETE | `/api/shares/{id}?purge=` | U | Dono ou admin → `{ok}`. Link com apelido é **revogado**, não apagado: o endereço continua reservado a quem o criou. `?purge=1` apaga a linha e libera o apelido |
 
 Links de um usuário desativado respondem 404 enquanto ele estiver desativado. Em `?path=` (autenticado ou público) nomes `.filezam-*` são 400 `invalid_path` também na leitura.
+
+### Apelido (`slug`)
+
+`slug` troca o token por um endereço legível (`/s/orcamento-2026`). São 3–63 caracteres em
+`[a-z0-9-]`, sem hífen nas pontas, únicos em toda a instalação e fora da lista reservada (`admin`,
+`login`, `filezam`, `s`, `api`) — 400 `invalid_slug`, 409 `slug_taken`. Como o endereço é
+adivinhável, **senha é obrigatória** (400 `password_required`); o sigilo do link passa a morar nela.
+Depende de `slugs_enabled` nas configurações (403 `feature_disabled`).
+
+### Link de envio (`mode: "drop"`)
+
+Depende de `drop_enabled` (403 `feature_disabled`). Sempre `kind: dir`, e:
+
+- `path` **não pode ser a raiz do escopo** (400 `root_op`) e a pasta é criada no ato; se já existir,
+  precisa estar vazia — inclusive de partes de upload (409 `not_empty`).
+- `expiresIn` é obrigatório e vale no máximo `min(drop_max_ttl, 30 dias, FILEZAM_SHARE_MAX_TTL)`
+  (400 `bad_expiry`).
+- `quotaBytes` é obrigatório, limitado por `drop_max_quota` e pela cota restante do dono
+  (400 `bad_quota`). `maxFileBytes` e `maxFiles` caem no padrão das configurações.
+- 409 `drop_links_exceeded` quando o usuário já tem `drop_max_links` links de envio ativos.
 
 ## Público (sem sessão)
 
 | Método | Rota | Auth | Descrição |
 |---|---|---|---|
-| GET | `/api/public/{token}` | P | `{name, kind, expiresAt, now, locked}` (+ `size, mtime, fileName` para arquivo); conta um acesso quando destravado. `locked: true` quando o link tem senha e o cookie de unlock não veio. 404 se inexistente, expirado, revogado, item sumiu ou dono desativado |
+| GET | `/api/public/{token}` | P | Travado, devolve só `{kind, mode, expiresAt, now, locked: true}` — nem o nome, que com apelido seria um oráculo de enumeração. Destravado, acrescenta `name` (+ `size, mtime, fileName` para arquivo; + os campos de envio abaixo para `mode: drop`) e conta um acesso. 404 se inexistente, expirado, revogado, item sumiu ou dono desativado |
 | POST | `/api/public/{token}/unlock` | P | `{password}` → `{ok}` e cookie `fz_s_<hash16>` (HMAC do token, 24 h). 401 `bad_credentials`; 5/min por (link, IP) e `loginSem` (Argon2). Exige `X-Filezam: 1` |
-| GET | `/api/public/{token}/list?path=` | P | `{path, entries}`; 401 `share_locked` com senha pendente; 409 `not_dir` em link de arquivo |
+| GET | `/api/public/{token}/list?path=` | P | `{path, entries}`; 401 `share_locked` com senha pendente; 409 `not_dir` em link de arquivo; **404 em link de envio** |
 | GET | `/api/public/{token}/content?path=&inline=` | P | Conteúdo (mesmas regras de inline). Em link de arquivo `path` é ignorado: serve sempre o arquivo compartilhado. 401 `share_locked`. Com 2 downloads/zips do mesmo IP em andamento, espera um slot até 30 s e só então responde 429 `busy` |
 | GET | `/api/public/{token}/zip?path=...` | P | ZIP; sem `path` compacta a pasta inteira. 401 `share_locked`; 409 `not_dir` em link de arquivo; divide com `content` os 2 slots por IP e tem teto de 4 zips públicos simultâneos no servidor (mesma espera de até 30 s, depois 429 `busy`) |
 
-Tudo responde 404 `not_found` para token inválido/expirado/revogado; 429 por rate limit.
+`{token}` aceita o token de 43 caracteres ou o apelido. Um apelido errado consome um balde próprio
+(30/min por IP) antes do 404, então varrer endereços trava rápido e quem tem o link certo nunca paga
+por isso.
+
+Tudo responde 404 `not_found` para token inválido/expirado/revogado; 429 por rate limit. Um link de
+envio responde 404 nas rotas de leitura e um link de leitura responde 404 nas de escrita: a
+invariante de "mesma resposta para tudo que não existe" vale nos dois sentidos.
+
+## Envio anônimo (link `mode: drop`)
+
+Todas exigem `X-Filezam: 1` e origem do mesmo site, como `unlock`, e 401 `share_locked` enquanto a
+senha do link não foi destravada.
+
+| Método | Rota | Auth | Descrição |
+|---|---|---|---|
+| PUT | `/api/public/{token}/content?name=&mtime=` | P | Corpo bruto, até `chunkSize` → 201 `{name, size}`. O `name` devolvido é sempre **o que foi pedido**, mesmo quando o servidor precisou gravar como `nome (1).ext` para não sobrescrever: revelar o desvio faria do endpoint um teste de existência de nome na pasta. 413 `too_large` acima do bloco |
+| POST | `/api/public/{token}/uploads` | P | `{name, size, mtime}` → 201 `Upload` (sem `dir`: o link é plano) |
+| PUT | `/api/public/{token}/uploads/{id}?index=` | P | Um bloco, `Content-Length` exato; 411 `length_required`, 400 `bad_index`/`bad_length` |
+| POST | `/api/public/{token}/uploads/{id}/complete` | P | → `{name, size}` (o nome pedido, como no PUT); 409 `incomplete {missing}` |
+| DELETE | `/api/public/{token}/uploads/{id}` | P | Cancela e devolve o espaço reservado |
+
+O `GET /api/public/{token}` destravado de um link de envio traz o que o cliente precisa sem depender
+de `/api/config` (que exige sessão): `{quotaBytes, usedBytes, fileCount, maxFileBytes, maxFiles,
+chunkSize, maxParallel, mine: [{name, size, at}]}`. `mine` lista **apenas os envios do próprio
+visitante**, identificado pelo cookie `fz_d_<hash16>` assinado pelo servidor; adulterá-lo só faz o
+servidor emitir uma identidade nova. Os nomes em `mine` são os que o visitante pediu, não os que
+estão no disco.
+
+Um link cujo recurso o administrador desligou responde **404 em todas as rotas**, inclusive as que
+já existiam antes de ser desligado.
+
+Limites: 507 `drop_full` (cota do link **ou** do dono — indistinguíveis de propósito), 413
+`drop_file_limit`, 409 `drop_count_exceeded` (teto de arquivos do link, ou 8 sessões abertas do mesmo
+visitante). Sessões abertas contam na cota enquanto existem e são descartadas após `drop_stale_age`.
+A escrita usa um balde de requisições próprio (o de leitura, 120/min, mataria um envio legítimo de
+algumas dezenas de arquivos) e 2 envios simultâneos por IP, com a mesma espera de 30 s dos downloads
+antes de 429 `busy`.
 
 ## Administração
 
@@ -140,6 +198,8 @@ Tudo responde 404 `not_found` para token inválido/expirado/revogado; 429 por ra
 | PATCH | `/api/admin/users/{id}` | A | Qualquer de `{role, scope, disabled, password, mustChangePassword, quota}` (`quota` em bytes, 0 = sem limite; 400 `bad_quota`) → `{user}`; 409 `last_admin`. Mudanças de role/scope/senha/disabled revogam sessões; estreitar `scope` apaga os links públicos do usuário que ficaram fora dele (`sharesRevoked` no evento de auditoria) |
 | POST | `/api/admin/users/{id}/totp/reset` | A | Remove o 2FA do usuário e derruba as sessões dele → `{ok}` |
 | DELETE | `/api/admin/users/{id}` | A | → `{ok}`; 409 `self`/`last_admin`; remove partes de upload pendentes |
+| GET | `/api/admin/settings` | A | `{settings, dropTtlHardMax}` |
+| PATCH | `/api/admin/settings` | A | Campos parciais de `Settings` → `{settings, dropTtlHardMax}`. Fora de faixa → 400 `bad_quota`; `dropMaxTtl` nunca passa de 30 dias, mesmo com o banco editado à mão. Auditado como `settings.update` |
 | GET | `/api/admin/dirs?path=` | A | `{path, dirs: [string]}` só diretórios reais da **raiz base**, para o seletor de escopo |
 | GET | `/metrics` | token | Prometheus text format; exige `FILEZAM_METRICS_TOKEN` (`Authorization: Bearer`) ou sessão admin; 404 quando desativado |
 | GET | `/api/admin/index` | A | `{enabled, ready, running, entries, lastFullAt, interval}` do índice de nomes |
@@ -160,14 +220,14 @@ Regras de `username`: 2–64 caracteres de `A-Z a-z 0-9 . _ - @`, único sem dis
 
 | HTTP | code | Quando |
 |---|---|---|
-| 400 | `bad_json`, `invalid_path` (inclui tamanho de upload fora de `[0, 1 PiB]` e nomes `.filezam-*`), `invalid_name` (inclui caracteres de controle em nomes novos), `bad_query`, `nested`, `root_op`, `bad_index`, `bad_length`, `bad_conflict`, `bad_expiry`, `bad_id`, `bad_meta`, `bad_multipart`, `no_paths`, `too_many`, `too_many_files`, `weak_password`, `invalid_username`, `invalid_role`, `invalid_scope`, `bad_quota`, `unsupported` | Entrada inválida |
+| 400 | `bad_json`, `invalid_path` (inclui tamanho de upload fora de `[0, 1 PiB]` e nomes `.filezam-*`), `invalid_name` (inclui caracteres de controle em nomes novos), `bad_query`, `nested`, `root_op`, `bad_index`, `bad_length`, `bad_conflict`, `bad_expiry`, `bad_id`, `bad_meta`, `bad_multipart`, `no_paths`, `too_many`, `too_many_files`, `weak_password`, `invalid_slug`, `password_required`, `bad_mode`, `invalid_username`, `invalid_role`, `invalid_scope`, `bad_quota`, `unsupported` | Entrada inválida |
 | 401 | `unauthorized`, `bad_credentials`, `share_locked`, `bad_totp`, `totp_expired` | Sem sessão / credenciais erradas / link com senha pendente / código 2FA inválido ou etapa expirada |
-| 403 | `forbidden`, `csrf`, `password_change_required`, `totp_required`, `scope_unavailable`, `fs_permission` | Sem permissão |
+| 403 | `forbidden`, `csrf`, `feature_disabled`, `password_change_required`, `totp_required`, `scope_unavailable`, `fs_permission` | Sem permissão |
 | 404 | `not_found` | Caminho, job, share, usuário |
-| 409 | `exists`, `is_dir`, `not_dir`, `modified`, `conflict`, `cross_device`, `upload_in_progress`, `incomplete`, `last_admin`, `self`, `totp_setup_expired`, `totp_not_enabled`, `totp_already_enabled` | Conflito de estado |
+| 409 | `exists`, `is_dir`, `not_dir`, `not_empty`, `modified`, `slug_taken`, `drop_count_exceeded`, `drop_links_exceeded`, `conflict`, `cross_device`, `upload_in_progress`, `incomplete`, `last_admin`, `self`, `totp_setup_expired`, `totp_not_enabled`, `totp_already_enabled` | Conflito de estado |
 | 411 | `length_required` | Chunk sem `Content-Length` |
-| 413 | `too_large`, `upload_reserve_exceeded` | Corpo maior que o limite / uploads inacabados do usuário já reservam o teto de espaço |
-| 507 | `no_space`, `quota_exceeded` | Disco cheio / cota do usuário estourada |
+| 413 | `too_large`, `upload_reserve_exceeded`, `drop_file_limit` | Corpo maior que o limite / uploads inacabados do usuário já reservam o teto de espaço / arquivo acima do teto por arquivo do link de envio |
+| 507 | `no_space`, `quota_exceeded`, `drop_full` | Disco cheio / cota do usuário estourada / link de envio sem espaço (a cota do link ou a do dono: um visitante anônimo não distingue as duas) |
 | 429 | `rate_limited`, `busy` | Limite de taxa ou concorrência (`Retry-After: 1`) |
 | 499 | `cancelled` | Cliente desistiu |
 | 503 | `db`, `root` | Health |

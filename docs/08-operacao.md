@@ -261,7 +261,7 @@ O proxy reverso é o mesmo da seção 2.
 | `FILEZAM_SESSION_TTL` | `168h` | Validade deslizante da sessão (teto absoluto: 30 dias) |
 | `FILEZAM_MAX_UPLOAD_CHUNK` | `16MiB` | Tamanho do bloco de upload (1 MiB a 1 GiB). Até 64 MiB atrás da Cloudflare |
 | `FILEZAM_UPLOAD_MAX_RESERVED` | `100GiB` | Espaço que os uploads em blocos inacabados de um usuário podem reservar no disco (a sessão pré-aloca o tamanho do arquivo); `0` = sem teto. Um arquivo maior que isso precisa de um valor maior |
-| `FILEZAM_SHARE_MAX_TTL` | `720h` | Validade máxima de um link público |
+| `FILEZAM_SHARE_MAX_TTL` | `720h` | Validade máxima de um link público. Um link de recebimento nunca passa de 30 dias, nem com valor maior aqui |
 | `FILEZAM_TRASH_RETENTION` | `720h` | Tempo na lixeira (`<escopo>/.filezam-trash`) antes de apagar de vez; `0` desativa a lixeira |
 | `FILEZAM_INDEX_INTERVAL` | `6h` | Varredura completa do índice de nomes da pesquisa; `0` desativa o índice (a pesquisa percorre o disco) |
 | `FILEZAM_METRICS_TOKEN` | vazio | Liga `GET /metrics` (Prometheus) para quem envia `Authorization: Bearer <token>` |
@@ -273,6 +273,16 @@ O proxy reverso é o mesmo da seção 2.
 Só no `.env` do compose (não são lidas pelo binário): `PUID`/`PGID`, `FILEZAM_HOST_ROOT`, `FILEZAM_HOST_CONFIG`, `FILEZAM_BIND`, `FILEZAM_PORT`, `FILEZAM_SUBNET` (sub-rede da rede do compose, padrão `172.31.250.0/24`), `FILEZAM_VERSION`.
 
 Validações no startup: raiz não pode ser `/`; `FILEZAM_DATA_DIR` não pode estar dentro da raiz (symlinks são resolvidos antes da checagem); chunk entre 1 MiB e 1 GiB; admin e senha iniciais não podem ser vazios; `FILEZAM_SECURE_COOKIES=auto` sem proxies confiáveis gera aviso no log (cookies não serão `Secure` atrás de proxy).
+
+Os links com endereço personalizado e os links de recebimento **não têm variável de ambiente**: são
+ligados e ajustados em **Administração → Configurações do sistema**, que grava na tabela `settings`
+e vale na hora, sem reiniciar. O recebimento nasce desligado; o teto de 30 dias do vencimento é
+constante no código e o painel só consegue encurtá-lo.
+
+Dimensionamento de disco com links de recebimento: o pior caso por usuário é
+`min(links ativos × cota por link, cota do usuário)`, e `FILEZAM_UPLOAD_MAX_RESERVED` continua sendo
+a rede final para o que as sessões inacabadas reservam. Numa instalação com gente de fora enviando,
+defina cota por usuário.
 
 ## Subcomandos do binário
 
@@ -330,6 +340,9 @@ Logs em JSON no stdout (`docker compose logs -f filezam` ou `journalctl -u filez
 | Pesquisa não acha arquivo copiado por Samba/SSH | o índice só vê mudanças feitas pelo Filezam até a próxima varredura | Aguardar `FILEZAM_INDEX_INTERVAL` ou **Reconstruir índice** na tela Pesquisar (admin) |
 | Pasta `.filezam-trash` no disco | lixeira do Filezam; invisível na interface | Não apagar à mão: use Esvaziar lixeira |
 | Usuário diz que a senha certa não entra | bloqueio de 15 min+ por (usuário, IP) após 10 erros; a resposta é igual à de senha errada | Esperar, ou entrar de outro endereço; ver `login.locked` na auditoria |
+| 507 `drop_full` no link de recebimento | a cota do link acabou, ou a do dono | Criar um link novo, aumentar a cota do dono, ou esperar as sessões inacabadas caírem (2 h por padrão). A cota do link conta **tudo que já entrou**, mesmo que os arquivos tenham sido apagados depois |
+| 409 `not_empty` ao criar um link de recebimento | a pasta escolhida já tem conteúdo (inclusive parte de upload) | Escolher um nome de pasta que ainda não existe; o link cria a pasta |
+| 409 `slug_taken` com um endereço que você mesmo usava | o link foi revogado, e o apelido continua reservado ao dono de propósito | Liberar em **Compartilhamentos → Liberar endereço** |
 | 413 `upload_reserve_exceeded` | uploads em blocos inacabados do usuário já reservam `FILEZAM_UPLOAD_MAX_RESERVED` | Concluir ou cancelar os envios pendentes (somem sozinhos após 24 h parados) ou aumentar o teto |
 | 507 `quota_exceeded` | cota do usuário (Administração → Usuários) estourada | Aumentar a cota ou liberar espaço; a medição atualiza em até 30 s |
 | Usuário perdeu o celular e os códigos de recuperação | 2FA sem como validar | Administração → Usuários → editar → **Redefinir 2FA** (se for o único admin: `reset-admin`, que também limpa o 2FA) |

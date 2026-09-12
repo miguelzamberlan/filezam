@@ -31,22 +31,63 @@ func (s *Server) isTrustedRequest(r *http.Request) bool {
 }
 
 // publicShare resolves the token to a live share (rate-limited per IP; same 404 for every failure).
+// ifEnabled drops a link whose feature the administrator turned off. A checagem fica aqui, e
+// não só na criação, porque desligar o recurso precisa parar os links que já existem — é isso
+// que alguém faz ao perceber abuso. 404 para não distinguir de um link inexistente.
+func (s *Server) ifEnabled(sh *store.Share) (*store.Share, error) {
+	if sh.Mode == "drop" && !s.settings().DropEnabled {
+		return nil, errShareNotFound
+	}
+	return sh, nil
+}
+
+// publicShare resolves the link of a read request, charging the shared public rate limit.
 func (s *Server) publicShare(r *http.Request) (*store.Share, error) {
 	if !s.publicIP.Allow(ipFrom(r)) {
 		return nil, errorf(http.StatusTooManyRequests, "rate_limited", "too many requests")
 	}
+	return s.resolveShare(r)
+}
+
+// publicShareWrite resolves the link of an upload request. O balde de leitura (120/min) mataria
+// um envio legítimo: 40 arquivos pequenos já são 120 requisições entre abrir, mandar blocos e
+// concluir. Aqui o custo real é limitado por bytes, cota e slots simultâneos, não por contagem.
+func (s *Server) publicShareWrite(r *http.Request) (*store.Share, error) {
+	if !s.dropIP.Allow(ipFrom(r)) {
+		return nil, errorf(http.StatusTooManyRequests, "rate_limited", "too many requests")
+	}
+	return s.resolveShare(r)
+}
+
+func (s *Server) resolveShare(r *http.Request) (*store.Share, error) {
 	tok := r.PathValue("token")
-	if len(tok) < 16 || len(tok) > 128 {
+	isSlug := slugShape(tok)
+	if !isSlug && (len(tok) < 16 || len(tok) > 128) {
 		return nil, errShareNotFound
 	}
 	sh, err := s.db.GetActiveShareByToken(r.Context(), auth.HashToken(tok))
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			return nil, errShareNotFound
-		}
+	if err == nil {
+		return s.ifEnabled(sh)
+	}
+	if !errors.Is(err, store.ErrNotFound) {
 		return nil, err
 	}
-	return sh, nil
+	// Duas consultas indexadas em vez de um OR: não dependem do otimizador do SQLite e cobrem
+	// o caso raro de um token base64url que saia todo em minúsculas.
+	// Apelidos desligados pelo admin param de resolver na hora, inclusive os já criados.
+	if isSlug && s.settings().SlugsEnabled {
+		if sh, err := s.db.GetActiveShareBySlug(r.Context(), tok); err == nil {
+			return s.ifEnabled(sh)
+		} else if !errors.Is(err, store.ErrNotFound) {
+			return nil, err
+		}
+		// Um apelido é adivinhável; só as tentativas erradas pagam pedágio, então quem tem o
+		// endereço certo nunca é afetado e quem varre a lista trava rápido.
+		if !s.slugMiss.Allow(ipFrom(r)) {
+			return nil, errorf(http.StatusTooManyRequests, "rate_limited", "too many requests")
+		}
+	}
+	return nil, errShareNotFound
 }
 
 // shareFile is the name of the shared file inside its root (kind "file"), "" for folder shares.
@@ -166,18 +207,40 @@ func (s *Server) handlePublicInfo(w http.ResponseWriter, r *http.Request) error 
 		return err
 	}
 	defer root.Close()
-	out := map[string]any{"name": sh.Name, "kind": sh.Kind, "expiresAt": sh.ExpiresAt, "now": time.Now().Unix(), "locked": !shareUnlocked(r, sh)}
-	if out["locked"] == false {
-		s.db.TouchShare(r.Context(), sh.ID)
-		if sh.Kind == "file" {
-			if e, err := root.Stat(shareFile(sh)); err == nil {
-				out["size"] = e.Size
-				out["mtime"] = e.Mtime
-				out["fileName"] = e.Name
-			}
+	unlocked := shareUnlocked(r, sh)
+	out := map[string]any{"kind": sh.Kind, "mode": sh.Mode, "expiresAt": sh.ExpiresAt, "now": time.Now().Unix(), "locked": !unlocked}
+	if !unlocked {
+		// Travado não se diz nem o nome da pasta: com apelido, isso viraria um oráculo para
+		// descobrir quais endereços existem e o que guardam.
+		writeJSON(w, r, 200, out)
+		return nil
+	}
+	out["name"] = sh.Name
+	s.db.TouchShare(r.Context(), sh.ID)
+	switch {
+	case sh.Mode == "drop":
+		// O link de envio devolve os próprios limites e a lista de quem está enviando: é a
+		// configuração de que o cliente público precisa, já que /api/config exige sessão.
+		for k, v := range s.dropInfo(r.Context(), r, sh, s.dropSender(r, sh)) {
+			out[k] = v
+		}
+	case sh.Kind == "file":
+		if e, err := root.Stat(shareFile(sh)); err == nil {
+			out["size"] = e.Size
+			out["mtime"] = e.Mtime
+			out["fileName"] = e.Name
 		}
 	}
 	writeJSON(w, r, 200, out)
+	return nil
+}
+
+// readable refuses the read routes on a drop link. Responde 404, e não 403, para manter a
+// invariante de que todo link inexistente, expirado, revogado ou inacessível responde igual.
+func readable(sh *store.Share) error {
+	if sh.Mode == "drop" {
+		return errShareNotFound
+	}
 	return nil
 }
 
@@ -187,6 +250,9 @@ func (s *Server) handlePublicList(w http.ResponseWriter, r *http.Request) error 
 		return err
 	}
 	defer root.Close()
+	if err := readable(sh); err != nil {
+		return err
+	}
 	if !shareUnlocked(r, sh) {
 		return errShareLocked
 	}
@@ -227,6 +293,9 @@ func (s *Server) handlePublicContent(w http.ResponseWriter, r *http.Request) err
 		return err
 	}
 	defer root.Close()
+	if err := readable(sh); err != nil {
+		return err
+	}
 	if !shareUnlocked(r, sh) {
 		return errShareLocked
 	}
@@ -250,6 +319,9 @@ func (s *Server) handlePublicZip(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	defer root.Close()
+	if err := readable(sh); err != nil {
+		return err
+	}
 	if !shareUnlocked(r, sh) {
 		return errShareLocked
 	}

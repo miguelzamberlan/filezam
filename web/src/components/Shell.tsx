@@ -100,6 +100,7 @@ export default function Shell() {
           <div className="mt-3 px-2.5 text-xs font-medium uppercase tracking-wide text-neutral-500">{S.admin}</div>
           <NavLink to="/admin/users" className={linkCls} onClick={() => setMenuOpen(false)}><IUsers size={16} /> {S.users}</NavLink>
           <NavLink to="/admin/audit" className={linkCls} onClick={() => setMenuOpen(false)}><ILog size={16} /> {S.audit}</NavLink>
+          <NavLink to="/admin/settings" className={linkCls} onClick={() => setMenuOpen(false)}><ISettings size={16} /> {S.settingsAdmin}</NavLink>
         </>
       )}
       <div className="mt-auto border-t border-neutral-200 pt-2 dark:border-neutral-800">

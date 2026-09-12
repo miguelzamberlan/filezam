@@ -57,7 +57,8 @@ Três prioridades guiam cada decisão, nesta ordem:
 - **Visualização** de imagens, vídeo, áudio, PDF, texto e Markdown formatado sem sair da página.
 - **Uploads sérios**: arquivos de vários GB em blocos paralelos com retomada, pastas inteiras por arrastar e soltar, milhares de arquivos pequenos em lote, tudo com painel de progresso, pausa e repetição de falhas.
 - **Editor embutido**: edite arquivos de texto, markdown e configuração pelo navegador, com prévia formatada para `.md` e proteção contra duas pessoas salvarem por cima uma da outra.
-- **Links públicos**: compartilhe uma pasta ou um arquivo por link somente leitura com prazo de validade, senha opcional, contagem de acessos e revogação imediata.
+- **Links públicos**: compartilhe uma pasta ou um arquivo por link somente leitura com prazo de validade, senha opcional, contagem de acessos e revogação imediata. O endereço pode ser um nome que você escolhe (`/s/orcamento-2026`), com senha obrigatória.
+- **Links para receber arquivos**: uma caixa de entrada pública para quem não tem conta enviar arquivos para uma pasta sua, com cota e vencimento obrigatórios. Quem envia não vê nem baixa o que já está lá.
 - **Verificação em duas etapas** (TOTP) com códigos de recuperação e "confiar neste dispositivo por 30 dias"; opcionalmente obrigatória para administradores.
 - **Administração**: usuários com cota de disco e redefinição de 2FA, auditoria de logins e alterações, bloqueio progressivo contra força bruta, histórico de operações e métricas Prometheus.
 - **Interface**: português ou inglês, tema claro/escuro/sistema, cores personalizáveis, zoom da listagem, ícones por tipo, arrastar e soltar para mover, listagem paginada para pastas enormes, atalhos de teclado e uso confortável no celular.
@@ -207,6 +208,16 @@ Após 10 falhas seguidas de login do mesmo endereço, aquele par usuário + IP f
 ### Links públicos
 
 Selecione uma pasta ou um arquivo, clique em **Compartilhar**, escolha a validade e, se quiser, uma senha: o link (`/s/<token>`) é copiado na hora e pode ser copiado de novo em **Compartilhamentos** ou nas propriedades da pasta. Quem tiver o link pode listar, visualizar e baixar (arquivo ou ZIP), nada mais. O token tem 256 bits. Revogar ou expirar invalida o link na hora; desativar o usuário ou tirar a pasta do escopo dele também. Mover, renomear ou recriar o item compartilhado invalida o link.
+
+**Endereço personalizado.** No lugar do token você pode escolher o endereço (`/s/orcamento-2026`), útil para ditar por telefone ou imprimir. Como um nome assim é fácil de adivinhar, ele exige senha — é ela que protege o link. Um endereço revogado continua reservado a você: ninguém mais consegue criar um link com ele até você liberar em **Compartilhamentos**.
+
+### Links para receber arquivos
+
+Precisa que um cliente mande documentos e você não quer criar uma conta para ele? Em **Compartilhar**, escolha **Receber arquivos**: informe o nome de uma pasta nova, a cota e a validade (no máximo 30 dias). A pasta é criada na hora e precisa estar vazia — nada do que você já tem fica exposto.
+
+Quem abre o link só envia. Não lista, não baixa, não vê o que outras pessoas mandaram (vê apenas os próprios envios) e nunca sobrescreve nada: um nome repetido é salvo como `nome (1).ext`. Cada envio aparece na **Auditoria** com o IP de origem.
+
+O recurso vem desligado. Um administrador liga em **Administração → Configurações do sistema**, onde também ficam os tetos: cota máxima por link, validade máxima, tamanho por arquivo, número de arquivos e quantos links cada usuário pode ter.
 
 ### Uploads
 

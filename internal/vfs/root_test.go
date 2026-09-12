@@ -504,3 +504,40 @@ func TestCopyIntoItselfThroughSymlink(t *testing.T) {
 	}
 	checkCanary(t, outside)
 }
+
+// IsEmpty é a porta de entrada do link de envio: ela decide se uma pasta pode receber
+// arquivos de anônimos. Nunca pode ser enganada para fora do root nem fingir que uma pasta
+// com parte de upload está vazia.
+func TestIsEmptyRefusesEscape(t *testing.T) {
+	r, root, outside := fixture(t)
+	for _, p := range []string{"link-out", "link-etc", "loop", "link-out/.."} {
+		if _, err := r.IsEmpty(p); err == nil {
+			t.Errorf("IsEmpty(%q) succeeded", p)
+		}
+	}
+	if _, err := r.IsEmpty(".."); err == nil {
+		t.Error(`IsEmpty("..") succeeded`)
+	}
+	// Pasta realmente vazia x pasta com conteúdo.
+	if err := r.Mkdir("empty"); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := r.IsEmpty("empty"); err != nil || !ok {
+		t.Fatalf("empty dir: %v %v", ok, err)
+	}
+	if ok, err := r.IsEmpty("a"); err != nil || ok {
+		t.Fatalf("dir with files reported empty: %v %v", ok, err)
+	}
+	// Uma parte de upload conta como conteúdo, mesmo sendo invisível na listagem.
+	if err := os.WriteFile(filepath.Join(root, "empty", PartName("x")), []byte("p"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := r.IsEmpty("empty"); err != nil || ok {
+		t.Fatalf("dir with an upload part reported empty: %v %v", ok, err)
+	}
+	// Um arquivo não é pasta vazia.
+	if _, err := r.IsEmpty("a/file.txt"); err == nil {
+		t.Error("IsEmpty on a file succeeded")
+	}
+	checkCanary(t, outside)
+}

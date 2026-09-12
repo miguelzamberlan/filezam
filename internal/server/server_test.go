@@ -1614,6 +1614,574 @@ func TestUploadSessionsPerUserAndReserve(t *testing.T) {
 	}
 }
 
+// dropEnv liga os dois recursos novos (nascem desligados) e devolve o admin já logado.
+func dropEnv(t *testing.T) (*client, *Server, string) {
+	t.Helper()
+	admin, s, root := newEnv(t)
+	admin.login("admin", "admin")
+	admin.expect("POST", "/api/auth/password", map[string]string{"current": "admin", "new": "correct horse battery"}, 200)
+	admin.expect("PATCH", "/api/admin/settings", map[string]any{"slugsEnabled": true, "dropEnabled": true}, 200)
+	return admin, s, root
+}
+
+// newPublic returns a visitor: no session, its own cookie jar.
+func newPublic(t *testing.T, srv *httptest.Server) *client {
+	t.Helper()
+	jar, _ := cookiejar.New(nil)
+	return &client{t: t, srv: srv, c: &http.Client{Jar: jar}}
+}
+
+func TestAdminSettings(t *testing.T) {
+	admin, s, _ := newEnv(t)
+	admin.login("admin", "admin")
+	admin.expect("POST", "/api/auth/password", map[string]string{"current": "admin", "new": "correct horse battery"}, 200)
+
+	// Padrão de fábrica: apelidos ligados, link de envio desligado.
+	out := admin.expect("GET", "/api/admin/settings", nil, 200)["settings"].(map[string]any)
+	if out["slugsEnabled"] != true || out["dropEnabled"] != false {
+		t.Fatalf("factory defaults: %v", out)
+	}
+	// Desligado vale também para o admin: ele liga primeiro, e isso fica na auditoria.
+	o := admin.expect("POST", "/api/shares", map[string]any{"path": "teamA/caixa", "expiresIn": 3600, "mode": "drop", "quotaBytes": 1 << 20, "password": "abcd"}, 403)
+	if code(o) != "feature_disabled" {
+		t.Fatalf("drop while disabled: %v", o)
+	}
+	o = admin.expect("POST", "/api/shares", map[string]any{"path": "teamA/pub", "expiresIn": 3600, "slug": "vendas", "password": "abcd"}, 201)
+	if o["share"].(map[string]any)["slug"] != "vendas" {
+		t.Fatalf("slug is on by default: %v", o)
+	}
+	admin.expect("PATCH", "/api/admin/settings", map[string]any{"slugsEnabled": false}, 200)
+	o = admin.expect("POST", "/api/shares", map[string]any{"path": "teamA/pub", "expiresIn": 3600, "slug": "compras", "password": "abcd"}, 403)
+	if code(o) != "feature_disabled" {
+		t.Fatalf("slug while disabled: %v", o)
+	}
+	// O teto rígido de 30 dias não é negociável pelo painel.
+	o = admin.expect("PATCH", "/api/admin/settings", map[string]any{"dropMaxTtl": 31 * 86400}, 400)
+	if code(o) != "bad_quota" {
+		t.Fatalf("ttl above the hard cap: %v", o)
+	}
+	// Usuário comum não chega perto.
+	admin.expect("POST", "/api/admin/users", map[string]any{"username": "bob", "password": "bobpassword1", "scope": "teamA"}, 201)
+	bob := newPublic(t, admin.srv)
+	bob.login("bob", "bobpassword1")
+	bob.expect("GET", "/api/admin/settings", nil, 403)
+	bob.expect("PATCH", "/api/admin/settings", map[string]any{"dropEnabled": true}, 403)
+
+	if s.settings().SlugsEnabled {
+		t.Fatal("settings cache not refreshed")
+	}
+	found := false
+	for _, e := range admin.expect("GET", "/api/admin/audit", nil, 200)["entries"].([]any) {
+		if e.(map[string]any)["action"] == "settings.update" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("settings.update not audited")
+	}
+}
+
+func TestShareSlug(t *testing.T) {
+	admin, _, _ := dropEnv(t)
+	pub := newPublic(t, admin.srv)
+	mk := func(slug, pw string, status int) map[string]any {
+		body := map[string]any{"path": "teamA/pub", "expiresIn": 3600, "slug": slug}
+		if pw != "" {
+			body["password"] = pw
+		}
+		return admin.expect("POST", "/api/shares", body, status)
+	}
+	// O apelido é adivinhável: sem senha o link não teria segredo nenhum.
+	if o := mk("vendas", "", 400); code(o) != "password_required" {
+		t.Fatalf("slug without password: %v", o)
+	}
+	for _, bad := range []string{"ab", "Vendas", "-vendas", "vendas-", "ven das", "ven_das", "admin", "api", strings.Repeat("a", 64)} {
+		if o := mk(bad, "abcd", 400); code(o) != "invalid_slug" {
+			t.Fatalf("slug %q accepted: %v", bad, o)
+		}
+	}
+	o := mk("vendas-2026", "abcd", 201)
+	tok := o["token"].(string)
+	if url, _ := o["url"].(string); !strings.HasSuffix(url, "/s/vendas-2026") {
+		t.Fatalf("url should carry the slug: %v", url)
+	}
+	if o2 := mk("vendas-2026", "abcd", 409); code(o2) != "slug_taken" {
+		t.Fatalf("duplicate slug: %v", o2)
+	}
+	// O endereço resolve pelo apelido e pelo token; ambos pedem a senha.
+	for _, addr := range []string{"vendas-2026", tok} {
+		info := pub.expect("GET", "/api/public/"+addr, nil, 200)
+		if info["locked"] != true {
+			t.Fatalf("%s should be locked: %v", addr, info)
+		}
+		// Travado não conta nem o nome da pasta: seria um oráculo de enumeração.
+		if _, ok := info["name"]; ok {
+			t.Fatalf("locked info leaks the name: %v", info)
+		}
+	}
+	pub.expect("POST", "/api/public/vendas-2026/unlock", map[string]string{"password": "abcd"}, 200)
+	if info := pub.expect("GET", "/api/public/vendas-2026", nil, 200); info["name"] != "pub" {
+		t.Fatalf("after unlock: %v", info)
+	}
+	pub.expect("GET", "/api/public/vendas-2026/list", nil, 200)
+
+	// Revogar tira o link do ar mas NÃO devolve o apelido ao pool: outra pessoa o assumiria e
+	// passaria a receber o que era destinado a quem o divulgou.
+	id := int64(admin.expect("GET", "/api/shares", nil, 200)["shares"].([]any)[0].(map[string]any)["id"].(float64))
+	admin.expect("DELETE", fmt.Sprintf("/api/shares/%d", id), nil, 200)
+	pub.expect("GET", "/api/public/vendas-2026", nil, 404)
+	if o2 := mk("vendas-2026", "abcd", 409); code(o2) != "slug_taken" {
+		t.Fatalf("revoked slug went back to the pool: %v", o2)
+	}
+	// O dono continua vendo o apelido reservado e pode liberá-lo de propósito.
+	var revoked map[string]any
+	for _, v := range admin.expect("GET", "/api/shares", nil, 200)["shares"].([]any) {
+		if m := v.(map[string]any); m["slug"] == "vendas-2026" {
+			revoked = m
+		}
+	}
+	if revoked == nil || revoked["revoked"] != true {
+		t.Fatalf("revoked slug should stay listed: %v", revoked)
+	}
+	admin.expect("DELETE", fmt.Sprintf("/api/shares/%d?purge=1", id), nil, 200)
+	mk("vendas-2026", "abcd", 201)
+}
+
+func TestSlugEnumerationIsRateLimited(t *testing.T) {
+	admin, s, _ := dropEnv(t)
+	admin.expect("POST", "/api/shares", map[string]any{"path": "teamA/pub", "expiresIn": 3600, "slug": "existe", "password": "abcd"}, 201)
+	pub := newPublic(t, admin.srv)
+	s.slugMiss = auth.NewLimiter(5, 5)
+	limited := false
+	for i := 0; i < 12; i++ {
+		resp, _ := pub.do("GET", fmt.Sprintf("/api/public/chute-%d", i), nil, nil)
+		resp.Body.Close()
+		if resp.StatusCode == 429 {
+			limited = true
+			break
+		}
+	}
+	if !limited {
+		t.Fatal("slug guessing was never rate limited")
+	}
+	// Quem tem o endereço certo não paga pelo enumerador: só o erro consome o balde.
+	pub.expect("GET", "/api/public/existe", nil, 200)
+}
+
+// mkDrop cria um link de envio com os limites pedidos e devolve (token, id).
+func mkDrop(c *client, path string, quota, maxFile, maxFiles int64) (string, int64) {
+	c.t.Helper()
+	body := map[string]any{"path": path, "expiresIn": 3600, "mode": "drop", "quotaBytes": quota}
+	if maxFile > 0 {
+		body["maxFileBytes"] = maxFile
+	}
+	if maxFiles > 0 {
+		body["maxFiles"] = maxFiles
+	}
+	o := c.expect("POST", "/api/shares", body, 201)
+	return o["token"].(string), int64(o["share"].(map[string]any)["id"].(float64))
+}
+
+// send faz o envio único de um arquivo pequeno pelo link.
+func send(c *client, tok, name string, body []byte) (*http.Response, map[string]any) {
+	c.t.Helper()
+	return c.do("PUT", "/api/public/"+tok+"/content?name="+url.QueryEscape(name), body, nil)
+}
+
+func TestDropCreateRequiresEmptyFolder(t *testing.T) {
+	admin, _, root := dropEnv(t)
+	// A pasta nasce com o link.
+	mkDrop(admin, "teamA/recebidos", 1<<20, 0, 0)
+	if fi, err := os.Stat(filepath.Join(root, "teamA", "recebidos")); err != nil || !fi.IsDir() {
+		t.Fatalf("drop folder was not created: %v", err)
+	}
+	// Pasta existente e vazia é aceita; com conteúdo, não.
+	if err := os.MkdirAll(filepath.Join(root, "teamA", "vazia"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mkDrop(admin, "teamA/vazia", 1<<20, 0, 0)
+	o := admin.expect("POST", "/api/shares", map[string]any{"path": "teamA/pub", "expiresIn": 3600, "mode": "drop", "quotaBytes": 1 << 20}, 409)
+	if code(o) != "not_empty" {
+		t.Fatalf("drop into a folder with files: %v", o)
+	}
+	// Uma parte de upload também conta como conteúdo.
+	if err := os.WriteFile(filepath.Join(root, "teamA", "vazia", vfs.PartName("z")), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if o := admin.expect("POST", "/api/shares", map[string]any{"path": "teamA/vazia", "expiresIn": 3600, "mode": "drop", "quotaBytes": 1 << 20}, 409); code(o) != "not_empty" {
+		t.Fatalf("drop into a folder holding an upload part: %v", o)
+	}
+	// Vencimento é obrigatório e nunca passa de 30 dias.
+	for _, exp := range []any{0, 31 * 86400} {
+		o := admin.expect("POST", "/api/shares", map[string]any{"path": "teamA/x", "expiresIn": exp, "mode": "drop", "quotaBytes": 1 << 20}, 400)
+		if code(o) != "bad_expiry" {
+			t.Fatalf("expiresIn %v: %v", exp, o)
+		}
+	}
+	// Cota é obrigatória.
+	for _, q := range []any{0, int64(1) << 45} {
+		o := admin.expect("POST", "/api/shares", map[string]any{"path": "teamA/y", "expiresIn": 3600, "mode": "drop", "quotaBytes": q}, 400)
+		if code(o) != "bad_quota" {
+			t.Fatalf("quotaBytes %v: %v", q, o)
+		}
+	}
+	// Nada de pasta órfã quando a criação falha depois do mkdir.
+	if _, err := os.Stat(filepath.Join(root, "teamA", "x")); !os.IsNotExist(err) {
+		t.Fatalf("folder left behind after a failed create: %v", err)
+	}
+	if o := admin.expect("POST", "/api/shares", map[string]any{"path": "", "expiresIn": 3600, "mode": "drop", "quotaBytes": 1 << 20}, 400); code(o) != "root_op" {
+		t.Fatalf("drop on the scope root: %v", o)
+	}
+}
+
+func TestDropAnonymousUpload(t *testing.T) {
+	admin, s, root := dropEnv(t)
+	tok, _ := mkDrop(admin, "teamA/recebidos", 64<<20, 0, 0)
+	pub := newPublic(t, admin.srv)
+
+	// Envio único.
+	resp, out := send(pub, tok, "nota.txt", []byte("conteudo"))
+	if resp.StatusCode != 201 {
+		t.Fatalf("single upload: %d %v", resp.StatusCode, out)
+	}
+	if b, err := os.ReadFile(filepath.Join(root, "teamA", "recebidos", "nota.txt")); err != nil || string(b) != "conteudo" {
+		t.Fatalf("file on disk: %q %v", b, err)
+	}
+	// Envio em blocos de um arquivo acima do chunkSize.
+	s.cfg.ChunkSize = 4
+	s.uploads = uploads.New(s.db, 4, false, s.cfg.UploadReserve, s.log)
+	data := []byte("0123456789")
+	o := pub.expect("POST", "/api/public/"+tok+"/uploads", map[string]any{"name": "grande.bin", "size": len(data)}, 201)
+	id := o["id"].(string)
+	for i := 0; i*4 < len(data); i++ {
+		end := min((i+1)*4, len(data))
+		pub.expect("PUT", fmt.Sprintf("/api/public/%s/uploads/%s?index=%d", tok, id, i), data[i*4:end], 200)
+	}
+	pub.expect("POST", "/api/public/"+tok+"/uploads/"+id+"/complete", nil, 200)
+	if b, _ := os.ReadFile(filepath.Join(root, "teamA", "recebidos", "grande.bin")); string(b) != string(data) {
+		t.Fatalf("chunked file on disk: %q", b)
+	}
+	// O visitante vê os próprios envios e o consumo do link.
+	info := pub.expect("GET", "/api/public/"+tok, nil, 200)
+	if info["mode"] != "drop" || info["fileCount"].(float64) != 2 || info["usedBytes"].(float64) != 18 {
+		t.Fatalf("drop info: %v", info)
+	}
+	if mine := info["mine"].([]any); len(mine) != 2 {
+		t.Fatalf("mine: %v", mine)
+	}
+	// Escrita exige CSRF, como qualquer rota mutante.
+	req, _ := http.NewRequest("PUT", admin.srv.URL+"/api/public/"+tok+"/content?name=x.txt", strings.NewReader("x"))
+	resp, err := pub.c.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 403 {
+		t.Fatalf("upload without X-Filezam: %d", resp.StatusCode)
+	}
+	// E o dono vê tudo na auditoria.
+	found := false
+	for _, e := range admin.expect("GET", "/api/admin/audit", nil, 200)["entries"].([]any) {
+		if e.(map[string]any)["action"] == "share.drop.upload" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("anonymous upload not audited")
+	}
+}
+
+func TestDropNeverOverwrites(t *testing.T) {
+	admin, _, root := dropEnv(t)
+	tok, _ := mkDrop(admin, "teamA/recebidos", 1<<20, 0, 0)
+	// Arquivo que já era do dono na pasta.
+	if err := os.WriteFile(filepath.Join(root, "teamA", "recebidos", "doc.txt"), []byte("do dono"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a, b := newPublic(t, admin.srv), newPublic(t, admin.srv)
+	for _, c := range []*client{a, b} {
+		if resp, out := send(c, tok, "doc.txt", []byte("de fora")); resp.StatusCode != 201 {
+			t.Fatalf("upload: %d %v", resp.StatusCode, out)
+		}
+	}
+	if got, _ := os.ReadFile(filepath.Join(root, "teamA", "recebidos", "doc.txt")); string(got) != "do dono" {
+		t.Fatalf("owner file overwritten: %q", got)
+	}
+	names, _ := filepath.Glob(filepath.Join(root, "teamA", "recebidos", "*"))
+	if len(names) != 3 {
+		t.Fatalf("want 3 files (owner + two renamed), got %v", names)
+	}
+	// Cada visitante enxerga só o próprio envio, e sempre com o nome que ELE pediu: o link não
+	// deixa ler a pasta, então revelar o desvio de nome contaria que o arquivo já existia.
+	for _, c := range []*client{a, b} {
+		mine := c.expect("GET", "/api/public/"+tok, nil, 200)["mine"].([]any)
+		if len(mine) != 1 {
+			t.Fatalf("sender isolation: %v", mine)
+		}
+		if n := mine[0].(map[string]any)["name"].(string); n != "doc.txt" {
+			t.Fatalf("receipt must echo the requested name, got %q", n)
+		}
+	}
+}
+
+// O link de envio não deixa ler a pasta. Se a resposta contasse que o arquivo foi salvo com
+// outro nome, bastaria enviar 1 byte com um nome chutado para descobrir o que já está lá —
+// de outro remetente ou do próprio dono.
+func TestDropDoesNotLeakExistingNames(t *testing.T) {
+	admin, s, root := dropEnv(t)
+	tok, _ := mkDrop(admin, "teamA/recebidos", 1<<20, 0, 0)
+	if err := os.WriteFile(filepath.Join(root, "teamA", "recebidos", "segredo.pdf"), []byte("do dono"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	pub := newPublic(t, admin.srv)
+	// Nome que existe e nome que não existe respondem exatamente igual.
+	_, hit := send(pub, tok, "segredo.pdf", []byte("x"))
+	_, miss := send(pub, tok, "inexistente.pdf", []byte("x"))
+	if hit["name"] != "segredo.pdf" || miss["name"] != "inexistente.pdf" {
+		t.Fatalf("single upload leaks the collision: %v vs %v", hit, miss)
+	}
+	// O arquivo do dono continua intacto e o do visitante foi para o lado.
+	if b, _ := os.ReadFile(filepath.Join(root, "teamA", "recebidos", "segredo.pdf")); string(b) != "do dono" {
+		t.Fatalf("owner file overwritten: %q", b)
+	}
+	if _, err := os.Stat(filepath.Join(root, "teamA", "recebidos", "segredo (1).pdf")); err != nil {
+		t.Fatalf("visitor file should have been written aside: %v", err)
+	}
+	// O mesmo pela sessão em blocos, que antes vazava por outro caminho: dois remetentes com o
+	// mesmo nome batiam no índice único de uploads e o segundo recebia 409.
+	s.uploads = uploads.New(s.db, 4, false, s.cfg.UploadReserve, s.log)
+	other := newPublic(t, admin.srv)
+	var ids []string
+	for _, c := range []*client{pub, other} {
+		o := c.expect("POST", "/api/public/"+tok+"/uploads", map[string]any{"name": "relatorio.bin", "size": 4}, 201)
+		if o["name"] != "relatorio.bin" {
+			t.Fatalf("session leaks the collision: %v", o)
+		}
+		ids = append(ids, o["id"].(string))
+	}
+	for i, c := range []*client{pub, other} {
+		c.expect("PUT", fmt.Sprintf("/api/public/%s/uploads/%s?index=0", tok, ids[i]), make([]byte, 4), 200)
+		if o := c.expect("POST", "/api/public/"+tok+"/uploads/"+ids[i]+"/complete", nil, 200); o["name"] != "relatorio.bin" {
+			t.Fatalf("complete leaks the collision: %v", o)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(root, "teamA", "recebidos", "relatorio (1).bin")); err != nil {
+		t.Fatalf("second sender should have been written aside: %v", err)
+	}
+}
+
+// Desligar o recurso tem de parar a escrita anônima nos links que já existem — é isso que se
+// faz ao perceber abuso. Idem para os apelidos já criados.
+func TestFeatureSwitchStopsLiveLinks(t *testing.T) {
+	admin, _, _ := dropEnv(t)
+	tok, _ := mkDrop(admin, "teamA/recebidos", 1<<20, 0, 0)
+	slug := admin.expect("POST", "/api/shares", map[string]any{"path": "teamA/pub", "expiresIn": 3600, "slug": "vendas", "password": "abcd"}, 201)["token"].(string)
+	pub := newPublic(t, admin.srv)
+	if resp, _ := send(pub, tok, "a.txt", []byte("a")); resp.StatusCode != 201 {
+		t.Fatal("setup upload failed")
+	}
+	pub.expect("GET", "/api/public/vendas", nil, 200)
+
+	admin.expect("PATCH", "/api/admin/settings", map[string]any{"dropEnabled": false, "slugsEnabled": false}, 200)
+
+	pub.expect("GET", "/api/public/"+tok, nil, 404)
+	if resp, _ := send(pub, tok, "b.txt", []byte("b")); resp.StatusCode != 404 {
+		t.Fatalf("upload into a link of a disabled feature: %d", resp.StatusCode)
+	}
+	pub.expect("POST", "/api/public/"+tok+"/uploads", map[string]any{"name": "c.bin", "size": 4}, 404)
+	// O apelido para de resolver, mas o token do mesmo link continua valendo.
+	pub.expect("GET", "/api/public/vendas", nil, 404)
+	pub.expect("GET", "/api/public/"+slug, nil, 200)
+}
+
+func TestDropLimits(t *testing.T) {
+	admin, s, _ := dropEnv(t)
+	tok, _ := mkDrop(admin, "teamA/recebidos", 100, 10, 3)
+	pub := newPublic(t, admin.srv)
+
+	if resp, out := send(pub, tok, "grande.bin", make([]byte, 11)); resp.StatusCode != 413 || code(out) != "drop_file_limit" {
+		t.Fatalf("per-file cap: %d %v", resp.StatusCode, out)
+	}
+	for i := 0; i < 3; i++ {
+		if resp, out := send(pub, tok, fmt.Sprintf("f%d.bin", i), make([]byte, 5)); resp.StatusCode != 201 {
+			t.Fatalf("upload %d: %d %v", i, resp.StatusCode, out)
+		}
+	}
+	if resp, out := send(pub, tok, "f4.bin", []byte("x")); resp.StatusCode != 409 || code(out) != "drop_count_exceeded" {
+		t.Fatalf("file count cap: %d %v", resp.StatusCode, out)
+	}
+	// Cota: um link pequeno enche, e a sessão aberta já conta (ela reserva o disco).
+	tok2, _ := mkDrop(admin, "teamA/caixa2", 20, 0, 0)
+	s.uploads = uploads.New(s.db, 4, false, s.cfg.UploadReserve, s.log)
+	o := pub.expect("POST", "/api/public/"+tok2+"/uploads", map[string]any{"name": "a.bin", "size": 16}, 201)
+	if resp, out := send(pub, tok2, "b.bin", make([]byte, 8)); resp.StatusCode != 507 || code(out) != "drop_full" {
+		t.Fatalf("open session must hold the quota: %d %v", resp.StatusCode, out)
+	}
+	// Abortar devolve o espaço.
+	pub.expect("DELETE", "/api/public/"+tok2+"/uploads/"+o["id"].(string), nil, 200)
+	if resp, _ := send(pub, tok2, "b.bin", make([]byte, 8)); resp.StatusCode != 201 {
+		t.Fatalf("aborting a session must free its reservation: %d", resp.StatusCode)
+	}
+}
+
+func TestDropOwnerQuotaIsEnforced(t *testing.T) {
+	admin, _, _ := dropEnv(t)
+	admin.expect("POST", "/api/admin/users", map[string]any{"username": "bob", "password": "bobpassword1", "scope": "teamA", "quota": 4096}, 201)
+	bob := newPublic(t, admin.srv)
+	bob.login("bob", "bobpassword1")
+	// A cota do link não pode prometer mais do que o dono ainda tem.
+	if o := bob.expect("POST", "/api/shares", map[string]any{"path": "recebidos", "expiresIn": 3600, "mode": "drop", "quotaBytes": 1 << 30}, 400); code(o) != "bad_quota" {
+		t.Fatalf("link quota above the owner's: %v", o)
+	}
+	// O escopo já tem o arquivo do fixture, então a cota livre é menor que 4096.
+	tok, _ := mkDrop(bob, "recebidos", 4000, 0, 0)
+	pub := newPublic(t, admin.srv)
+	resp, out := send(pub, tok, "enche.bin", make([]byte, 2000))
+	for i := 0; resp.StatusCode == 201 && i < 4; i++ {
+		resp, out = send(pub, tok, fmt.Sprintf("enche%d.bin", i), make([]byte, 2000))
+	}
+	// Cota do dono estourada responde com o erro do link: o visitante anônimo não fica sabendo
+	// como anda a conta de quem criou o link.
+	if resp.StatusCode != 507 || code(out) != "drop_full" {
+		t.Fatalf("owner quota: %d %v", resp.StatusCode, out)
+	}
+}
+
+func TestDropIsNotReadable(t *testing.T) {
+	admin, _, _ := dropEnv(t)
+	tok, _ := mkDrop(admin, "teamA/recebidos", 1<<20, 0, 0)
+	pub := newPublic(t, admin.srv)
+	if resp, _ := send(pub, tok, "a.txt", []byte("a")); resp.StatusCode != 201 {
+		t.Fatal("setup upload failed")
+	}
+	// Quem envia não lista, não baixa e não leva zip — nem o que ele mesmo mandou.
+	for _, p := range []string{"/list", "/content?path=a.txt", "/zip"} {
+		if resp, _ := pub.do("GET", "/api/public/"+tok+p, nil, nil); resp.StatusCode != 404 {
+			t.Fatalf("drop link served %s: %d", p, resp.StatusCode)
+		}
+	}
+	// E as rotas de escrita não existem num link de leitura.
+	read := admin.expect("POST", "/api/shares", map[string]any{"path": "teamA/pub", "expiresIn": 3600}, 201)["token"].(string)
+	if resp, _ := send(pub, read, "x.txt", []byte("x")); resp.StatusCode != 404 {
+		t.Fatalf("write into a read link: %d", resp.StatusCode)
+	}
+	pub.expect("POST", "/api/public/"+read+"/uploads", map[string]any{"name": "x", "size": 1}, 404)
+
+	// Com senha, nada de escrita antes do unlock.
+	o := admin.expect("POST", "/api/shares", map[string]any{"path": "teamA/cofre", "expiresIn": 3600, "mode": "drop", "quotaBytes": 1 << 20, "password": "abcd"}, 201)
+	locked := o["token"].(string)
+	if resp, out := send(pub, locked, "x.txt", []byte("x")); resp.StatusCode != 401 || code(out) != "share_locked" {
+		t.Fatalf("upload before unlock: %d %v", resp.StatusCode, out)
+	}
+	pub.expect("POST", "/api/public/"+locked+"/uploads", map[string]any{"name": "x", "size": 1}, 401)
+	pub.expect("POST", "/api/public/"+locked+"/unlock", map[string]string{"password": "abcd"}, 200)
+	if resp, _ := send(pub, locked, "x.txt", []byte("x")); resp.StatusCode != 201 {
+		t.Fatalf("upload after unlock: %d", resp.StatusCode)
+	}
+}
+
+func TestDropSenderCookieIsSigned(t *testing.T) {
+	admin, _, _ := dropEnv(t)
+	tok, _ := mkDrop(admin, "teamA/recebidos", 1<<20, 0, 0)
+	pub := newPublic(t, admin.srv)
+	if resp, _ := send(pub, tok, "meu.txt", []byte("x")); resp.StatusCode != 201 {
+		t.Fatal("setup upload failed")
+	}
+	if mine := pub.expect("GET", "/api/public/"+tok, nil, 200)["mine"].([]any); len(mine) != 1 {
+		t.Fatalf("own upload not listed: %v", mine)
+	}
+	// O cookie identifica o remetente: adulterá-lo não dá acesso à lista de ninguém, o servidor
+	// simplesmente emite uma identidade nova.
+	u, _ := url.Parse(admin.srv.URL)
+	var name, valid string
+	for _, c := range pub.c.Jar.Cookies(u) {
+		if strings.HasPrefix(c.Name, "fz_d_") {
+			name, valid = c.Name, c.Value
+		}
+	}
+	if name == "" {
+		t.Fatal("no sender cookie was set")
+	}
+	id, _, _ := strings.Cut(valid, ".")
+	for _, forged := range []string{id + ".00", strings.Repeat("a", 32) + "." + strings.Split(valid, ".")[1], "short.x"} {
+		other := newPublic(t, admin.srv)
+		other.c.Jar.SetCookies(u, []*http.Cookie{{Name: name, Value: forged}})
+		if mine := other.expect("GET", "/api/public/"+tok, nil, 200)["mine"].([]any); len(mine) != 0 {
+			t.Fatalf("forged cookie %q saw somebody else's uploads: %v", forged, mine)
+		}
+	}
+	// E um visitante honesto, com jar próprio, também não vê nada de terceiros.
+	if mine := newPublic(t, admin.srv).expect("GET", "/api/public/"+tok, nil, 200)["mine"].([]any); len(mine) != 0 {
+		t.Fatalf("fresh visitor saw uploads: %v", mine)
+	}
+}
+
+func TestDropUploadsHiddenFromOwner(t *testing.T) {
+	admin, s, _ := dropEnv(t)
+	tok, _ := mkDrop(admin, "teamA/recebidos", 1<<20, 0, 0)
+	s.uploads = uploads.New(s.db, 4, false, s.cfg.UploadReserve, s.log)
+	pub := newPublic(t, admin.srv)
+	id := pub.expect("POST", "/api/public/"+tok+"/uploads", map[string]any{"name": "grande.bin", "size": 16}, 201)["id"].(string)
+
+	// A interface do dono aborta toda pendência que enxerga: se a sessão do visitante
+	// aparecesse aqui, abrir o navegador de arquivos cancelaria o envio dele.
+	if ups := admin.expect("GET", "/api/uploads", nil, 200)["uploads"].([]any); len(ups) != 0 {
+		t.Fatalf("owner sees the visitor's session: %v", ups)
+	}
+	admin.expect("GET", "/api/uploads/"+id, nil, 404)
+	admin.expect("DELETE", "/api/uploads/"+id, nil, 404)
+	// E a sessão continua válida para quem a abriu.
+	pub.expect("PUT", fmt.Sprintf("/api/public/%s/uploads/%s?index=0", tok, id), make([]byte, 4), 200)
+	// Um outro visitante também não mexe nela.
+	newPublic(t, admin.srv).expect("DELETE", "/api/public/"+tok+"/uploads/"+id, nil, 404)
+}
+
+func TestDropSurvivesRateLimit(t *testing.T) {
+	admin, s, _ := dropEnv(t)
+	tok, _ := mkDrop(admin, "teamA/recebidos", 1<<20, 0, 0)
+	s.cfg.ChunkSize = 1
+	s.uploads = uploads.New(s.db, 1, false, s.cfg.UploadReserve, s.log)
+	pub := newPublic(t, admin.srv)
+	// O balde de leitura (120/min) mataria este envio no meio: 150 blocos é um arquivo comum
+	// dividido, não um ataque.
+	id := pub.expect("POST", "/api/public/"+tok+"/uploads", map[string]any{"name": "muitos.bin", "size": 150}, 201)["id"].(string)
+	for i := 0; i < 150; i++ {
+		resp, out := pub.do("PUT", fmt.Sprintf("/api/public/%s/uploads/%s?index=%d", tok, id, i), []byte{byte(i)}, nil)
+		resp.Body.Close()
+		if resp.StatusCode != 200 {
+			t.Fatalf("chunk %d: %d %v", i, resp.StatusCode, out)
+		}
+	}
+	pub.expect("POST", "/api/public/"+tok+"/uploads/"+id+"/complete", nil, 200)
+}
+
+func TestDropFolderRemovedMidUpload(t *testing.T) {
+	admin, s, root := dropEnv(t)
+	s.cfg.TrashRetention = time.Hour
+	tok, _ := mkDrop(admin, "teamA/recebidos", 1<<20, 0, 0)
+	s.uploads = uploads.New(s.db, 4, false, s.cfg.UploadReserve, s.log)
+	pub := newPublic(t, admin.srv)
+	id := pub.expect("POST", "/api/public/"+tok+"/uploads", map[string]any{"name": "grande.bin", "size": 16}, 201)["id"].(string)
+	pub.expect("PUT", fmt.Sprintf("/api/public/%s/uploads/%s?index=0", tok, id), make([]byte, 4), 200)
+
+	// O dono apaga a pasta pelo app: o link cai junto e a sessão em voo não fica reservando
+	// disco num caminho que nem existe mais.
+	waitJob(t, admin, admin.expect("POST", "/api/files/delete", map[string]any{"paths": []string{"teamA/recebidos"}}, 200))
+	pub.expect("PUT", fmt.Sprintf("/api/public/%s/uploads/%s?index=1", tok, id), make([]byte, 4), 404)
+	pub.expect("GET", "/api/public/"+tok, nil, 404)
+	if resp, _ := send(pub, tok, "x.txt", []byte("x")); resp.StatusCode != 404 {
+		t.Fatalf("upload into a dead link: %d", resp.StatusCode)
+	}
+	if ups, _ := s.db.ListUploadsByShare(context.Background(), 1); len(ups) != 0 {
+		t.Fatalf("sessions left behind: %v", ups)
+	}
+	// Recriar a pasta por fora não ressuscita o link.
+	if err := os.MkdirAll(filepath.Join(root, "teamA", "recebidos"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	pub.expect("GET", "/api/public/"+tok, nil, 404)
+}
+
 // O editor abre um arquivo, o usuário digita por minutos e só então salva. Sem conferir o mtime,
 // quem salvasse por último apagaria em silêncio o trabalho do outro. Os mtimes são explícitos para
 // o teste não depender do relógio: a conferência tem resolução de 1 ms.
