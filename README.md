@@ -56,6 +56,7 @@ Três prioridades guiam cada decisão, nesta ordem:
 - **Lixeira** com retenção configurável e restauração ao lugar original. `Shift+Del` apaga de vez.
 - **Visualização** de imagens, vídeo, áudio, PDF, texto e Markdown formatado sem sair da página.
 - **Uploads sérios**: arquivos de vários GB em blocos paralelos com retomada, pastas inteiras por arrastar e soltar, milhares de arquivos pequenos em lote, tudo com painel de progresso, pausa e repetição de falhas.
+- **Extrair e compactar**: descompacte um `.zip` para uma pasta nova pelo menu de contexto, ou gere um `.zip` do que estiver selecionado. A extração nunca sobrescreve o que já existe e recusa arquivos que tentem escrever fora da pasta.
 - **Editor embutido**: edite arquivos de texto, markdown e configuração pelo navegador, com prévia formatada para `.md` e proteção contra duas pessoas salvarem por cima uma da outra.
 - **Links públicos**: compartilhe uma pasta ou um arquivo por link somente leitura com prazo de validade, senha opcional, contagem de acessos e revogação imediata. O endereço pode ser um nome que você escolhe (`/s/orcamento-2026`), com senha obrigatória.
 - **Links para receber arquivos**: uma caixa de entrada pública para quem não tem conta enviar arquivos para uma pasta sua, com cota e vencimento obrigatórios. Quem envia não vê nem baixa o que já está lá.

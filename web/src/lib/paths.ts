@@ -74,3 +74,8 @@ export function uniqueName(name: string, taken: Set<string>): string {
   }
   return `${base}-${Date.now()}${ext}`
 }
+
+/** isExtractable: o Filezam extrai .zip; outros formatos continuam só para download. */
+export function isExtractable(name: string): boolean {
+  return name.toLowerCase().endsWith('.zip')
+}

@@ -95,6 +95,17 @@ A página pública usa `upload/dropUploader.ts`, e não o `UploadManager`. O ger
 
 Os interruptores e os tetos dos links de envio ficam na tabela `settings`, editáveis pelo admin sem reiniciar o serviço — é ele quem decide, na operação, se a instalação aceita escrita anônima e com que limites. Isso não amplia o que um admin comprometido consegue fazer, já que ele podia alterar escopo e cota de qualquer conta. O que não é configurável é o teto de 30 dias do vencimento: está no código e o painel só encurta.
 
+### ADR-17 · Extrair para pasta nova, sem nunca confiar no arquivo
+
+A pasta de destino é criada na hora e a extração roda num `os.Root` aninhado nela: um erro de lógica
+no tratamento de caminho não alcança nem o resto do escopo. Nada declarado pelo arquivo é honrado —
+nem o modo (que traria setuid), nem o tamanho descomprimido (que é a bomba), nem o tipo quando não é
+arquivo regular ou diretório (que traria symlinks). O nome da entrada é normalizado sozinho antes de
+ser juntado ao destino, porque a ordem inversa colapsaria `..` contra a pasta de destino em silêncio.
+
+Extrair "na pasta atual" foi descartado: obrigaria a resolver colisão com o que o usuário já tem, e é
+justamente a classe de problema que a pasta nova elimina de saída.
+
 ### ADR-10 · Container distroless sem root e sem `chown` no entrypoint
 
 Não há shell na imagem; o healthcheck é o subcomando `healthcheck` do próprio binário. O app roda como `PUID:PGID` e testa a gravação em `/data` e `/config` na inicialização. Como o Docker cria bind mounts inexistentes como `root`, o compose traz um serviço `init` (Alpine, executa uma vez) que ajusta `/config` e, só se vazia, `/data`.

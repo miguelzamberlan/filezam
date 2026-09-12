@@ -15,6 +15,8 @@
 - **Retomada de upload só soltando o mesmo arquivo de novo** (até 24 h): o navegador não guarda o `File`, e a retomada automática foi descartada (ver Decisões).
 - **Listagem paginada só na ordem do servidor**: enquanto faltam páginas, o filtro da pasta e `Ctrl+A` só alcançam o que já foi carregado.
 - **Índice de nomes não vê mudanças externas** (Samba, SSH) até a próxima varredura completa ou um "Reconstruir índice".
+- **`.tar.gz` não é extraído**: só `.zip`. O tar tem uma superfície própria (arquivos esparsos, entradas puladas que o leitor descomprime para descartar, hardlinks) que precisa dos seus próprios limites e testes.
+- **Diretório central na memória**: o `archive/zip` carrega o índice do arquivo inteiro antes de qualquer filtro; um `.zip` só de cabeçalhos amplifica o uso de RAM. Contido pelo teto de tamanho do arquivo e pelos semáforos, não eliminado.
 - **Cota do link de recebimento não é devolvida**: ela mede o total que já entrou pelo link, não o que está ocupado agora. Apagar os arquivos recebidos não libera espaço no link — o que impede o link de virar um ralo infinito, mas significa que um link muito usado precisa ser recriado.
 - **Apelido fica preso ao dono**: um endereço personalizado revogado continua reservado a quem o criou até ele liberar de propósito (ou até a conta ser excluída). É o que impede o sequestro de um endereço já divulgado, ao custo de apelidos "presos" em instalações com muita rotatividade.
 - **Link de recebimento não notifica**: quem recebe precisa abrir a pasta para saber que chegou algo.
@@ -58,8 +60,9 @@ Não verificado manualmente antes do lançamento: o item 15 do checklist de [09]
 ## Próximos passos sugeridos (ordem de valor)
 
 1. Avisar o dono quando chega arquivo num link de recebimento (hoje ele precisa ir olhar a pasta).
-2. Retomar jobs interrompidos por reinício a partir do histórico.
-3. Chaves de acesso (WebAuthn/passkeys) como alternativa ao TOTP; revogação individual de dispositivos confiáveis.
+2. Extrair `.tar.gz` além de `.zip`.
+3. Retomar jobs interrompidos por reinício a partir do histórico.
+4. Chaves de acesso (WebAuthn/passkeys) como alternativa ao TOTP; revogação individual de dispositivos confiáveis.
 
 ## Feito
 

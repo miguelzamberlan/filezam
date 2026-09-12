@@ -3,6 +3,7 @@ import { Api } from '../api/client'
 import type { JobRecord } from '../api/types'
 import { formatBytes, formatDate, formatDuration } from '../lib/format'
 import { S, errorMessage } from '../strings'
+import { jobLabel } from '../lib/jobs'
 import { toast } from '../components/dialogs'
 import { ISpinner, ICheck, IAlert, IClose, IRefresh } from '../components/Icons'
 import { MenuButton } from '../components/Shell'
@@ -27,7 +28,7 @@ export default function Jobs() {
       toast(errorMessage(undefined, String(e)), 'error')
     }
   }
-  const typeLabel = (t: JobRecord['type']) => (t === 'copy' ? S.jobCopy : t === 'move' ? S.jobMove : S.jobDelete)
+
   const stateIcon = (j: JobRecord) =>
     j.state === 'running' ? <ISpinner size={14} /> : j.state === 'done' ? <ICheck size={14} className="text-emerald-600" /> : j.state === 'cancelled' ? <IClose size={14} className="text-neutral-400" /> : <IAlert size={14} className="text-red-600" />
   const stateLabel = (j: JobRecord) => (j.state === 'done' ? S.jobDone : j.state === 'failed' ? S.jobFailed : j.state === 'cancelled' ? S.jobCancelled : S.jobsRunning)
@@ -38,7 +39,7 @@ export default function Jobs() {
       <tr className="border-t border-neutral-200 dark:border-neutral-800">
         <td className="px-3 py-1.5"><span className="flex items-center gap-1.5 whitespace-nowrap" title={j.error}>{stateIcon(j)} {stateLabel(j)}</span></td>
         <td className="px-3 py-1.5">
-          <div className="font-medium">{typeLabel(j.type)}</div>
+          <div className="font-medium">{jobLabel(j.type)}</div>
           <div className="truncate text-xs text-neutral-500" title={j.label}>{j.label}</div>
           {j.state === 'running' && (
             <div className="mt-1 h-1 w-40 overflow-hidden rounded bg-neutral-200 dark:bg-neutral-800"><div className="h-full bg-accent" style={{ width: pct + '%' }} /></div>

@@ -95,6 +95,11 @@ README.md README.en.md CONTRIBUTING.md SECURITY.md CODE_OF_CONDUCT.md CLAUDE.md
 | Links de envio ativos por usuário | `drop_max_links` (20) | `CountActiveDropLinks` |
 | Downloads/zips públicos simultâneos por IP | 2; o excedente espera um slot até 30 s, depois 429 `busy` | `publicDL`, `publicWait` |
 | Zips públicos simultâneos no servidor inteiro | 4 (`publicZipMax`); mesma espera | `publicZip` |
+| Extrações/compactações por usuário | 1 | `extractSem` → 429 `busy` |
+| Extrações simultâneas no servidor | 2 (`extractGlobalMax`) | `archiveSem` |
+| Bytes escritos por extração | `extract_max_bytes` (10 GiB) | contados de verdade, não do cabeçalho |
+| Entradas por arquivo compactado | `extract_max_entries` (50 000) | a cota limita bytes, não inodes |
+| Tamanho do arquivo a extrair | `extract_max_archive` (2 GiB) | único teto antes de o zip ser carregado na memória |
 | Corpo JSON | 1 MiB | `readJSON` |
 | Corpo de chunk / PUT | `ChunkSize` | `MaxBytesReader` |
 | Corpo de lote | `BatchMaxBytes` + 1 MiB | idem |

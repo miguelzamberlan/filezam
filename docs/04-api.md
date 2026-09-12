@@ -21,7 +21,8 @@ Upload   { id, dir, name, size, mtime, chunkSize, chunks, received: [int], overw
 Favorite { id, path, name, createdAt }
 Share    { id, token, slug, mode: "read"|"drop", kind: "dir"|"file", hasPassword, revoked, path, name, createdBy, mine, createdAt, expiresAt, expired, accessCount, lastAccessAt,
            quotaBytes, usedBytes, fileCount, maxFileBytes, maxFiles /*só mode "drop"*/ }
-Settings { slugsEnabled, dropEnabled, dropMaxQuota, dropMaxTtl, dropFileMax, dropMaxFiles, dropMaxLinks, dropStaleAge }
+Settings { slugsEnabled, dropEnabled, dropMaxQuota, dropMaxTtl, dropFileMax, dropMaxFiles, dropMaxLinks, dropStaleAge,
+           extractEnabled, extractMaxBytes, extractMaxEntries, extractMaxArchive }
 AdminUser{ id, username, role, scope, mustChangePassword, disabled, lockedUntil, createdAt, updatedAt }
 Audit    { id, ts, userId, username, ip, action, detail /*JSON string*/ }
 ```
@@ -66,6 +67,8 @@ Timestamps: `mtime` em milissegundos; os demais em segundos Unix.
 | POST | `/api/files/rename` | U | `{path, newName}` → `{path, entry}`; 409 `exists`, 400 `invalid_name`. Revoga os links públicos do item e do que estiver dentro dele |
 | POST | `/api/files/delete` | U | `{paths: [], permanent?: bool}` → `{job}` (sync-or-job). Com a lixeira ativa e sem `permanent`, os itens vão para `<escopo>/.filezam-trash/<id>/<nome>` e ganham uma linha em `trash`; senão são apagados. Os links públicos de cada item (e do que estiver dentro) são revogados antes; restaurar da lixeira não os traz de volta |
 | POST | `/api/files/copy` | U | `{sources: [], destDir, onConflict: "rename"\|"overwrite"\|"skip"}` → `{job}`; o job falha com "disk quota exceeded" se a cópia estourar a cota |
+| POST | `/api/files/extract` | U | `{path}` → `{job}`. Extrai um `.zip` para uma pasta nova ao lado, com o nome do arquivo (`UniqueName` se já existir); nada preexistente é sobrescrito. 400 `bad_archive` (extensão ou conteúdo), 409 `is_dir`, 413 `archive_too_large`, 429 `busy`, 403 `feature_disabled`. Entradas recusadas (travessia, symlink, cifradas, duplicadas) viram aviso do job; estourar os tetos falha o job e apaga a pasta |
+| POST | `/api/files/archive` | U | `{paths, name?}` → `{job}`. Gera um `.zip` na pasta das origens; o nome ganha `.zip` e desvia com `UniqueName` se estiver ocupado |
 | POST | `/api/files/move` | U | idem → `{job}`; rename atômico, fallback copiar+apagar entre dispositivos. Revoga os links públicos de cada item movido |
 
 Validações de copy/move: `destDir` deve existir e ser pasta; cada origem deve existir; origem não pode conter o destino (400 `nested`); a raiz não pode ser origem (400 `root_op`). Até 10 000 caminhos por chamada (400 `too_many`).
@@ -220,13 +223,13 @@ Regras de `username`: 2–64 caracteres de `A-Z a-z 0-9 . _ - @`, único sem dis
 
 | HTTP | code | Quando |
 |---|---|---|
-| 400 | `bad_json`, `invalid_path` (inclui tamanho de upload fora de `[0, 1 PiB]` e nomes `.filezam-*`), `invalid_name` (inclui caracteres de controle em nomes novos), `bad_query`, `nested`, `root_op`, `bad_index`, `bad_length`, `bad_conflict`, `bad_expiry`, `bad_id`, `bad_meta`, `bad_multipart`, `no_paths`, `too_many`, `too_many_files`, `weak_password`, `invalid_slug`, `password_required`, `bad_mode`, `invalid_username`, `invalid_role`, `invalid_scope`, `bad_quota`, `unsupported` | Entrada inválida |
+| 400 | `bad_json`, `invalid_path` (inclui tamanho de upload fora de `[0, 1 PiB]` e nomes `.filezam-*`), `invalid_name` (inclui caracteres de controle em nomes novos), `bad_query`, `nested`, `root_op`, `bad_index`, `bad_length`, `bad_conflict`, `bad_expiry`, `bad_id`, `bad_meta`, `bad_multipart`, `no_paths`, `too_many`, `too_many_files`, `weak_password`, `bad_archive`, `invalid_slug`, `password_required`, `bad_mode`, `invalid_username`, `invalid_role`, `invalid_scope`, `bad_quota`, `unsupported` | Entrada inválida |
 | 401 | `unauthorized`, `bad_credentials`, `share_locked`, `bad_totp`, `totp_expired` | Sem sessão / credenciais erradas / link com senha pendente / código 2FA inválido ou etapa expirada |
 | 403 | `forbidden`, `csrf`, `feature_disabled`, `password_change_required`, `totp_required`, `scope_unavailable`, `fs_permission` | Sem permissão |
 | 404 | `not_found` | Caminho, job, share, usuário |
 | 409 | `exists`, `is_dir`, `not_dir`, `not_empty`, `modified`, `slug_taken`, `drop_count_exceeded`, `drop_links_exceeded`, `conflict`, `cross_device`, `upload_in_progress`, `incomplete`, `last_admin`, `self`, `totp_setup_expired`, `totp_not_enabled`, `totp_already_enabled` | Conflito de estado |
 | 411 | `length_required` | Chunk sem `Content-Length` |
-| 413 | `too_large`, `upload_reserve_exceeded`, `drop_file_limit` | Corpo maior que o limite / uploads inacabados do usuário já reservam o teto de espaço / arquivo acima do teto por arquivo do link de envio |
+| 413 | `too_large`, `upload_reserve_exceeded`, `drop_file_limit`, `archive_too_large` | Corpo maior que o limite / uploads inacabados do usuário já reservam o teto de espaço / arquivo acima do teto por arquivo do link de envio |
 | 507 | `no_space`, `quota_exceeded`, `drop_full` | Disco cheio / cota do usuário estourada / link de envio sem espaço (a cota do link ou a do dono: um visitante anônimo não distingue as duas) |
 | 429 | `rate_limited`, `busy` | Limite de taxa ou concorrência (`Retry-After: 1`) |
 | 499 | `cancelled` | Cliente desistiu |

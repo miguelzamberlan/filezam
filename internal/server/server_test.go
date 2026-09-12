@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -2224,5 +2225,115 @@ func TestPutContentIfMtime(t *testing.T) {
 	put(fmt.Sprintf("&ifMtime=%d", t2), "quinta", 404)
 	if _, err := os.Stat(filepath.Join(root, "teamA", "nota.txt")); !os.IsNotExist(err) {
 		t.Fatalf("file recreated by a stale write: %v", err)
+	}
+}
+
+// zipBytes monta um zip em memória para os testes de endpoint.
+func zipBytes(t *testing.T, files map[string]string) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	for name, body := range files {
+		w, err := zw.Create(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := w.Write([]byte(body)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+func TestExtractAndArchive(t *testing.T) {
+	admin, s, root := newEnv(t)
+	admin.login("admin", "admin")
+	admin.expect("POST", "/api/auth/password", map[string]string{"current": "admin", "new": "correct horse battery"}, 200)
+	if err := os.WriteFile(filepath.Join(root, "teamA", "fotos.zip"), zipBytes(t, map[string]string{"a.txt": "um", "sub/b.txt": "dois"}), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Extrai para uma pasta nova com o nome do arquivo.
+	waitJob(t, admin, admin.expect("POST", "/api/files/extract", map[string]any{"path": "teamA/fotos.zip"}, 200))
+	if b, _ := os.ReadFile(filepath.Join(root, "teamA", "fotos", "sub", "b.txt")); string(b) != "dois" {
+		t.Fatalf("extracted content: %q", b)
+	}
+	// Extrair de novo não sobrescreve: a segunda vai para o lado.
+	waitJob(t, admin, admin.expect("POST", "/api/files/extract", map[string]any{"path": "teamA/fotos.zip"}, 200))
+	if _, err := os.Stat(filepath.Join(root, "teamA", "fotos (1)", "a.txt")); err != nil {
+		t.Fatalf("second extraction: %v", err)
+	}
+
+	// O que não é arquivo compactado é recusado na hora, não vira job falhado.
+	if o := admin.expect("POST", "/api/files/extract", map[string]any{"path": "teamA/pub/doc.txt"}, 400); code(o) != "bad_archive" {
+		t.Fatalf("not an archive: %v", o)
+	}
+	if o := admin.expect("POST", "/api/files/extract", map[string]any{"path": "teamA/pub"}, 409); code(o) != "is_dir" {
+		t.Fatalf("folder: %v", o)
+	}
+	admin.expect("POST", "/api/files/extract", map[string]any{"path": "teamA/nao-existe.zip"}, 404)
+
+	// Arquivo maior que o teto é recusado antes de o zip ser aberto.
+	admin.expect("PATCH", "/api/admin/settings", map[string]any{"extractMaxArchive": 1 << 20}, 200)
+	big := make([]byte, (1<<20)+1)
+	if err := os.WriteFile(filepath.Join(root, "teamA", "grande.zip"), big, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if o := admin.expect("POST", "/api/files/extract", map[string]any{"path": "teamA/grande.zip"}, 413); code(o) != "archive_too_large" {
+		t.Fatalf("oversized archive: %v", o)
+	}
+
+	// Desligar o recurso vale para todos, inclusive o admin.
+	admin.expect("PATCH", "/api/admin/settings", map[string]any{"extractEnabled": false}, 200)
+	if o := admin.expect("POST", "/api/files/extract", map[string]any{"path": "teamA/fotos.zip"}, 403); code(o) != "feature_disabled" {
+		t.Fatalf("disabled: %v", o)
+	}
+	admin.expect("PATCH", "/api/admin/settings", map[string]any{"extractEnabled": true}, 200)
+
+	// Compactar: o caminho inverso, na mesma pasta.
+	waitJob(t, admin, admin.expect("POST", "/api/files/archive", map[string]any{"paths": []string{"teamA/pub"}, "name": "backup"}, 200))
+	b, err := os.ReadFile(filepath.Join(root, "teamA", "backup.zip"))
+	if err != nil {
+		t.Fatalf("archive: %v", err)
+	}
+	zr, err := zip.NewReader(bytes.NewReader(b), int64(len(b)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, f := range zr.File {
+		names = append(names, f.Name)
+	}
+	if !slices.Contains(names, "pub/doc.txt") {
+		t.Fatalf("archive contents: %v", names)
+	}
+	// Nenhum arquivo temporário reservado ficou para trás.
+	des, _ := os.ReadDir(filepath.Join(root, "teamA"))
+	for _, d := range des {
+		if strings.HasPrefix(d.Name(), ".filezam-") {
+			t.Fatalf("temp file left behind: %s", d.Name())
+		}
+	}
+	_ = s
+}
+
+// A bomba de descompressão falha o job e não deixa a pasta pela metade.
+func TestExtractBombFailsJob(t *testing.T) {
+	admin, _, root := newEnv(t)
+	admin.login("admin", "admin")
+	admin.expect("POST", "/api/auth/password", map[string]string{"current": "admin", "new": "correct horse battery"}, 200)
+	admin.expect("PATCH", "/api/admin/settings", map[string]any{"extractMaxBytes": 1 << 20}, 200)
+	if err := os.WriteFile(filepath.Join(root, "teamA", "bomba.zip"), zipBytes(t, map[string]string{"zeros.bin": strings.Repeat("\x00", 4<<20)}), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	j := waitJob(t, admin, admin.expect("POST", "/api/files/extract", map[string]any{"path": "teamA/bomba.zip"}, 200))
+	if j["state"] != "failed" {
+		t.Fatalf("bomb job: %v", j)
+	}
+	if _, err := os.Stat(filepath.Join(root, "teamA", "bomba")); !os.IsNotExist(err) {
+		t.Fatalf("destination folder left behind: %v", err)
 	}
 }

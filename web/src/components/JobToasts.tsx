@@ -5,6 +5,7 @@ import type { Job } from '../api/types'
 import { formatBytes } from '../lib/format'
 import { useJobs } from '../store/jobs'
 import { S, errorMessage } from '../strings'
+import { jobLabel } from '../lib/jobs'
 import { useInvalidateDirs } from '../hooks'
 import { IClose, ISpinner, ICheck, IAlert } from './Icons'
 
@@ -36,7 +37,7 @@ function JobToast({ job }: { job: Job }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [job.state])
-  const label = job.type === 'copy' ? S.jobCopy : job.type === 'move' ? S.jobMove : S.jobDelete
+  const label = jobLabel(job.type)
   const pct = job.bytesTotal > 0 ? (job.bytesDone / job.bytesTotal) * 100 : job.total > 0 ? (job.done / job.total) * 100 : 0
   return (
     <div className="card w-80 p-3 text-sm">

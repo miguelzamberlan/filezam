@@ -69,6 +69,7 @@ export interface AppConfig {
   dropMaxQuota: number
   dropFileMax: number
   dropMaxFiles: number
+  extractEnabled: boolean
 }
 
 export interface Settings {
@@ -82,9 +83,11 @@ export interface Settings {
   dropStaleAge: number
 }
 
+export type JobType = 'copy' | 'move' | 'delete' | 'extract' | 'archive'
+
 export interface Job {
   id: string
-  type: 'copy' | 'move' | 'delete'
+  type: JobType
   state: 'running' | 'done' | 'failed' | 'cancelled'
   done: number
   total: number
@@ -101,7 +104,7 @@ export interface Job {
 
 export interface JobRecord {
   id: string
-  type: 'copy' | 'move' | 'delete'
+  type: JobType
   label: string
   state: 'running' | 'done' | 'failed' | 'cancelled'
   done: number

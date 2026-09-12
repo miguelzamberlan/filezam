@@ -115,6 +115,9 @@ export const Api = {
   move: (sources: string[], destDir: string, onConflict: Conflict) =>
     api<{ job: Job }>('POST', '/api/files/move', { sources, destDir, onConflict }),
 
+  extract: (path: string) => api<{ job: Job }>('POST', '/api/files/extract', { path }),
+  archive: (paths: string[], name?: string) => api<{ job: Job }>('POST', '/api/files/archive', { paths, name: name ?? '' }),
+
   // jobs
   jobs: () => api<{ jobs: Job[] }>('GET', '/api/jobs'),
   jobHistory: (limit = 100) => api<{ jobs: JobRecord[] }>('GET', '/api/jobs/history' + q({ limit })),

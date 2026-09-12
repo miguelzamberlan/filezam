@@ -37,6 +37,9 @@ var (
 	errBadJSON      = errorf(http.StatusBadRequest, "bad_json", "invalid JSON body")
 	errShareLocked  = errorf(http.StatusUnauthorized, "share_locked", "this link requires a password")
 	errTOTPRequired = errorf(http.StatusForbidden, "totp_required", "two-factor authentication must be set up first")
+	// errBadArchive: extensão não suportada, ou o arquivo não abre como um compactado válido.
+	errBadArchive = errorf(http.StatusBadRequest, "bad_archive", "not a supported archive")
+
 	// errModified: alguém gravou o arquivo enquanto ele estava aberto no editor.
 	errModified = errorf(http.StatusConflict, "modified", "the file changed since it was opened")
 
@@ -62,6 +65,8 @@ func toAPIError(err error) *apiError {
 		return errorf(http.StatusConflict, "exists", "%s", err.Error())
 	case errors.Is(err, vfs.ErrIsDir):
 		return errorf(http.StatusConflict, "is_dir", "target is a directory")
+	case errors.Is(err, vfs.ErrBadArchive):
+		return errBadArchive
 	case errors.Is(err, vfs.ErrNotDir):
 		return errorf(http.StatusConflict, "not_dir", "not a directory")
 	case errors.Is(err, vfs.ErrNoSpace):

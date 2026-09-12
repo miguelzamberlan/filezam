@@ -23,6 +23,14 @@ const (
 	defDropMaxLinks = int64(20)
 	defDropStaleAge = 2 * time.Hour
 
+	// Extração e compactação. Os tetos são de dano, não de uso: o limite real do que cabe é a
+	// cota do usuário. MaxArchive é o único que morde antes de o archive/zip carregar o
+	// diretório central inteiro na memória.
+	defExtractEnabled    = true
+	defExtractMaxBytes   = int64(10) << 30
+	defExtractMaxEntries = int64(50000)
+	defExtractMaxArchive = int64(2) << 30
+
 	// dropTTLHardMax é requisito de produto, não configuração: um link de envio nunca pode
 	// valer mais de 30 dias, e o administrador só consegue encurtar esse prazo.
 	dropTTLHardMax = 30 * 24 * time.Hour
@@ -30,6 +38,10 @@ const (
 	dropQuotaHardMax = int64(1) << 40
 	dropFilesHardMax = int64(100000)
 	dropLinksHardMax = int64(1000)
+
+	extractBytesHardMax   = int64(1) << 40
+	extractEntriesHardMax = int64(500000)
+	extractArchiveHardMax = int64(16) << 30
 )
 
 // settings holds the admin-editable globals.
@@ -42,6 +54,11 @@ type settings struct {
 	DropMaxFiles int64 `json:"dropMaxFiles"`
 	DropMaxLinks int64 `json:"dropMaxLinks"`
 	DropStaleAge int64 `json:"dropStaleAge"` // segundos
+
+	ExtractEnabled    bool  `json:"extractEnabled"`
+	ExtractMaxBytes   int64 `json:"extractMaxBytes"`   // total escrito por extração
+	ExtractMaxEntries int64 `json:"extractMaxEntries"` // entradas por arquivo
+	ExtractMaxArchive int64 `json:"extractMaxArchive"` // tamanho do arquivo de origem
 }
 
 func defaultSettings() settings {
@@ -54,6 +71,11 @@ func defaultSettings() settings {
 		DropMaxFiles: defDropMaxFiles,
 		DropMaxLinks: defDropMaxLinks,
 		DropStaleAge: int64(defDropStaleAge.Seconds()),
+
+		ExtractEnabled:    defExtractEnabled,
+		ExtractMaxBytes:   defExtractMaxBytes,
+		ExtractMaxEntries: defExtractMaxEntries,
+		ExtractMaxArchive: defExtractMaxArchive,
 	}
 }
 
@@ -96,6 +118,14 @@ func (s *Server) loadSettings(ctx context.Context) error {
 			v.DropMaxLinks = parseInt(row.Value, v.DropMaxLinks)
 		case "drop_stale_age":
 			v.DropStaleAge = parseInt(row.Value, v.DropStaleAge)
+		case "extract_enabled":
+			v.ExtractEnabled = row.Value == "1"
+		case "extract_max_bytes":
+			v.ExtractMaxBytes = parseInt(row.Value, v.ExtractMaxBytes)
+		case "extract_max_entries":
+			v.ExtractMaxEntries = parseInt(row.Value, v.ExtractMaxEntries)
+		case "extract_max_archive":
+			v.ExtractMaxArchive = parseInt(row.Value, v.ExtractMaxArchive)
 		}
 	}
 	s.set.mu.Lock()
@@ -121,6 +151,9 @@ func clampSettings(v settings) settings {
 	v.DropMaxFiles = clamp64(v.DropMaxFiles, 1, dropFilesHardMax)
 	v.DropMaxLinks = clamp64(v.DropMaxLinks, 1, dropLinksHardMax)
 	v.DropStaleAge = clamp64(v.DropStaleAge, 60, int64((24 * time.Hour).Seconds()))
+	v.ExtractMaxBytes = clamp64(v.ExtractMaxBytes, 1<<20, extractBytesHardMax)
+	v.ExtractMaxEntries = clamp64(v.ExtractMaxEntries, 1, extractEntriesHardMax)
+	v.ExtractMaxArchive = clamp64(v.ExtractMaxArchive, 1<<20, extractArchiveHardMax)
 	return v
 }
 
@@ -157,6 +190,11 @@ func (s *Server) handleAdminSettingsUpdate(w http.ResponseWriter, r *http.Reques
 		DropMaxFiles *int64 `json:"dropMaxFiles"`
 		DropMaxLinks *int64 `json:"dropMaxLinks"`
 		DropStaleAge *int64 `json:"dropStaleAge"`
+
+		ExtractEnabled    *bool  `json:"extractEnabled"`
+		ExtractMaxBytes   *int64 `json:"extractMaxBytes"`
+		ExtractMaxEntries *int64 `json:"extractMaxEntries"`
+		ExtractMaxArchive *int64 `json:"extractMaxArchive"`
 	}
 	if err := readJSON(r, &in); err != nil {
 		return err
@@ -196,6 +234,16 @@ func (s *Server) handleAdminSettingsUpdate(w http.ResponseWriter, r *http.Reques
 		return err
 	}
 	if err := putInt("drop_stale_age", in.DropStaleAge, 60, int64((24 * time.Hour).Seconds())); err != nil {
+		return err
+	}
+	putBool("extract_enabled", in.ExtractEnabled)
+	if err := putInt("extract_max_bytes", in.ExtractMaxBytes, 1<<20, extractBytesHardMax); err != nil {
+		return err
+	}
+	if err := putInt("extract_max_entries", in.ExtractMaxEntries, 1, extractEntriesHardMax); err != nil {
+		return err
+	}
+	if err := putInt("extract_max_archive", in.ExtractMaxArchive, 1<<20, extractArchiveHardMax); err != nil {
 		return err
 	}
 	if len(vals) > 0 {

@@ -57,6 +57,48 @@ Requisições mutantes em `/api` exigem:
 
 Isso vale inclusive para o login. Scripts e `curl` precisam enviar o header. A checagem fica dentro de `requireUser`, então cobre todo endpoint autenticado (inclusive `PUT` de chunks e logout).
 
+## Extração de arquivos compactados
+
+Extrair é a primeira operação que interpreta **estrutura** de conteúdo de terceiros — e, com os
+links públicos de recebimento, esse conteúdo pode ter sido depositado por alguém sem conta. O que
+sustenta que isso seja seguro:
+
+- **Pasta nova e um `os.Root` aninhado.** O destino é sempre uma pasta criada na hora (`UniqueName`
+  se o nome estiver ocupado), e a extração roda dentro de `base.Sub(destino)`. São três barreiras de
+  kernel empilhadas: escopo, destino, e a validação do caminho.
+- **O nome da entrada é normalizado sozinho, antes de ser juntado ao destino.** Essa ordem não é
+  intercambiável: normalizar o caminho já concatenado faria `destino/../x` colapsar em silêncio para
+  um irmão do destino, dentro do escopo. Sozinho, o `..` estoura em `Normalize` porque a pilha
+  começa vazia. Depois disso cada segmento passa por `ValidName`.
+- **Profundidade do caminho final**, não da entrada: `Depth(destino) + Depth(entrada) > MaxDepth`
+  recusa. Senão daria para criar um arquivo que existe, ocupa cota e que a interface não consegue
+  nem abrir nem apagar, porque `queryPath` recusaria o caminho.
+- **Só arquivo regular e diretório.** Nenhum symlink é criado, em hipótese alguma: ele permitiria
+  que a entrada seguinte escrevesse através dele para fora.
+- **O modo declarado é ignorado** (0644 e 0755 fixos): `setuid`, `setgid` e `sticky` vindos do
+  arquivo não existem no resultado.
+- **Nunca sobrescreve**: cada arquivo é criado com `O_CREATE|O_EXCL`, que também falha se o nome for
+  um symlink. Entrada duplicada dentro do mesmo arquivo vira aviso.
+- **Entrada cifrada é pulada explicitamente.** O `archive/zip` do Go não valida esse bit: sem a
+  checagem, ele copiaria o texto cifrado para o disco com nome legítimo e só acusaria erro de
+  checksum no fim. Qualquer erro no meio da cópia também apaga o arquivo parcial.
+- **Bomba de descompressão**: o tamanho descomprimido do cabeçalho é escolhido por quem monta o
+  arquivo e mente, então ele nunca é usado como limite — contam os bytes que realmente passam pelo
+  disco (`extract_max_bytes`). O número de entradas tem teto próprio (`extract_max_entries`), porque
+  a cota limita bytes e não inodes. E o tamanho do **arquivo de origem** (`extract_max_archive`) é o
+  único teto que morde antes de o `zip.NewReader` carregar o diretório central inteiro na memória.
+- **Recursos**: uma extração por usuário e duas no servidor inteiro, job cancelável, contexto
+  conferido a cada entrada. Ao falhar ou ser cancelada, a pasta de destino é removida com `Remove` —
+  e não com a varredura, que no cancelamento não apagaria nada por já estar com o contexto morto.
+- **Não é recursivo**: um `.zip` dentro do `.zip` sai como arquivo.
+- **Nada é executado.** Extrair grava bytes; não há shell, `exec` nem interpretação do conteúdo. O
+  pior caso realista é consumo de disco e CPU, ambos limitados.
+- **Nomes legados**: um zip sem o bit UTF-8 traz os nomes na code page do sistema que compactou; eles
+  são convertidos de CP437 antes de validar, senão todo arquivo com acento seria recusado.
+- Limitações aceitas: o diretório central é carregado inteiro na memória pelo `archive/zip`
+  (mitigado pelo teto de tamanho do arquivo e pelos semáforos); `.tar.gz` ainda não é suportado; e
+  trocar o arquivo por fora (Samba) durante a leitura faz a extração falhar, sem escapar do sandbox.
+
 ## Cabeçalhos HTTP
 
 Em todas as respostas: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: same-origin`, `Permissions-Policy` restritiva, `Cross-Origin-Opener-Policy: same-origin`, e `Strict-Transport-Security` quando a conexão é HTTPS (direta ou por proxy confiável).
@@ -99,6 +141,7 @@ Na SPA: `Content-Security-Policy: default-src 'self'; script-src 'self'; style-s
   - **As sessões anônimas são invisíveis no caminho autenticado** (`ListUploads`/`GetUpload` filtram `share_id = 0`): a interface do dono aborta toda pendência que enxerga, então listá-las faria abrir o navegador de arquivos cancelar o envio de terceiros. A autorização de uma sessão pública é o par (link, remetente), nunca o usuário.
   - **Balde de requisições próprio** para escrita (900/min por IP) mais 2 envios simultâneos por IP: o balde de leitura (120/min) mataria um envio legítimo de algumas dezenas de arquivos, já que cada arquivo em blocos custa três requisições. O custo real fica limitado por bytes, cota e slots, não por contagem.
   - Auditoria `share.drop.upload` com o **id do link** — o segmento de token é mascarado nos logs, e sem o id não daria para saber qual link está sendo martelado.
+- **O que sai de um arquivo compactado é conteúdo de terceiros** pelas mesmas razões: ao pré-visualizar depois, valem a allow-list de `detectType` e a CSP `sandbox`, como em qualquer arquivo enviado.
 - **Conteúdo que agora vem da internet**: um arquivo num link de envio foi enviado por alguém sem conta, e o dono vai pré-visualizá-lo depois pela interface autenticada. As defesas contra XSS armazenada são as de sempre (allow-list de `detectType`, tudo que é texto servido como `text/plain`, CSP `sandbox` no inline, `nosniff`), mas a origem do conteúdo mudou de "usuário confiável" para "qualquer um com o link" — ao avaliar mudanças nessas defesas, é esse o modelo a considerar.
 - Rate limit por IP, no máximo 2 downloads/zips simultâneos por IP e **4 zips públicos simultâneos no servidor inteiro** (um zip de pasta grande custa CPU e leitura de disco por minutos, e visitantes anônimos trocam de IP à vontade; não há teto de bytes por zip). Acima disso a requisição **espera** um slot (até 30 s; desiste se o visitante cancelar) em vez de responder 429 na hora: um preview de Markdown pede todas as imagens de uma vez e um `<img>` recusado fica quebrado. Quem espera não ocupa disco nem banda; o número de esperas por IP é limitado pelo rate limit de 120 requisições/min.
 - Mesma resposta 404 para inexistente, expirado, revogado, dono desativado ou pasta removida.

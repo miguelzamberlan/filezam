@@ -1,12 +1,17 @@
 package vfs
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"hash/crc32"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -540,4 +545,341 @@ func TestIsEmptyRefusesEscape(t *testing.T) {
 		t.Error("IsEmpty on a file succeeded")
 	}
 	checkCanary(t, outside)
+}
+
+// zipEntry descreve uma entrada a ser forjada no teste. O archive/zip não valida nome nenhum na
+// escrita, então dá para montar exatamente os arquivos maliciosos que interessam.
+type zipEntry struct {
+	name    string
+	body    string
+	mode    fs.FileMode
+	raw     bool   // escreve o header verbatim (para forjar tamanho, método e flags)
+	flags   uint16 // bit 0 = cifrado
+	method  uint16
+	declare uint64 // UncompressedSize64 mentido
+}
+
+func makeZip(t *testing.T, root, name string, entries []zipEntry) {
+	t.Helper()
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	for _, e := range entries {
+		hdr := &zip.FileHeader{Name: e.name, Method: zip.Deflate, Modified: time.Now()}
+		if e.mode != 0 {
+			hdr.SetMode(e.mode)
+		}
+		if e.raw {
+			hdr.Flags = e.flags
+			hdr.Method = e.method
+			hdr.UncompressedSize64 = e.declare
+			hdr.CompressedSize64 = uint64(len(e.body))
+			hdr.CRC32 = crc32.ChecksumIEEE([]byte(e.body))
+			w, err := zw.CreateRaw(hdr)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := w.Write([]byte(e.body)); err != nil {
+				t.Fatal(err)
+			}
+			continue
+		}
+		w, err := zw.CreateHeader(hdr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// O writer recusa corpo numa entrada de diretório; o nome é o que interessa no teste.
+		if e.body != "" && !strings.HasSuffix(e.name, "/") && e.name != "" && e.name != "/" {
+			if _, err := w.Write([]byte(e.body)); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, name), buf.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+var bigLimits = ExtractLimits{MaxBytes: 1 << 20, MaxEntries: 1000}
+
+// Um arquivo compactado é conteúdo de terceiros: com os links públicos de recebimento, pode ter
+// sido depositado por alguém sem conta. Nenhuma entrada pode escrever fora da pasta de destino,
+// criar symlink, carregar setuid ou sobrescrever o que já existe.
+func TestExtractRefusesEscape(t *testing.T) {
+	r, root, outside := fixture(t)
+	ctx := context.Background()
+	if err := r.Mkdir("saida"); err != nil {
+		t.Fatal(err)
+	}
+	makeZip(t, root, "evil.zip", []zipEntry{
+		{name: "../canary.txt", body: "invadido"},
+		{name: "../../canary.txt", body: "invadido"},
+		{name: "/etc/passwd", body: "invadido"},
+		{name: "a/../../canary.txt", body: "invadido"},
+		{name: "....//canary.txt", body: "invadido"},
+		{name: ".filezam-upload-x.part", body: "reservado"},
+		{name: "sub/.filezam-trash/x", body: "reservado"},
+		{name: "ctrl\x01nome.txt", body: "controle"},
+		{name: "", body: "vazio"},
+		{name: "/", body: "barra"},
+		{name: "link", body: "/etc", mode: 0o777 | fs.ModeSymlink},
+		{name: "bom.txt", body: "conteudo legitimo"},
+	})
+	res, err := r.ExtractZip(ctx, "evil.zip", "saida", bigLimits, nil)
+	if err != nil {
+		t.Fatalf("extract: %v", err)
+	}
+	// As entradas maliciosas viram aviso; o que sobra é inofensivo. Um nome absoluto perde a
+	// barra e vira relativo ao destino ("/etc/passwd" → "saida/etc/passwd"), e "...." é um nome
+	// literal, não travessia — os dois ficam contidos, que é o que importa.
+	if res.Files == 0 || res.Skipped < 6 {
+		t.Fatalf("result: %+v", res)
+	}
+	checkCanary(t, outside)
+	if _, err := os.Lstat(filepath.Join(outside, "canary.txt")); err != nil {
+		t.Fatal("canary deleted")
+	}
+	// Nada apareceu fora da pasta de destino.
+	for _, p := range []string{"canary.txt", "passwd", "etc", "link"} {
+		if _, err := os.Lstat(filepath.Join(root, p)); err == nil {
+			t.Errorf("escaped the destination: %q exists at the scope root", p)
+		}
+	}
+	// E dentro dela, nenhum symlink, nenhum nome reservado, e todo caminho continua endereçável.
+	saida := filepath.Join(root, "saida")
+	var got []string
+	if err := filepath.WalkDir(saida, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || p == saida {
+			return err
+		}
+		rel, _ := filepath.Rel(saida, p)
+		got = append(got, rel)
+		if d.Type()&fs.ModeSymlink != 0 {
+			t.Errorf("symlink created: %s", rel)
+		}
+		if strings.Contains(rel, ReservedPrefix) {
+			t.Errorf("reserved name extracted: %s", rel)
+		}
+		if _, err := Normalize(rel); err != nil {
+			t.Errorf("unaddressable path extracted: %s (%v)", rel, err)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, g := range got {
+		if g == "bom.txt" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("legitimate entry missing: %v", got)
+	}
+}
+
+// O modo declarado no arquivo é ignorado: setuid dentro de um .zip não pode virar setuid no disco.
+func TestExtractIgnoresDeclaredMode(t *testing.T) {
+	r, root, outside := fixture(t)
+	if err := r.Mkdir("saida"); err != nil {
+		t.Fatal(err)
+	}
+	makeZip(t, root, "modes.zip", []zipEntry{
+		{name: "setuid.sh", body: "#!/bin/sh\n", mode: 0o4755},
+		{name: "todos.txt", body: "x", mode: 0o777},
+		{name: "pasta/", body: "", mode: 0o2777 | fs.ModeDir},
+	})
+	if _, err := r.ExtractZip(context.Background(), "modes.zip", "saida", bigLimits, nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range []string{"setuid.sh", "todos.txt"} {
+		fi, err := os.Lstat(filepath.Join(root, "saida", n))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if fi.Mode().Perm() != 0o644 || fi.Mode()&(fs.ModeSetuid|fs.ModeSetgid|fs.ModeSticky) != 0 {
+			t.Errorf("%s: mode %v", n, fi.Mode())
+		}
+	}
+	fi, err := os.Lstat(filepath.Join(root, "saida", "pasta"))
+	if err != nil || fi.Mode().Perm() != 0o755 || fi.Mode()&fs.ModeSetgid != 0 {
+		t.Fatalf("pasta: %v %v", fi.Mode(), err)
+	}
+	checkCanary(t, outside)
+}
+
+// O tamanho descomprimido do cabeçalho é escolhido por quem monta o arquivo. Só os bytes que
+// realmente passam pelo disco contam, e o teto corta a extração no meio.
+func TestExtractBombs(t *testing.T) {
+	r, root, outside := fixture(t)
+	ctx := context.Background()
+	if err := r.Mkdir("s1"); err != nil {
+		t.Fatal(err)
+	}
+	// Cabeçalho mentindo um terabyte com dez bytes de conteúdo. O tamanho declarado não pode
+	// virar nem arquivo gigante nem espaço reservado: a entrada é recusada por estar corrompida,
+	// e o que fica no disco é nada.
+	makeZip(t, root, "mentira.zip", []zipEntry{
+		{name: "grande.bin", body: "0123456789", raw: true, method: zip.Store, declare: 1 << 40},
+		{name: "normal.txt", body: "conteudo real"},
+	})
+	res, err := r.ExtractZip(ctx, "mentira.zip", "s1", bigLimits, nil)
+	if err != nil {
+		t.Fatalf("extract: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "s1", "grande.bin")); !os.IsNotExist(err) {
+		t.Fatalf("entry with a lying header produced a file: %v", err)
+	}
+	if res.Bytes > 1000 {
+		t.Fatalf("declared size trusted: %d bytes counted", res.Bytes)
+	}
+	// E o arquivo legítimo ao lado sai com o tamanho real, sem blocos reservados a mais.
+	fi, err := os.Stat(filepath.Join(root, "s1", "normal.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Size() != 13 {
+		t.Fatalf("normal.txt size %d", fi.Size())
+	}
+	if st, ok := fi.Sys().(*syscall.Stat_t); ok && st.Blocks > 64 {
+		t.Fatalf("preallocated %d blocks for a 13-byte file", st.Blocks)
+	}
+
+	// Bomba de verdade: muitos zeros, que comprimem bem. O teto corta.
+	if err := r.Mkdir("s2"); err != nil {
+		t.Fatal(err)
+	}
+	makeZip(t, root, "bomba.zip", []zipEntry{{name: "zeros.bin", body: strings.Repeat("\x00", 4<<20)}})
+	if _, err := r.ExtractZip(ctx, "bomba.zip", "s2", ExtractLimits{MaxBytes: 1 << 16, MaxEntries: 10}, nil); !errors.Is(err, ErrArchiveLimit) {
+		t.Fatalf("bomb: want ErrArchiveLimit, got %v", err)
+	}
+	// O arquivo parcial não fica com nome legítimo no disco.
+	if _, err := os.Stat(filepath.Join(root, "s2", "zeros.bin")); !os.IsNotExist(err) {
+		t.Fatalf("partial file left behind: %v", err)
+	}
+
+	// Entradas demais: recusado antes de escrever qualquer coisa.
+	if err := r.Mkdir("s3"); err != nil {
+		t.Fatal(err)
+	}
+	many := make([]zipEntry, 20)
+	for i := range many {
+		many[i] = zipEntry{name: fmt.Sprintf("f%d.txt", i), body: "x"}
+	}
+	makeZip(t, root, "muitas.zip", many)
+	if _, err := r.ExtractZip(ctx, "muitas.zip", "s3", ExtractLimits{MaxBytes: 1 << 20, MaxEntries: 5}, nil); !errors.Is(err, ErrArchiveLimit) {
+		t.Fatalf("entry cap: %v", err)
+	}
+	if des, _ := os.ReadDir(filepath.Join(root, "s3")); len(des) != 0 {
+		t.Fatalf("wrote %d entries despite the cap", len(des))
+	}
+	checkCanary(t, outside)
+}
+
+// Entrada cifrada, método não suportado e duplicada viram aviso — nunca arquivo de lixo no disco.
+func TestExtractSkipsUnreadable(t *testing.T) {
+	r, root, outside := fixture(t)
+	if err := r.Mkdir("saida"); err != nil {
+		t.Fatal(err)
+	}
+	makeZip(t, root, "ruins.zip", []zipEntry{
+		{name: "cifrado.txt", body: "texto cifrado ilegivel", raw: true, method: zip.Store, flags: 0x1, declare: 22},
+		{name: "deflate64.bin", body: "xxxx", raw: true, method: 9, declare: 4},
+		{name: "dup.txt", body: "primeira"},
+		{name: "dup.txt", body: "segunda"},
+	})
+	res, err := r.ExtractZip(context.Background(), "ruins.zip", "saida", bigLimits, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Files != 1 || res.Skipped != 3 {
+		t.Fatalf("result: %+v", res)
+	}
+	// A entrada cifrada não pode ter virado um arquivo com o texto cifrado dentro.
+	if _, err := os.Stat(filepath.Join(root, "saida", "cifrado.txt")); !os.IsNotExist(err) {
+		t.Fatal("encrypted entry was written to disk")
+	}
+	if _, err := os.Stat(filepath.Join(root, "saida", "deflate64.bin")); !os.IsNotExist(err) {
+		t.Fatal("unsupported method left a file behind")
+	}
+	// A duplicada não sobrescreve a primeira.
+	if b, _ := os.ReadFile(filepath.Join(root, "saida", "dup.txt")); string(b) != "primeira" {
+		t.Fatalf("duplicate overwrote: %q", b)
+	}
+	checkCanary(t, outside)
+}
+
+// Zips do Windows trazem os acentos em CP437. Sem converter, todo arquivo com acento seria
+// recusado como UTF-8 inválido — o que, em português, é quase todo arquivo.
+func TestExtractDecodesLegacyNames(t *testing.T) {
+	r, root, _ := fixture(t)
+	if err := r.Mkdir("saida"); err != nil {
+		t.Fatal(err)
+	}
+	// "Orçamento.pdf" em CP437: ç = 0x87, a = 0x61...
+	legacy := "Or\x87amento.txt"
+	makeZip(t, root, "windows.zip", []zipEntry{{name: legacy, body: "conteudo"}})
+	res, err := r.ExtractZip(context.Background(), "windows.zip", "saida", bigLimits, nil)
+	if err != nil || res.Files != 1 {
+		t.Fatalf("extract: %+v %v", res, err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "saida", "Orçamento.txt")); err != nil {
+		des, _ := os.ReadDir(filepath.Join(root, "saida"))
+		names := []string{}
+		for _, d := range des {
+			names = append(names, d.Name())
+		}
+		t.Fatalf("CP437 name not decoded, got %v", names)
+	}
+}
+
+// Cancelar no meio devolve context.Canceled, e quem chamou apaga a pasta.
+func TestExtractCancels(t *testing.T) {
+	r, root, outside := fixture(t)
+	if err := r.Mkdir("saida"); err != nil {
+		t.Fatal(err)
+	}
+	many := make([]zipEntry, 50)
+	for i := range many {
+		many[i] = zipEntry{name: fmt.Sprintf("f%d.txt", i), body: strings.Repeat("x", 1000)}
+	}
+	makeZip(t, root, "muitas.zip", many)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := r.ExtractZip(ctx, "muitas.zip", "saida", bigLimits, nil); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancel: %v", err)
+	}
+	checkCanary(t, outside)
+}
+
+// Ida e volta com o zip que o próprio produto gera: o endurecimento não pode ter quebrado o caso
+// de uso número um, que é baixar um zip do Filezam e extraí-lo de volta.
+func TestExtractRoundTrip(t *testing.T) {
+	r, root, _ := fixture(t)
+	ctx := context.Background()
+	var buf bytes.Buffer
+	if err := r.WriteZip(ctx, &buf, []string{"a"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "saida.zip"), buf.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Mkdir("saida"); err != nil {
+		t.Fatal(err)
+	}
+	res, err := r.ExtractZip(ctx, "saida.zip", "saida", bigLimits, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Files != 2 {
+		t.Fatalf("round trip: %+v", res)
+	}
+	if b, _ := os.ReadFile(filepath.Join(root, "saida", "a", "file.txt")); string(b) != "hello" {
+		t.Fatalf("content: %q", b)
+	}
+	if b, _ := os.ReadFile(filepath.Join(root, "saida", "a", "sub", "deep.txt")); string(b) != "deep" {
+		t.Fatalf("nested content: %q", b)
+	}
 }

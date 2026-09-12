@@ -100,6 +100,15 @@ Estado na URL (`?path=&q=`), consulta `['search', path, q]` (staleTime 30 s). Mo
 
 Trash: consulta `['trash']`, seleção por checkbox, ações restaurar/excluir de vez/esvaziar (`dialogs.confirm` nas permanentes), invalida `['list']`, `['disk']` e `['trash']`. PublicShare: `info.locked` mostra o formulário de senha (`POST unlock` grava o cookie; depois invalida `['public', token]`); `kind: file` mostra um cartão com download e preview em vez da listagem. Travado, a resposta não traz o nome, então o cabeçalho cai em `S.appName`.
 
+## Operações de arquivo compactado
+
+**Extrair aqui** e **Compactar em .zip** no menu de contexto — o primeiro condicionado por extensão
+(`isExtractable` em `lib/paths.ts`), que até então o menu não fazia com nenhum item. Os dois rodam
+como job e reusam `track(job)` e o `JobToasts`.
+
+O rótulo do job passou a sair de um mapa com fallback (`lib/jobs.ts`) em vez do ternário fechado que
+existia em dois lugares: um tipo de operação novo aparecia silenciosamente como "Excluindo".
+
 ## Editor (`components/Editor.tsx`)
 
 Edita os mesmos tipos de texto que o preview mostra, até `previewMaxText` (1 MiB) — acima disso a

@@ -5,6 +5,7 @@ import (
 	"context"
 	"io"
 	"io/fs"
+	"os"
 	"strings"
 )
 
@@ -53,4 +54,54 @@ func (r *Root) WriteZip(ctx context.Context, w io.Writer, paths []string) error 
 		}
 	}
 	return zw.Close()
+}
+
+// UniqueIfExists returns name, or the next free "name (n).ext" when it is taken.
+func (r *Root) UniqueIfExists(dir, name string) (string, error) {
+	ok, err := r.Exists(Join(dir, name))
+	if err != nil || !ok {
+		return name, err
+	}
+	return r.UniqueName(dir, name)
+}
+
+// WriteZipFile writes a zip of paths into dir/name. Diferente do WriteZip, que transmite direto
+// para a resposta HTTP, aqui o destino é o próprio disco: grava num arquivo temporário e só
+// publica no fim, para uma compactação interrompida não deixar um .zip pela metade com nome
+// legítimo.
+func (r *Root) WriteZipFile(ctx context.Context, dir, name string, paths []string, prog *Progress) error {
+	if err := ValidName(name); err != nil {
+		return err
+	}
+	tmp := ReservedPrefix + "zip-" + name
+	f, err := r.r.OpenFile(Join(dir, tmp), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
+		return MapError(err)
+	}
+	clean := func() { f.Close(); _ = r.r.Remove(Join(dir, tmp)) }
+	if err := r.WriteZip(ctx, &progressWriter{w: f, prog: prog}, paths); err != nil {
+		clean()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		_ = r.r.Remove(Join(dir, tmp))
+		return MapError(err)
+	}
+	if err := r.r.Rename(Join(dir, tmp), Join(dir, name)); err != nil {
+		_ = r.r.Remove(Join(dir, tmp))
+		return MapError(err)
+	}
+	return nil
+}
+
+// progressWriter reporta bytes gravados enquanto o zip é montado.
+type progressWriter struct {
+	w    io.Writer
+	prog *Progress
+}
+
+func (p *progressWriter) Write(b []byte) (int, error) {
+	n, err := p.w.Write(b)
+	p.prog.add(0, int64(n))
+	return n, err
 }

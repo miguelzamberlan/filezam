@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Api, ApiError } from '../api/client'
 import type { Conflict, Entry } from '../api/types'
 import { useAuth, useFavorites, useInvalidateDirs, useListing } from '../hooks'
-import { basename, decodePath, dirname, encodePath, join } from '../lib/paths'
+import { basename, decodePath, dirname, encodePath, isExtractable, join } from '../lib/paths'
 import { sortEntries } from '../lib/naturalSort'
 import { useUI, ZOOM_STEPS } from '../store/ui'
 import { useJobs } from '../store/jobs'
@@ -22,7 +22,7 @@ import { dialogs, toast } from '../components/dialogs'
 import { useUploads } from '../components/UploadPanel'
 import { MenuButton } from '../components/Shell'
 import {
-  IArrowUp, ICopy, IDownload, IEdit, IText, IFolderPlus, IGrid, IList, IPaste, IRefresh, IScissors, IShare, IStar, ITrash, IUpload, ISpinner, IEye, IInfo, ISearch, IZoomIn, IZoomOut, IMore, IClose,
+  IArrowUp, IArchive, ICopy, IDownload, IEdit, IText, IFolderPlus, IGrid, IList, IPaste, IRefresh, IScissors, IShare, IStar, ITrash, IUpload, ISpinner, IEye, IInfo, ISearch, IZoomIn, IZoomOut, IMore, IClose,
 } from '../components/Icons'
 
 function triggerDownload(url: string) {
@@ -55,6 +55,7 @@ export default function Browser() {
   const [info, setInfo] = useState<string | null>(null)
   const [editing, setEditing] = useState<Entry | null>(null)
   const maxText = cfg?.previewMaxText ?? 1 << 20
+  const archiveOn = cfg?.extractEnabled !== false
   const [dragOver, setDragOver] = useState(false)
   const [dragOverName, setDragOverName] = useState<string | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
@@ -314,6 +315,26 @@ export default function Browser() {
     if (files.length === 0 && dirs.size > 0) invalidate([dest])
   }
 
+  const extract = async (e: Entry) => {
+    try {
+      const { job } = await Api.extract(join(path, e.name))
+      track(job)
+    } catch (err) {
+      toast(err instanceof ApiError ? errorMessage(err.code, err.message) : String(err), 'error')
+    }
+  }
+  const compress = async (sel: Entry[]) => {
+    const suggested = sel.length === 1 ? basename(sel[0].name) : basename(path) || 'arquivos'
+    const name = await dialogs.prompt({ title: S.compress, label: S.name, initial: suggested + '.zip', selectExt: true })
+    if (!name) return
+    try {
+      const { job } = await Api.archive(sel.map((e) => join(path, e.name)), name)
+      track(job)
+    } catch (err) {
+      toast(err instanceof ApiError ? errorMessage(err.code, err.message) : String(err), 'error')
+    }
+  }
+
   // ---- keyboard ----
   const onKeyDown = (ev: React.KeyboardEvent) => {
     if (menu || preview !== null || share || info !== null || editing) return
@@ -423,6 +444,10 @@ export default function Browser() {
     if (one?.type === 'dir') items.push({ label: S.paste, icon: <IPaste size={16} />, onClick: () => paste(join(path, one.name)), disabled: !ui.clipboard })
     items.push(
       { label: S.download, icon: <IDownload size={16} />, onClick: () => download(sel) },
+      ...(archiveOn && one?.type === 'file' && isExtractable(one.name)
+        ? [{ label: S.extract, icon: <IArchive size={16} />, onClick: () => extract(one) } as MenuItem]
+        : []),
+      ...(archiveOn && sel.length > 0 ? [{ label: S.compress, icon: <IArchive size={16} />, onClick: () => compress(sel) } as MenuItem] : []),
       { separator: true, label: '' },
       { label: S.copy, icon: <ICopy size={16} />, onClick: () => clip('copy', sel), shortcut: 'Ctrl+C' },
       { label: S.cut, icon: <IScissors size={16} />, onClick: () => clip('cut', sel), shortcut: 'Ctrl+X' },

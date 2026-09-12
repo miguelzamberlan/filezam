@@ -44,6 +44,8 @@ type Server struct {
 	dropIP      *auth.Limiter        // escrita anônima: balde próprio, o de leitura é apertado demais
 	dropSem     *auth.KeyedSemaphore // envios anônimos simultâneos por IP
 	dropMu      dropLocks            // serializa a admissão de arquivos por link
+	extractSem  *auth.KeyedSemaphore // uma extração/compactação por usuário
+	archiveSem  auth.Semaphore       // extrações simultâneas no servidor inteiro
 	slugMiss    *auth.Limiter        // tentativas malsucedidas com forma de apelido
 	uploadSem   *auth.KeyedSemaphore
 	searchSem   *auth.KeyedSemaphore
@@ -77,6 +79,8 @@ func New(cfg *config.Config, db *store.DB, base *vfs.Root, log *slog.Logger, ver
 		publicZip:   auth.NewSemaphore(publicZipMax),
 		dropIP:      auth.NewLimiter(900, 240),
 		dropSem:     auth.NewKeyedSemaphore(dropClientParallel),
+		extractSem:  auth.NewKeyedSemaphore(1),
+		archiveSem:  auth.NewSemaphore(extractGlobalMax),
 		slugMiss:    auth.NewLimiter(30, 30),
 		uploadSem:   auth.NewKeyedSemaphore(8),
 		searchSem:   auth.NewKeyedSemaphore(2),
@@ -268,6 +272,8 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.Handle("POST /api/files/delete", user(s.handleDelete))
 	mux.Handle("POST /api/files/copy", user(s.handleCopy))
 	mux.Handle("POST /api/files/move", user(s.handleMove))
+	mux.Handle("POST /api/files/extract", user(s.handleExtract))
+	mux.Handle("POST /api/files/archive", user(s.handleArchive))
 
 	mux.Handle("GET /api/jobs", user(s.handleJobs))
 	mux.Handle("GET /api/jobs/history", user(s.handleJobHistory))
@@ -356,6 +362,7 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) error {
 		"dropMaxQuota":   s.settings().DropMaxQuota,
 		"dropFileMax":    s.settings().DropFileMax,
 		"dropMaxFiles":   s.settings().DropMaxFiles,
+		"extractEnabled": s.settings().ExtractEnabled,
 		"previewMaxText": 1 << 20,
 		"version":        s.version,
 	})
