@@ -71,7 +71,11 @@ Simplifica o servidor (índice → offset), permite blocos paralelos e fora de o
 
 ### ADR-8 · Jobs em memória com polling
 
-Copiar/mover/excluir rodam em goroutines; o handler espera até 300 ms ("sync-or-job") e devolve o snapshot. O cliente consulta a cada 500 ms enquanto `running`. SSE foi descartado por exigir configuração de proxy (`proxy_buffering off`) e manter conexões abertas. Reiniciar o processo perde apenas a exibição de progresso.
+Copiar/mover/excluir/extrair/compactar rodam em goroutines do próprio processo; o handler espera até 300 ms ("sync-or-job") e devolve o snapshot. O cliente consulta a cada 500 ms enquanto `running`. SSE foi descartado por exigir configuração de proxy (`proxy_buffering off`) e manter conexões abertas.
+
+**Não há servidor de filas, e não deve haver.** O produto é um binário estático com SQLite e nenhuma dependência externa; um Redis ou RabbitMQ seria um segundo container, um segundo ponto de falha e um segundo backup, para resolver problemas que não existem aqui: não há trabalho a distribuir entre máquinas (uma instância, um HD), não há produtor externo a desacoplar, e repetir sozinho uma operação de arquivo que falhou é mais perigoso que útil. Durabilidade, o único ganho real, o SQLite já daria.
+
+Consequência assumida: **um reinício mata as operações em andamento**. O desligamento limpo espera até 30 s (`Shutdown` → `jobs.Wait`) e depois cancela; na subida seguinte o que ficou `running` vira `failed` com "interrupted by server restart". Uma cópia grande interrompida deixa os arquivos que já foram copiados, sem retomada — refazer a operação continua de onde parou apenas no sentido de que o que já existe no destino é resolvido pela política de conflito. Retomar de verdade a partir do histórico está em [10](10-roadmap.md#próximos-passos-sugeridos-ordem-de-valor) e não precisa de fila para acontecer.
 
 ### ADR-9 · Links públicos por caminho, token com hash
 

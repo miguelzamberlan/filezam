@@ -288,6 +288,20 @@ O cache de miniaturas fica em `<DATA_DIR>/thumbs` e entra no dimensionamento do 
 configuração, não no de dados: o padrão é no máximo 2 GiB, ajustável em **Configurações do
 sistema**. Apagar a pasta é seguro a qualquer momento — o servidor regenera sob demanda.
 
+### Reiniciar o serviço com operações em andamento
+
+Copiar, mover, excluir, extrair e compactar rodam dentro do próprio processo. Ao receber `SIGTERM`
+(um `docker compose restart`, uma atualização), o servidor **espera até 30 segundos** as operações
+terminarem e então cancela o que sobrou. Na subida seguinte, o que ficou como "em andamento" aparece
+no histórico como interrompido.
+
+Não há retomada: uma cópia de 50 GB cortada na metade deixa no destino o que já havia sido copiado.
+Refazer a operação copia o que falta — os arquivos que já existem caem na política de conflito
+escolhida (renomear, sobrescrever ou pular).
+
+Na prática: antes de atualizar ou reiniciar, vale olhar **Operações** e esperar o que estiver
+rodando, como já se recomenda para envios em andamento.
+
 ### Baixar uma pasta grande como ZIP
 
 O ZIP é montado **em transmissão**, sem passar pelo disco e sem buffer do tamanho do conteúdo: um
