@@ -159,16 +159,24 @@ func healthcheck() error {
 	return nil
 }
 
-// resetAdmin sets the password of the admin user (FILEZAM_ADMIN_USER) from
-// FILEZAM_ADMIN_PASSWORD or the first argument, re-enables it, and forces a change at next login.
+// resetAdmin sets the password of the admin user (FILEZAM_ADMIN_USER) from the first argument or
+// FILEZAM_ADMIN_PASSWORD, re-enables it, and forces a change at next login. Sem nenhum dos dois,
+// sorteia uma senha e a imprime: quem roda isto perdeu o acesso e precisa de algo que funcione
+// agora, não de uma mensagem dizendo qual variável faltou.
 func resetAdmin(args []string) error {
 	cfg, err := config.Load()
 	if err != nil {
 		return err
 	}
-	pw := cfg.AdminPassword
+	pw, generated := cfg.AdminPassword, false
 	if len(args) > 0 {
 		pw = args[0]
+	}
+	if pw == "" {
+		if pw, err = auth.NewReadablePassword(); err != nil {
+			return err
+		}
+		generated = true
 	}
 	if err := auth.CheckPolicy(pw); err != nil {
 		return err
@@ -189,6 +197,7 @@ func resetAdmin(args []string) error {
 			return err
 		}
 		fmt.Println("admin user created:", cfg.AdminUser)
+		printGenerated(generated, pw)
 		return nil
 	}
 	if err != nil {
@@ -214,5 +223,14 @@ func resetAdmin(args []string) error {
 		fmt.Println("two-factor authentication cleared for:", cfg.AdminUser)
 	}
 	fmt.Println("admin password reset for:", cfg.AdminUser)
+	printGenerated(generated, pw)
 	return nil
+}
+
+// printGenerated mostra a senha sorteada. Só é impressa quando foi este comando que a criou:
+// uma senha escolhida por quem chamou não precisa voltar pela tela.
+func printGenerated(generated bool, pw string) {
+	if generated {
+		fmt.Println("generated password (change it at first login):", pw)
+	}
 }

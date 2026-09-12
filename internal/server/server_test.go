@@ -2657,3 +2657,65 @@ func TestSharePasswordMinimumLength(t *testing.T) {
 	}
 	admin.expect("POST", "/api/shares", map[string]any{"path": "teamA", "expiresIn": 3600, "password": "abcd1234"}, 201)
 }
+
+// Sem FILEZAM_ADMIN_PASSWORD, a conta inicial nasce com uma senha sorteada que aparece uma vez no
+// log. O padrão fixo anterior ("admin") valia da subida do serviço até o primeiro login: uma
+// janela que quem varre a internet conhece de cor.
+func TestInitialAdminPasswordIsGenerated(t *testing.T) {
+	dir := t.TempDir()
+	root := filepath.Join(dir, "data")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{Root: root, DataDir: filepath.Join(dir, "cfg"), AdminUser: "admin", AdminPassword: "",
+		SessionTTL: time.Hour, SessionMaxTTL: 24 * time.Hour, ChunkSize: 1 << 20, BatchMaxFiles: 200, BatchMaxBytes: 32 << 20,
+		MaxParallel: 4, ShareMaxTTL: 720 * time.Hour, Fsync: false, SecureCookies: config.SecureOff, UploadStaleAge: time.Hour, IndexInterval: time.Hour}
+	if err := os.MkdirAll(cfg.DataDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	db, err := store.Open(cfg.DBPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	base, err := vfs.Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { base.Close() })
+	var logged bytes.Buffer
+	s, err := New(cfg, db, base, slog.New(slog.NewTextHandler(&logged, nil)), "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+
+	pw := ""
+	for _, f := range strings.Fields(logged.String()) {
+		if after, ok := strings.CutPrefix(f, "password="); ok {
+			pw = after
+		}
+	}
+	if err := auth.CheckPolicy(pw); err != nil {
+		t.Fatalf("generated password %q does not meet the policy: %v (log: %s)", pw, err, logged.String())
+	}
+	login := func(p string) int {
+		jar, _ := cookiejar.New(nil)
+		c := &client{t: t, srv: ts, c: &http.Client{Jar: jar, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
+		resp, _ := c.do("POST", "/api/auth/login", map[string]string{"username": "admin", "password": p}, nil)
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	if got := login("admin"); got != 401 {
+		t.Fatalf("the well-known admin/admin still works: %d", got)
+	}
+	if got := login(pw); got != 200 {
+		t.Fatalf("generated password refused: %d", got)
+	}
+	// E a troca continua obrigatória, então a senha do log envelhece no primeiro acesso.
+	u, err := db.GetUserByName(t.Context(), "admin")
+	if err != nil || !u.MustChangePassword {
+		t.Fatalf("initial admin must be forced to change the password: %v %v", u, err)
+	}
+}

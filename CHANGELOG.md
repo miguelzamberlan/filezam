@@ -13,6 +13,9 @@ Todas as mudanças relevantes do Filezam ficam registradas aqui. O formato segue
 - **Administração → Configurações do sistema**: liga e desliga os quatro recursos opcionais (endereço personalizado, link de recebimento, extrair/compactar, miniaturas) para todos os usuários e define os tetos dos links de recebimento (cota, validade, tamanho por arquivo, número de arquivos, links por usuário). O link de recebimento vem **desligado** por padrão.
 
 ### Alterado
+- **Subir pela primeira vez não precisa mais de `.env`**: `git clone` e `docker compose up -d --build` bastam, porque todo valor já tinha padrão e o compose lê o arquivo só se ele existir. O `.env` continua sendo o lugar de configurar para valer (usuário do host, proxy, URL pública), e não é mais passo obrigatório do primeiro contato.
+- **Configurações do sistema** ganha o interruptor de extrair/compactar, que existia no banco e na API mas não tinha controle na tela.
+- Documentação de onde guardar os dados em Windows e macOS, e do que muda nos nomes de arquivo entre NTFS, APFS e ext4 (`docs/08-operacao.md`).
 - Um link público protegido por senha não revela mais o nome do item enquanto não for destravado.
 - Desligar um recurso em **Configurações do sistema** vale também para o que já existe — links no ar, item de menu — e não só para a criação de novos.
 
@@ -25,6 +28,7 @@ Todas as mudanças relevantes do Filezam ficam registradas aqui. O formato segue
 - O campo de senha dizia "opcional" mesmo quando um endereço personalizado a tornava obrigatória.
 
 ### Segurança
+- **A senha do primeiro administrador deixa de ser `admin`.** Sem `FILEZAM_ADMIN_PASSWORD`, o Filezam sorteia uma senha e a mostra uma única vez no log (`docker compose logs filezam`). A troca no primeiro acesso continua obrigatória. O padrão fixo valia do momento em que o serviço subia até alguém entrar pela primeira vez — e é a primeira coisa que qualquer varredura tenta. `filezam reset-admin` sem argumento nem variável também sorteia e imprime, em vez de falhar.
 - A senha de um link público passa a exigir **8 caracteres**, o mesmo mínimo das senhas de conta. Num link com endereço personalizado ela é o único segredo, porque o endereço é escolhido para ser fácil de dizer — e de adivinhar.
 - Duas sessões de envio abertas no mesmo instante no mesmo link não reservam mais espaço além da cota: conferir a cota e criar a sessão viraram uma operação só.
 - Um arquivo recebido por link público é registrado mesmo que quem enviou feche a aba no exato momento em que a transferência termina. Antes, o arquivo podia ficar no disco sem entrar na conta do link.

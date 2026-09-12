@@ -91,7 +91,7 @@ const recoveryCount = 10
 
 // NewRecoveryCodes returns codes like "k7f3-9qzp-2m4x" and their hashes for storage.
 func NewRecoveryCodes() (codes []string, hashes []string, err error) {
-	const alphabet = "abcdefghjkmnpqrstuvwxyz23456789" // sem 0/o/1/l/i para ditar por telefone
+	const alphabet = readableAlphabet // sem 0/o/1/l/i para ditar por telefone
 	for i := 0; i < recoveryCount; i++ {
 		b := make([]byte, 12)
 		if _, err := rand.Read(b); err != nil {

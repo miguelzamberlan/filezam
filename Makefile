@@ -27,7 +27,7 @@ vuln:
 
 ## Run the Go API locally (serves ./data, db in ./config) with plain-HTTP cookies
 run:
-	FILEZAM_SECURE_COOKIES=false FILEZAM_LOG_LEVEL=debug go run ./cmd/filezam
+	FILEZAM_SECURE_COOKIES=false FILEZAM_LOG_LEVEL=debug FILEZAM_ADMIN_PASSWORD=admin1234 go run ./cmd/filezam
 
 ## Vite dev server with hot reload, proxying /api to :8080 (run `make run` in another terminal)
 dev:

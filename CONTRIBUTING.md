@@ -27,7 +27,7 @@ Se a porta 8080 estiver ocupada: `FILEZAM_LISTEN=127.0.0.1:8765 make run` (e aju
 docker run --rm -v "$PWD":/src -w /src -e GOFLAGS=-buildvcs=false golang:1.26-alpine go test ./...
 ```
 
-Login inicial em desenvolvimento: `admin` / `admin` (troca obrigatória). Chamadas à API por `curl` precisam do header `X-Filezam: 1`.
+Login inicial em desenvolvimento: `admin` / `admin1234` (troca obrigatória) — a senha fixa vem do `FILEZAM_ADMIN_PASSWORD` do alvo `run`; fora dele, sem essa variável, o Filezam sorteia uma e a mostra no log. Chamadas à API por `curl` precisam do header `X-Filezam: 1`.
 
 ## Regras que não se negociam
 

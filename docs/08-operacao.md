@@ -13,18 +13,49 @@ O processo roda **sem root** e precisa de permissão de escrita nas duas pastas.
 
 Discos NTFS/exFAT montados com `uid=`/`gid=` funcionam: basta que o `uid` do mount seja o mesmo `PUID`. Nunca use `PUID=0`.
 
+## Sistema de arquivos da pasta de dados
+
+`FILEZAM_ROOT` precisa estar num sistema de arquivos que **diferencie maiúsculas de minúsculas**: ext4, xfs, btrfs, zfs. Não é preferência de estilo — o prefixo reservado `.filezam-` (lixeira e partes de upload) é comparado byte a byte, então num sistema que não diferencia, um caminho escrito `.FILEZAM-trash` passa pela validação e chega na pasta real.
+
+Isso decide onde os dados moram em cada sistema operacional:
+
+| Onde você roda o Docker | Onde colocar `FILEZAM_HOST_ROOT` |
+|---|---|
+| Linux | qualquer pasta em ext4/xfs/btrfs/zfs — o caso normal |
+| **Windows** (Docker Desktop/WSL2) | dentro do WSL2 (`/home/você/filezam/data`, que é ext4) ou num volume nomeado do Docker. **Nunca** um caminho `C:\...`, `/mnt/c/...` |
+| **macOS** (Docker Desktop) | um volume nomeado do Docker. Bind mount de pasta do host é APFS, que também não diferencia |
+
+Além da regra do prefixo reservado, manter os dados fora do disco do host em Windows e macOS é muito mais rápido: o bind mount atravessa uma camada de tradução de sistema de arquivos, e listar uma pasta grande fica ordens de grandeza mais lenta que no volume nativo.
+
+### Nomes de arquivo
+
+O Filezam **nunca normaliza** um nome: os bytes que o navegador envia são os que vão para o disco e os que voltam na listagem. Acentuação de português, espanhol, inglês, alemão (`á ç ñ ü ã ß`) atravessa idêntica em qualquer sistema. O que muda é o que o sistema de arquivos por baixo aceita:
+
+| | ext4/xfs/btrfs | NTFS | APFS |
+|---|---|---|---|
+| `MAIÚSCULA.txt` e `maiúscula.txt` na mesma pasta | dois arquivos | um só | um só |
+| o mesmo nome em NFC e em NFD | dois arquivos | dois arquivos | um só |
+| `Relatório: Final.pdf` (`: * ? " < > \|`) | vale | o sistema recusa | vale |
+| `CON.txt`, `AUX.txt`, `NUL.txt`, `COM1.txt` | vale | o sistema recusa | vale |
+| trocar só a caixa ao renomear (`foto` → `Foto`) | vale | 409 `exists` | 409 `exists` |
+
+Nomes já existentes no disco com **UTF-8 inválido** (vindos de um Samba antigo com página de código Latin-1, por exemplo) aparecem na listagem em vermelho e não podem ser abertos, renomeados nem apagados pela interface — o caminho não é endereçável. Renomeie-os pelo sistema de arquivos.
+
+Limites do próprio Filezam, iguais em todo lugar: 255 bytes por segmento, 4096 bytes no caminho inteiro, 128 níveis de profundidade.
+
 ## 1. Na sua máquina (teste rápido)
 
 ### Com Docker Compose
 
 ```bash
 git clone https://github.com/miguelzamberlan/filezam.git && cd filezam
-cp .env.example .env
-# no .env: PUID/PGID = id -u / id -g; FILEZAM_HOST_ROOT = pasta a expor; FILEZAM_SECURE_COOKIES=false (sem HTTPS)
 docker compose up -d --build
+docker compose logs filezam | grep password
 ```
 
-Abra `http://127.0.0.1:8080`, entre com `admin` / `admin` e troque a senha (obrigatório). `FILEZAM_SECURE_COOKIES=false` é necessário porque sem HTTPS o navegador descarta cookies `Secure`; volte para `true` antes de expor na internet. Para parar: `docker compose down`. Os dados ficam em `./data` e `./config`.
+**O `.env` não é obrigatório.** O `docker-compose.yml` declara `env_file: required: false` e todo valor tem padrão (`${PUID:-1000}`, `${FILEZAM_BIND:-127.0.0.1}`…), então um clone limpo sobe sem configurar nada. Copie `.env.example` para `.env` quando for para valer — UID/GID reais, pasta do host, proxy, URL pública.
+
+Abra `http://127.0.0.1:8080` e entre como `admin` com a senha que apareceu no log; a troca é obrigatória. Sem `FILEZAM_ADMIN_PASSWORD`, a senha inicial é **sorteada e mostrada uma única vez** — se o log já rolou, `docker compose exec filezam /filezam reset-admin` sorteia outra e a imprime. Sem `.env`, `FILEZAM_SECURE_COOKIES` vale `auto` e o cookie sai sem `Secure`, que é o certo em HTTP local; o `.env.example` já vem com `true`, para produção atrás de HTTPS, e aí em HTTP o navegador descarta o cookie e o login não completa. Para parar: `docker compose down`. Os dados ficam em `./data` e `./config`.
 
 ### Sem Docker (binário)
 
@@ -60,16 +91,16 @@ FILEZAM_PORT=8080
 FILEZAM_TRUSTED_PROXIES=172.31.250.1       # gateway da rede do compose: é por ele que o proxy do host chega
 FILEZAM_SECURE_COOKIES=true                # acesso público é HTTPS
 FILEZAM_PUBLIC_URL=https://arquivos.exemplo.com
-FILEZAM_ADMIN_PASSWORD=troque-esta-senha   # só vale no primeiro início; a troca é forçada no login
+# FILEZAM_ADMIN_PASSWORD=                  # vazia: sorteada e mostrada uma vez no log (recomendado)
 FILEZAM_REQUIRE_2FA_ADMINS=true            # recomendado
 ```
 
 ```bash
 docker compose up -d --build
-docker compose logs -f filezam     # "filezam listening" = ok
+docker compose logs -f filezam     # "filezam listening" = ok; e a senha do admin, uma única vez
 ```
 
-Depois configure o proxy (receitas abaixo), abra `https://arquivos.exemplo.com`, troque a senha do admin, ative o 2FA e crie os usuários com as pastas de acesso deles.
+Depois configure o proxy (receitas abaixo), abra `https://arquivos.exemplo.com`, entre com a senha que apareceu no log, troque-a (é obrigatório), ative o 2FA e crie os usuários com as pastas de acesso deles. Se o log já se perdeu antes do primeiro acesso, `docker compose exec filezam /filezam reset-admin` sorteia outra senha e a imprime.
 
 ### Proxy reverso
 
@@ -257,7 +288,7 @@ O proxy reverso é o mesmo da seção 2.
 | `FILEZAM_TRUSTED_PROXIES` | vazio | IPs/CIDRs dos proxies, separados por vírgula. Só deles `X-Forwarded-*` é aceito; confie no mínimo possível ([Porta local e proxies confiáveis](#porta-local-e-proxies-confiáveis)) |
 | `FILEZAM_SECURE_COOKIES` | `auto` | `true` / `false` / `auto` (detecta HTTPS via `X-Forwarded-Proto` de proxy confiável) |
 | `FILEZAM_PUBLIC_URL` | vazio | Base dos links públicos gerados pela API (`https://...`); a interface usa o endereço do navegador quando vazio |
-| `FILEZAM_ADMIN_USER` / `FILEZAM_ADMIN_PASSWORD` | `admin` / `admin` | Admin criado no primeiro início (troca forçada no primeiro login) |
+| `FILEZAM_ADMIN_USER` / `FILEZAM_ADMIN_PASSWORD` | `admin` / *(sorteada)* | Admin criado no primeiro início, com troca forçada. Senha vazia = sorteada e mostrada **uma única vez** no log; preencha só para instalação automatizada |
 | `FILEZAM_SESSION_TTL` | `168h` | Validade deslizante da sessão (teto absoluto: 30 dias) |
 | `FILEZAM_MAX_UPLOAD_CHUNK` | `16MiB` | Tamanho do bloco de upload (1 MiB a 1 GiB). Até 64 MiB atrás da Cloudflare |
 | `FILEZAM_UPLOAD_MAX_RESERVED` | `100GiB` | Espaço que os uploads em blocos inacabados de um usuário podem reservar no disco (a sessão pré-aloca o tamanho do arquivo); `0` = sem teto. Um arquivo maior que isso precisa de um valor maior |
@@ -336,7 +367,7 @@ de um arquivo comum — com tamanho conhecido e retomável.
 |---|---|
 | `filezam serve` (padrão) | Sobe o servidor |
 | `filezam healthcheck` | Sai com 0 se `/api/health` responde; usado pelo `HEALTHCHECK` da imagem |
-| `filezam reset-admin [senha]` | Recria ou redefine `FILEZAM_ADMIN_USER` como admin ativo com troca obrigatória, apaga as sessões dele, zera bloqueios e **desliga o 2FA** da conta (é o caminho de recuperação de quem perdeu o autenticador e os códigos). Sem argumento usa `FILEZAM_ADMIN_PASSWORD`; prefira a variável ao argumento, que fica no histórico do shell. Com Docker: `docker compose run --rm -e FILEZAM_ADMIN_PASSWORD='NovaSenha123' filezam reset-admin` |
+| `filezam reset-admin [senha]` | Recria ou redefine `FILEZAM_ADMIN_USER` como admin ativo com troca obrigatória, apaga as sessões dele, zera bloqueios e **desliga o 2FA** da conta (é o caminho de recuperação de quem perdeu o autenticador e os códigos). Sem argumento usa `FILEZAM_ADMIN_PASSWORD`; sem os dois, **sorteia uma senha e a imprime** — quem chega aqui perdeu o acesso e precisa de algo que funcione agora. Prefira a variável ao argumento, que fica no histórico do shell. Com Docker: `docker compose run --rm -e FILEZAM_ADMIN_PASSWORD='NovaSenha123' filezam reset-admin` |
 | `filezam version` | Imprime a versão embutida no build |
 
 ## Atualização
@@ -398,4 +429,4 @@ Logs em JSON no stdout (`docker compose logs -f filezam` ou `journalctl -u filez
 | Preview de PDF em branco ou com ícone de bloqueio | build antigo (`X-Frame-Options: DENY` no conteúdo inline) | Reconstruir a imagem |
 | 429 `rate_limited` ao trocar a senha | mais de 5 tentativas/min com a senha atual errada | Aguardar um minuto |
 | `scope_unavailable` | pasta de escopo apagada/renomeada | Admin redefine o escopo do usuário |
-| Admin sem senha | — | `docker compose run --rm filezam reset-admin 'Senha123'` |
+| Admin sem senha | — | `docker compose exec filezam /filezam reset-admin` (imprime uma senha nova) |

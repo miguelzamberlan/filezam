@@ -145,7 +145,18 @@ func (s *Server) ensureAdmin(ctx context.Context) error {
 	if n > 0 {
 		return nil
 	}
-	hash, err := auth.HashPassword(s.cfg.AdminPassword)
+	// Sem FILEZAM_ADMIN_PASSWORD a senha é sorteada e sai no log uma única vez. É a troca
+	// deliberada: uma senha no log de quem já é dono da máquina, em vez de um "admin/admin" que
+	// vale desde a subida do serviço até o primeiro login e que qualquer varredura conhece. A
+	// troca continua obrigatória no primeiro acesso, então mesmo essa linha de log envelhece.
+	pw, generated := s.cfg.AdminPassword, false
+	if pw == "" {
+		if pw, err = auth.NewReadablePassword(); err != nil {
+			return err
+		}
+		generated = true
+	}
+	hash, err := auth.HashPassword(pw)
 	if err != nil {
 		return err
 	}
@@ -153,7 +164,12 @@ func (s *Server) ensureAdmin(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("create initial admin: %w", err)
 	}
-	s.log.Warn("created initial admin user; password change is required at first login", "username", s.cfg.AdminUser)
+	if generated {
+		s.log.Warn("created initial admin user with a random password, shown here only once; change it at first login (required)",
+			"username", s.cfg.AdminUser, "password", pw)
+	} else {
+		s.log.Warn("created initial admin user from FILEZAM_ADMIN_PASSWORD; password change is required at first login", "username", s.cfg.AdminUser)
+	}
 	return nil
 }
 

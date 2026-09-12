@@ -41,6 +41,38 @@ func CheckPolicy(pw string) error {
 	return nil
 }
 
+// readableAlphabet leaves out 0/o/1/l/i: a senha inicial costuma ser lida de um log e digitada
+// à mão, ou ditada para quem está instalando.
+const readableAlphabet = "abcdefghjkmnpqrstuvwxyz23456789"
+
+// NewReadablePassword returns a random password like "k7f3-9qzp-2m4x-r8dw": 16 caracteres do
+// alfabeto acima (≈79 bits) em grupos de quatro. Serve para a senha inicial do administrador
+// quando ninguém escolheu uma — um padrão fixo como "admin" fica válido desde que o serviço sobe
+// até alguém entrar pela primeira vez, e nesse intervalo quem chegar antes leva a conta.
+func NewReadablePassword() (string, error) {
+	const groups, per = 4, 4
+	// Amostragem por rejeição: `byte % 31` daria a oito letras do alfabeto uma chance a mais que
+	// às outras. O desvio é pequeno, mas não há motivo para aceitá-lo numa senha.
+	const limit = 256 - 256%len(readableAlphabet)
+	var sb strings.Builder
+	buf := make([]byte, 1)
+	for i := 0; i < groups*per; i++ {
+		if i > 0 && i%per == 0 {
+			sb.WriteByte('-')
+		}
+		for {
+			if _, err := rand.Read(buf); err != nil {
+				return "", err
+			}
+			if int(buf[0]) < limit {
+				sb.WriteByte(readableAlphabet[int(buf[0])%len(readableAlphabet)])
+				break
+			}
+		}
+	}
+	return sb.String(), nil
+}
+
 // HashPassword returns a PHC-formatted argon2id hash.
 func HashPassword(pw string) (string, error) {
 	salt := make([]byte, saltLen)

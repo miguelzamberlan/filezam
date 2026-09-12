@@ -61,12 +61,14 @@ func resolve(p string) string {
 // Load reads configuration from the environment and validates it.
 func Load() (*Config, error) {
 	c := &Config{
-		Root:           env("FILEZAM_ROOT", "./data"),
-		DataDir:        env("FILEZAM_DATA_DIR", "./config"),
-		Listen:         env("FILEZAM_LISTEN", ":8080"),
-		PublicURL:      strings.TrimRight(env("FILEZAM_PUBLIC_URL", ""), "/"),
-		AdminUser:      env("FILEZAM_ADMIN_USER", "admin"),
-		AdminPassword:  env("FILEZAM_ADMIN_PASSWORD", "admin"),
+		Root:      env("FILEZAM_ROOT", "./data"),
+		DataDir:   env("FILEZAM_DATA_DIR", "./config"),
+		Listen:    env("FILEZAM_LISTEN", ":8080"),
+		PublicURL: strings.TrimRight(env("FILEZAM_PUBLIC_URL", ""), "/"),
+		AdminUser: env("FILEZAM_ADMIN_USER", "admin"),
+		// Sem padrão: vazio quer dizer "sorteie uma e mostre no log na primeira subida". Um padrão
+		// fixo vale desde o momento em que o serviço sobe até alguém entrar pela primeira vez.
+		AdminPassword:  env("FILEZAM_ADMIN_PASSWORD", ""),
 		LogLevel:       strings.ToLower(env("FILEZAM_LOG_LEVEL", "info")),
 		MetricsToken:   env("FILEZAM_METRICS_TOKEN", ""),
 		BatchMaxFiles:  200,
@@ -162,8 +164,8 @@ func Load() (*Config, error) {
 	if c.SessionTTL > c.SessionMaxTTL {
 		c.SessionTTL = c.SessionMaxTTL
 	}
-	if c.AdminUser == "" || c.AdminPassword == "" {
-		return nil, errors.New("FILEZAM_ADMIN_USER and FILEZAM_ADMIN_PASSWORD must not be empty")
+	if c.AdminUser == "" {
+		return nil, errors.New("FILEZAM_ADMIN_USER must not be empty")
 	}
 	return c, nil
 }

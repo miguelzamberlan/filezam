@@ -55,12 +55,17 @@ Requirements: Docker with Compose v2.
 
 ```bash
 git clone https://github.com/miguelzamberlan/filezam.git && cd filezam
-cp .env.example .env
-# in .env: PUID/PGID (id -u / id -g), FILEZAM_HOST_ROOT (folder to expose), FILEZAM_SECURE_COOKIES=false (no HTTPS yet)
 docker compose up -d --build
+docker compose logs filezam | grep password   # the admin password, printed once
 ```
 
-Open `http://127.0.0.1:8080`, log in with `admin` / `admin` (or `FILEZAM_ADMIN_USER` / `FILEZAM_ADMIN_PASSWORD`) and change the password (mandatory on first login).
+No `.env` needed: every value has a default. Open `http://127.0.0.1:8080` and log in as `admin` with the password from the log — changing it is mandatory on first login. Data lands in `./data`, the database in `./config`.
+
+For real use (host folder, your user, a proxy), copy `.env.example` to `.env` and adjust; compose reads it when it exists.
+
+> **Windows and macOS**: keep the data **inside WSL2** (or in a Docker volume), never on a mounted
+> `C:\...`. Besides being much faster, NTFS and APFS are case-insensitive and Filezam needs a
+> case-sensitive filesystem — see [`docs/08`](docs/08-operacao.md#sistema-de-arquivos-da-pasta-de-dados).
 
 ### Without Docker
 
@@ -106,7 +111,7 @@ Create an **App** service from the GitHub repository (build: Dockerfile), set th
 | `FILEZAM_TRUSTED_PROXIES` | empty | Comma-separated IPs/CIDRs of the reverse proxy. Trust only the proxy: whoever is listed picks the IP used for the audit log and login limits ([local port and proxies](docs/08-operacao.md#porta-local-e-proxies-confiáveis), in Portuguese) |
 | `FILEZAM_SECURE_COOKIES` | `auto` | `true` / `false` / `auto` (from `X-Forwarded-Proto` of a trusted proxy) |
 | `FILEZAM_PUBLIC_URL` | empty | Base of public links (`https://...`); the UI uses the browser origin when empty |
-| `FILEZAM_ADMIN_USER` / `FILEZAM_ADMIN_PASSWORD` | `admin` / `admin` | Admin created on first start (change forced) |
+| `FILEZAM_ADMIN_USER` / `FILEZAM_ADMIN_PASSWORD` | `admin` / *(random)* | Admin created on first start; an empty password is drawn at random and printed once in the log. Change forced at first login |
 | `FILEZAM_SESSION_TTL` | `168h` | Sliding session lifetime (absolute cap: 30 days) |
 | `FILEZAM_MAX_UPLOAD_CHUNK` | `16MiB` | Upload chunk size (1 MiB–1 GiB) |
 | `FILEZAM_UPLOAD_MAX_RESERVED` | `100GiB` | Disk space one user's unfinished uploads may reserve; `0` = no cap |

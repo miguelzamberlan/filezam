@@ -80,12 +80,17 @@ Requisitos: Docker com Compose v2.
 
 ```bash
 git clone https://github.com/miguelzamberlan/filezam.git && cd filezam
-cp .env.example .env
-# no .env: PUID/PGID (id -u / id -g), FILEZAM_HOST_ROOT (pasta a expor) e FILEZAM_SECURE_COOKIES=false (sem HTTPS)
 docker compose up -d --build
+docker compose logs filezam | grep password   # a senha do admin, mostrada uma única vez
 ```
 
-Acesse `http://127.0.0.1:8080`. Login inicial: `admin` / `admin` (ou o que estiver em `FILEZAM_ADMIN_USER` / `FILEZAM_ADMIN_PASSWORD`); a troca de senha é obrigatória no primeiro acesso. Os dados ficam em `./data` e o banco em `./config`.
+Não precisa de `.env`: todo valor tem um padrão. Acesse `http://127.0.0.1:8080` e entre como `admin` com a senha do log — a troca é obrigatória no primeiro acesso. Os dados ficam em `./data` e o banco em `./config`.
+
+Para usar de verdade (pasta do host, seu usuário, proxy), copie `.env.example` para `.env` e ajuste; o compose lê o arquivo se ele existir.
+
+> **Windows e macOS**: deixe os dados **dentro do WSL2** (ou num volume do Docker), nunca num
+> `C:\...` montado. Além de ser muito mais rápido, NTFS e APFS não diferenciam maiúsculas, e o
+> Filezam precisa disso — veja [`docs/08`](docs/08-operacao.md#sistema-de-arquivos-da-pasta-de-dados).
 
 ### Sem Docker
 
@@ -184,7 +189,7 @@ O container roda sem root, como `PUID:PGID`, e as duas pastas precisam ser grav�
 | `FILEZAM_TRUSTED_PROXIES` | vazio | IPs/CIDRs do proxy reverso, separados por vírgula. Confie só no proxy: quem estiver na lista escolhe o IP da auditoria e dos limites de login ([porta local e proxies](docs/08-operacao.md#porta-local-e-proxies-confiáveis)) |
 | `FILEZAM_SECURE_COOKIES` | `auto` | `true` / `false` / `auto` (detecta via `X-Forwarded-Proto` de proxy confiável) |
 | `FILEZAM_PUBLIC_URL` | vazio | Base dos links públicos (`https://...`); sem ela a interface usa o endereço do navegador |
-| `FILEZAM_ADMIN_USER` / `FILEZAM_ADMIN_PASSWORD` | `admin` / `admin` | Admin criado no primeiro início (troca forçada) |
+| `FILEZAM_ADMIN_USER` / `FILEZAM_ADMIN_PASSWORD` | `admin` / *(sorteada)* | Admin criado no primeiro início; senha vazia é sorteada e sai uma única vez no log. Troca forçada no primeiro acesso |
 | `FILEZAM_SESSION_TTL` | `168h` | Validade deslizante da sessão (teto absoluto: 30 dias) |
 | `FILEZAM_MAX_UPLOAD_CHUNK` | `16MiB` | Tamanho do bloco de upload (1 MiB–1 GiB) |
 | `FILEZAM_UPLOAD_MAX_RESERVED` | `100GiB` | Espaço que os uploads inacabados de um usuário podem reservar no disco; `0` = sem teto |
