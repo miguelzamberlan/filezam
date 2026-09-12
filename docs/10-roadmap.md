@@ -29,6 +29,12 @@
 - **Arrastar dentro da UI** só com mouse; no toque use recortar/colar.
 - **PDF no celular abre fora da interface**: navegadores móveis não mostram PDF em iframe, então o preview oferece nova aba/download. Mostrar dentro exigiria embutir o pdf.js (centenas de KB carregados sob demanda, worker próprio e revisão da CSP).
 
+## Versão 1.1.0
+
+Lançada em 2026-09-12 ([CHANGELOG](../CHANGELOG.md)). Traz o editor de texto e markdown, o extrator e compactador de `.zip`, as miniaturas de imagem, o endereço personalizado no link público, o link público de recebimento de arquivos e a tela de configurações globais do administrador.
+
+Antes do lançamento, uma auditoria de segurança da superfície nova fechou seis achados, todos com teste automatizado ([09](09-testes.md)): a janela de corrida entre conferir a cota e criar a sessão de envio, o recibo que dependia da conexão de quem enviava, o mínimo de 8 caracteres na senha de link, os controles bidi em nomes de arquivo, o cache longo demais das miniaturas e o teto por remetente descrito como contenção quando é repartição. A senha do primeiro administrador deixou de ser fixa.
+
 ## Versão 1.0.0
 
 Lançada em 2026-09-10, primeira versão pública ([CHANGELOG](../CHANGELOG.md)). Versões publicadas não mudam: pedidos de alteração chegam por issue e entram numa versão nova, conforme a política de [`CONTRIBUTING.md`](../CONTRIBUTING.md#versões-e-lançamentos).
@@ -67,7 +73,7 @@ Não verificado manualmente antes do lançamento: o item 15 do checklist de [09]
 
 ## Feito
 
-Lixeira com retenção, índice de nomes em SQLite, link de arquivo único e senha no link, arrastar e soltar interno, listagem paginada, interface em inglês, histórico de operações persistido, métricas Prometheus, cota de disco por usuário com limites de zips/jobs, link amarrado ao inode e bloqueio de login silencioso por (usuário, IP) e verificação em duas etapas TOTP com códigos de recuperação e dispositivo confiável (setembro de 2026). Versão 1.0.0 pública (2026-09-10): revisão de segurança, validação em produção e pendências da auditoria resolvidas. Endereço personalizado no link público (com senha obrigatória) e link público de recebimento de arquivos, com tela de configurações globais do administrador (setembro de 2026).
+Lixeira com retenção, índice de nomes em SQLite, link de arquivo único e senha no link, arrastar e soltar interno, listagem paginada, interface em inglês, histórico de operações persistido, métricas Prometheus, cota de disco por usuário com limites de zips/jobs, link amarrado ao inode e bloqueio de login silencioso por (usuário, IP) e verificação em duas etapas TOTP com códigos de recuperação e dispositivo confiável (setembro de 2026). Versão 1.0.0 pública (2026-09-10): revisão de segurança, validação em produção e pendências da auditoria resolvidas. Versão 1.1.0 (2026-09-12): editor de texto e markdown, extrator e compactador de `.zip`, miniaturas de imagem, endereço personalizado no link público (com senha obrigatória), link público de recebimento de arquivos e tela de configurações globais do administrador.
 
 ## Decisões e ideias descartadas
 

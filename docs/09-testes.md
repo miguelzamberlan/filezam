@@ -40,10 +40,16 @@ Os testes de integração criam raiz e banco temporários; nada toca o sistema r
 9. Usuário com escopo não vê o pai; admin muda o escopo → sessão cai.
 10. Atrás do proxy real: cookie `Secure`, IP real na auditoria, upload de 200 MB completa.
 11. Preview de PDF abre dentro da interface (Chrome e Firefox). No celular (Android e iPhone) aparece "Abrir em nova aba"/"Baixar" e a nova aba mostra o PDF inteiro.
-11a. `.md` com tabela, lista de tarefas, imagem relativa (`img/x.png`), `<script>`/`<img onerror>` e `[x](javascript:alert(1))`: abre formatado, imagem aparece, nenhum alerta, o HTML some e o link perigoso vira texto; "Texto" mostra o fonte. Também pelo link público de pasta, com várias imagens: todas aparecem (nenhum 429 na aba Rede).
-11c. Painel de upload: cancelar itens e cancelar tudo não cria barra de rolagem horizontal na lista (status "Cancelado" é mais largo que a porcentagem).
-11b. No celular (ou DevTools em modo touch, 390 px): toque abre, toque longo abre o menu e seleciona, "⋯" mostra as ações, tabelas cabem na largura; tema claro/escuro e cores em Configurações refletem na hora.
-12. `go run golang.org/x/vuln/cmd/govulncheck@latest ./...` sem vulnerabilidades alcançáveis e `cd web && npm audit --omit=dev` limpo; se o Go tiver correção nova, subir `go.mod` e `Dockerfile`.
-13. Com `FILEZAM_METRICS_TOKEN`: `curl -H 'Authorization: Bearer …' /metrics` responde e o Prometheus consegue coletar; sem token → 404.
-15. Ativar 2FA com um app real (Aegis/Google Authenticator), sair, entrar com código, marcar "confiar", sair e entrar sem código; usar um código de recuperação; desativar.
-14. Reiniciar o container no meio de uma cópia grande: a operação aparece em **Operações** como interrompida e nada fica pela metade fora de `.filezam-*`.
+12. `.md` com tabela, lista de tarefas, imagem relativa (`img/x.png`), `<script>`/`<img onerror>` e `[x](javascript:alert(1))`: abre formatado, imagem aparece, nenhum alerta, o HTML some e o link perigoso vira texto; "Texto" mostra o fonte. Também pelo link público de pasta, com várias imagens: todas aparecem (nenhum 429 na aba Rede).
+13. No celular (ou DevTools em modo touch, 390 px): toque abre, toque longo abre o menu e seleciona, "⋯" mostra as ações, tabelas cabem na largura; tema claro/escuro e cores em Configurações refletem na hora.
+14. Painel de upload: cancelar itens e cancelar tudo não cria barra de rolagem horizontal na lista (status "Cancelado" é mais largo que a porcentagem).
+15. **Editor**: abrir um `.md`, editar, a prévia acompanha, salvar, conferir no disco. O mesmo arquivo em duas abas: a segunda recusa com `modified` e o texto digitado continua na tela. Arquivo acima de 1 MiB → opção desabilitada.
+16. **Extrator**: extrair um `.zip` normal; extrair de novo cria `nome (1)`. Um zip forjado com `../`, symlink e `.filezam-*` não tira nada do lugar. Cancelar no meio não deixa pasta pela metade. Compactar uma seleção e abrir o `.zip` fora do Filezam.
+17. **Miniaturas**: pasta com fotos em grade; a segunda visita revalida com `304` (aba Rede); desligar em Configurações volta ao ícone na hora. PNG com dimensões absurdas → ícone, sem estourar memória.
+18. **Link com apelido**: criar exige senha de 8 caracteres; o link travado não mostra o nome da pasta; revogar não devolve o apelido, e `?purge=1` devolve.
+19. **Link de recebimento**: criar aponta para pasta vazia criada na hora, com cota e vencimento obrigatórios (máx. 30 dias). Enviar de uma janela anônima, vários arquivos ao mesmo tempo e um grande em blocos: todos aparecem na lista de quem enviou e no disco do dono; um nome repetido vira `nome (1)`; ler pelo link responde 404. Atrás do proxy real, com uma conexão lenta de verdade: um envio grande não segura os outros nem estoura o tempo limite do proxy.
+20. **Configurações do sistema**: os quatro interruptores desligam o recurso para links e menus que já existem, não só na criação.
+21. `go run golang.org/x/vuln/cmd/govulncheck@latest ./...` sem vulnerabilidades alcançáveis e `cd web && npm audit --omit=dev` limpo; se o Go tiver correção nova, subir `go.mod` e `Dockerfile`.
+22. Com `FILEZAM_METRICS_TOKEN`: `curl -H 'Authorization: Bearer …' /metrics` responde e o Prometheus consegue coletar; sem token → 404.
+23. Ativar 2FA com um app real (Aegis/Google Authenticator), sair, entrar com código, marcar "confiar", sair e entrar sem código; usar um código de recuperação; desativar.
+24. Reiniciar o container no meio de uma cópia grande: a operação aparece em **Operações** como interrompida e nada fica pela metade fora de `.filezam-*`.

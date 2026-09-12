@@ -155,7 +155,7 @@ Contributions: read [`CONTRIBUTING.md`](CONTRIBUTING.md) (in Portuguese; the non
 
 ## Versions
 
-Current version: **1.0.0** ([`CHANGELOG.md`](CHANGELOG.md), in Portuguese). Semantic versioning: a published version never changes; fixes and features ship as new versions. In production, pin a version (`ghcr.io/miguelzamberlan/filezam:1.0.0`, or `:1.0` to receive only fixes) instead of following `main`. Change requests go through issues and land in a future version.
+Current version: **1.1.0** ([`CHANGELOG.md`](CHANGELOG.md), in Portuguese). Semantic versioning: a published version never changes; fixes and features ship as new versions. In production, pin a version (`ghcr.io/miguelzamberlan/filezam:1.1.0`, or `:1.1` to receive only fixes) instead of following `main`. Change requests go through issues and land in a future version.
 
 ## Author and license
 

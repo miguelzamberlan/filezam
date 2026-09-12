@@ -4,6 +4,8 @@ Todas as mudanças relevantes do Filezam ficam registradas aqui. O formato segue
 
 ## [Não lançado]
 
+## [1.1.0] - 2026-09-12
+
 ### Adicionado
 - **Miniaturas das imagens**: pastas de fotos mostram uma prévia de cada imagem em vez do ícone genérico, na lista e na grade. A miniatura é gerada na primeira vez que a pasta é aberta e reusada depois, então a segunda visita é instantânea. Formatos: JPEG, PNG, GIF, WebP, BMP e TIFF. Pode ser desligado pelo administrador para toda a instalação, e por cada pessoa nas próprias preferências.
 - **Extrair e compactar**: `Extrair aqui` no menu de contexto de um `.zip` descompacta para uma pasta nova ao lado, sem sobrescrever nada — extrair duas vezes cria `fotos` e `fotos (1)`. `Compactar em .zip` faz o contrário, com os arquivos selecionados. Os dois rodam em segundo plano, com progresso e cancelamento.
@@ -73,5 +75,6 @@ Primeira versão pública.
 - `docker-compose.yml` de referência com serviço `init` para permissões, sub-rede fixa e contêiner somente leitura sem capabilities.
 - Documentação completa em `docs/`: arquitetura, segurança, API, uploads, banco, frontend, operação (Docker, Easypanel, systemd, proxies), testes e roadmap.
 
-[Não lançado]: https://github.com/miguelzamberlan/filezam/compare/v1.0.0...HEAD
+[Não lançado]: https://github.com/miguelzamberlan/filezam/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/miguelzamberlan/filezam/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/miguelzamberlan/filezam/releases/tag/v1.0.0
