@@ -161,6 +161,7 @@ export const en: Strings = {
   dropFolder: 'Destination folder',
   dropFolderHint: 'The folder is created now and must be empty: nothing that already exists is exposed to senders.',
   dropQuota: 'Total limit of the link',
+  dropQuotaNote: 'The limit counts everything that has ever arrived through the link, not the space in use now: deleting or moving received files does not give space back to the link. When it runs out, create a new link.',
   dropFileMax: 'Per-file limit',
   dropMaxFiles: 'Maximum files',
   dropExpiryNote: 'An expiry date is required and lasts at most 30 days.',

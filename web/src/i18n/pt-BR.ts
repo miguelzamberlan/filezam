@@ -159,6 +159,7 @@ export const ptBR = {
   dropFolder: 'Pasta de destino',
   dropFolderHint: 'A pasta é criada agora e precisa estar vazia: nada do que já existe fica exposto a quem envia.',
   dropQuota: 'Limite total do link',
+  dropQuotaNote: 'O limite conta tudo o que já entrou pelo link, não o espaço ocupado agora: apagar ou mover os arquivos recebidos não devolve espaço ao link. Quando ele se esgotar, crie um link novo.',
   dropFileMax: 'Limite por arquivo',
   dropMaxFiles: 'Máximo de arquivos',
   dropExpiryNote: 'O vencimento é obrigatório e vale no máximo 30 dias.',

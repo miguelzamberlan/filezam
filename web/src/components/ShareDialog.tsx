@@ -106,6 +106,7 @@ export default function ShareDialog({ path, name, kind = 'dir', maxTtl, onClose,
               <select id="drop-quota" className="input mt-1" value={quota} onChange={(e) => setQuota(Number(e.target.value))}>
                 {quotas.map((q) => <option key={q} value={q}>{formatBytes(q)}</option>)}
               </select>
+              <p className="mt-1 text-xs text-neutral-500">{S.dropQuotaNote}</p>
             </>
           )}
           <label className="mt-3 block text-sm" htmlFor="share-expires">{S.shareExpires}</label>
