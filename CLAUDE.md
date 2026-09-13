@@ -25,7 +25,7 @@ The `docs/` folder is the source of truth. Read the document for the area you to
 | Test suites and manual checklist | `docs/09-testes.md` |
 | Known limitations and next steps | `docs/10-roadmap.md` |
 
-Feature switches, their factory defaults and hard ceilings are in `internal/server/settings.go`; there is **no env var** for them.
+Feature switches, their factory defaults and hard ceilings are in `internal/server/settings.go`; there is **no env var** for them. Trash retention and the index interval are settings too, but their factory default comes from `FILEZAM_TRASH_RETENTION`/`FILEZAM_INDEX_INTERVAL` until an admin saves a value (resolved in `settings()`, never cached resolved).
 
 ## Commands
 
@@ -55,6 +55,7 @@ Port 8080 is often taken on the dev machine; use `FILEZAM_LISTEN=127.0.0.1:8765`
 - **Schema changes = new migration file** `internal/store/migrations/NNN_*.sql`; never edit an applied one.
 - **Every mutating endpoint must be covered in `internal/server/server_test.go`.**
 - **Anything that reads third-party content** (archive entries, images) validates before it allocates or writes: names normalized **alone** and then joined (never the other way round — `dst/../x` collapses silently), depth checked on the final path, only regular files and directories created, declared sizes and modes ignored.
+- **File writes that can be interrupted go through a temporary and are published at the end** (`copyFile` → `publish`, `WriteZipFile`, upload `Finalize`). A job that touches the disk records what to undo in `job_cleanup` before it starts (`guardJob`) and forgets it when it ends (`unguardJob`); never register a whole tree for removal when the destination may be the only copy (moves register temporaries only).
 - **Public write paths never hold a lock across a transfer.** The per-link mutex covers quota arithmetic and name resolution only; holding it while bytes stream puts a link's uploads in a queue and stalls them behind the slowest one.
 - Tailwind 4: composite classes are `@utility` blocks in `web/src/index.css`; `@apply` of a custom class fails the build.
 - `internal/server/webdist/dist/.keep` must survive (`vite.config.ts` recreates it) or `go:embed` breaks.
@@ -62,9 +63,9 @@ Port 8080 is often taken on the dev machine; use `FILEZAM_LISTEN=127.0.0.1:8765`
 ## Where things live
 
 - Routes: `internal/server/server.go` (`routes()`), middleware chains `authed`/`user`/`admin`. Public write routes use `chain(s.h(fn), s.csrf)` — CSRF without a session.
-- Handlers: `handlers_{auth,admin,files,uploads,jobs,favorites,shares,public,drop,archive,thumbs}.go`; SPA in `spa.go`.
+- Handlers: `handlers_{auth,admin,files,uploads,jobs,favorites,shares,public,drop,archive,thumbs}.go`, `notifications.go` (per-user notices: server stores `kind` + JSON `data`, the UI builds the text; `Notify` groups by `group_key` while unread); SPA in `spa.go`.
 - Global settings and feature switches: `internal/server/settings.go` (memory cache + `clampSettings`), store in `internal/store/settings.go`.
 - Upload protocol server side: `internal/uploads/service.go` (`CreateOpts`/`SessionRef`) + `vfs/upload.go`; client side: `web/src/upload/manager.ts` (authenticated) and `web/src/upload/dropUploader.ts` (public drop — deliberately separate: no folders, no batch, no overwrite, no resume).
 - Archive extraction: `internal/vfs/archive.go` (+ `cp437.go` for legacy zip names); thumbnails: `internal/thumbs/` with the cache under `<DATA_DIR>/thumbs`.
-- Background maintenance: `Server.StartBackground` (stale uploads with a shorter cutoff for drop sessions, expired sessions, audit prune, trash sweep, job prune, thumbnail cache prune).
+- Background maintenance: `Server.StartBackground` (stale uploads with a shorter cutoff for drop sessions, expired sessions, audit prune, cleanup of jobs a restart cut short (`recovery.go`, table `job_cleanup`), resume of half-done trash deletions (`recoverPendingTrash`, `trash.pending`), broken-link sweep (`broken_shares.go`), trash sweep, job and notification prune, thumbnail cache prune). The name-index scan runs on its own timer, re-armed when the admin changes the interval.
 - UI actions and keyboard: `web/src/pages/Browser.tsx`; imperative dialogs: `web/src/components/dialogs.tsx`; editor: `web/src/components/Editor.tsx` (lives **outside** `Preview`, which captures Escape and arrows on `window`).
