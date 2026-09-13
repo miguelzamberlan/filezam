@@ -167,21 +167,21 @@ interface Toast {
 }
 interface ToastState {
   toasts: Toast[]
-  push: (text: string, kind?: Toast['kind']) => void
+  push: (text: string, kind?: Toast['kind'], ms?: number) => void
   remove: (id: number) => void
 }
 let toastId = 1
 export const useToasts = create<ToastState>((set) => ({
   toasts: [],
-  push: (text, kind = 'info') => {
+  push: (text, kind = 'info', ms) => {
     const id = toastId++
     set((s) => ({ toasts: [...s.toasts, { id, text, kind }] }))
-    setTimeout(() => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })), kind === 'error' ? 7000 : 3500)
+    setTimeout(() => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })), ms ?? (kind === 'error' ? 7000 : 3500))
   },
   remove: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 }))
 
-export const toast = (text: string, kind?: Toast['kind']) => useToasts.getState().push(text, kind)
+export const toast = (text: string, kind?: Toast['kind'], ms?: number) => useToasts.getState().push(text, kind, ms)
 
 export function ToastHost() {
   const { toasts, remove } = useToasts()
@@ -192,7 +192,7 @@ export function ToastHost() {
           key={t.id}
           onClick={() => remove(t.id)}
           className={
-            'pointer-events-auto rounded-md px-4 py-2 text-sm shadow-lg ' +
+            'pointer-events-auto max-w-[min(32rem,calc(100vw-2rem))] rounded-md px-4 py-2 text-sm shadow-lg ' +
             (t.kind === 'error' ? 'bg-red-600 text-white' : t.kind === 'success' ? 'bg-emerald-600 text-white' : 'bg-neutral-800 text-white dark:bg-neutral-200 dark:text-neutral-900')
           }
         >

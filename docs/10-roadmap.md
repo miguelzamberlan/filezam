@@ -13,7 +13,7 @@
 - **Queda durante a exclusão para a lixeira** pode deixar uma linha sem item (restaurar responde "não encontrado" e a remove; a retenção também) ou, entre dispositivos, uma cópia parcial visível na lixeira. Nunca fica item escondido sem linha.
 - **Zip público sem teto de tamanho**: no máximo 4 zips públicos ao mesmo tempo no servidor e 2 downloads por IP; um link de pasta grande ainda permite zips enormes, um por vaga (memória constante, custo de CPU/disco).
 - **Retomada de upload só soltando o mesmo arquivo de novo** (até 24 h): o navegador não guarda o `File`, e a retomada automática foi descartada (ver Decisões).
-- **Listagem paginada só na ordem do servidor**: enquanto faltam páginas, o filtro da pasta e `Ctrl+A` só alcançam o que já foi carregado.
+- **Listagem paginada só na ordem do servidor**: enquanto faltam páginas, o filtro da pasta e `Ctrl+A` só alcançam o que já foi carregado. `Ctrl+A` nessa situação avisa quantos itens ficaram de fora e como chegar a eles: rolar até o fim para excluir, mover ou copiar tudo, ou tirar a seleção e usar **Baixar**, que zipa a pasta inteira no servidor.
 - **Índice de nomes não vê mudanças externas** (Samba, SSH) até a próxima varredura completa ou um "Reconstruir índice".
 - **Miniaturas só de imagem, e só de alguns formatos**: HEIC, AVIF, RAW, PDF e vídeo exigiriam bibliotecas em C, incompatíveis com o binário estático e a imagem distroless. Decidido não cobrir esses formatos: eles caem no ícone por tipo, que é um resultado aceitável.
 - **`.tar.gz` não é extraído**: só `.zip`, por decisão. Ver "Próximos passos".

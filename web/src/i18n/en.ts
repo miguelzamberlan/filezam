@@ -59,6 +59,7 @@ export const en: Strings = {
   pdfNoInline: 'This browser cannot show PDFs inside the page.',
   openInNewTab: 'Open in new tab',
   selectAll: 'Select all',
+  selectAllPartial: (n: number, total: number) => `Selected ${n} of ${total} items: the rest of the folder has not loaded yet. To delete, move or copy everything, scroll the list to the end and press Ctrl+A again. To download the whole folder, clear the selection (Esc) and use Download.`,
   selected: (n: number) => (n === 1 ? '1 item selected' : `${n} items selected`),
   items: (n: number) => (n === 1 ? '1 item' : `${n} items`),
   search: 'Filter this folder',

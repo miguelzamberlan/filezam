@@ -6,6 +6,7 @@ Todas as mudanças relevantes do Filezam ficam registradas aqui. O formato segue
 
 ### Alterado
 - Ao criar um **link de recebimento**, o diálogo explica que o limite conta tudo o que já entrou pelo link: apagar ou mover os arquivos recebidos não devolve espaço, e um link esgotado é substituído por um novo.
+- **Ctrl+A numa pasta muito grande** que ainda não carregou inteira avisa que só o que já apareceu foi selecionado, e explica como alcançar o resto: rolar até o fim para excluir, mover ou copiar tudo, ou usar **Baixar** sem seleção para levar a pasta inteira.
 
 ### Corrigido
 - **Atalhos de teclado depois de fechar o visualizador com o mouse**: abrir um arquivo, fechar pelo X (ou clicando fora) e apertar `Delete` não fazia nada, embora o arquivo continuasse selecionado — era preciso clicar nele de novo. O mesmo acontecia depois de fechar um diálogo, como o de renomear. Agora as teclas voltam a valer para a lista na hora.

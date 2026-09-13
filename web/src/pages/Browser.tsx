@@ -259,6 +259,14 @@ export default function Browser() {
     }
   }
 
+  // Com páginas ainda por carregar, Ctrl+A só alcança o que já chegou. Selecionar tudo em silêncio
+  // faria "excluir tudo" apagar só uma parte, e pedir as páginas que faltam de uma vez travaria
+  // uma pasta de centenas de milhares de itens; o aviso diz o que ficou de fora e como chegar lá.
+  const selectAll = () => {
+    ui.setSelection(new Set(entries.map((e) => e.name)))
+    if (paged && listing.data) toast(S.selectAllPartial(entries.length, listing.data.total), 'info', 10000)
+  }
+
   const download = (list = selectedEntries) => {
     if (list.length === 1 && list[0].type === 'file') return triggerDownload(Api.contentUrl(join(path, list[0].name)))
     if (list.length === 0) return triggerDownload(Api.zipUrl([path], basename(path) || undefined))
@@ -402,7 +410,7 @@ export default function Browser() {
         if (idx >= 0) select(entries[idx], { shiftKey: false, ctrlKey: true, metaKey: false })
         break
       default:
-        if (mod && ev.key.toLowerCase() === 'a') ui.setSelection(new Set(entries.map((e) => e.name)))
+        if (mod && ev.key.toLowerCase() === 'a') selectAll()
         else if (mod && ev.key.toLowerCase() === 'c') clip('copy')
         else if (mod && ev.key.toLowerCase() === 'x') clip('cut')
         else if (mod && ev.key.toLowerCase() === 'v') void paste()

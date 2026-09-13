@@ -57,6 +57,7 @@ export const ptBR = {
   pdfNoInline: 'Este navegador não mostra PDF dentro da página.',
   openInNewTab: 'Abrir em nova aba',
   selectAll: 'Selecionar tudo',
+  selectAllPartial: (n: number, total: number) => `Selecionados ${n} de ${total} itens: o resto da pasta ainda não foi carregado. Para excluir, mover ou copiar tudo, role a lista até o fim e aperte Ctrl+A de novo. Para baixar a pasta inteira, tire a seleção (Esc) e use Baixar.`,
   selected: (n: number) => (n === 1 ? '1 item selecionado' : `${n} itens selecionados`),
   items: (n: number) => (n === 1 ? '1 item' : `${n} itens`),
   search: 'Filtrar nesta pasta',
