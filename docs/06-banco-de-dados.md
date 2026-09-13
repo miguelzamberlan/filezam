@@ -4,7 +4,7 @@ SQLite em `FILEZAM_DATA_DIR/filezam.db` (mais `-wal` e `-shm`). Driver `modernc.
 
 ## Abertura (`internal/store/db.go`)
 
-- DSN: `file:<path>?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=foreign_keys(ON)&_pragma=case_sensitive_like(ON)&_txlock=immediate`. `case_sensitive_like` porque os `LIKE` de prefixo de caminho no índice (`path LIKE 'Docs/%'`) não podem casar `docs/…`: senão estreitar o escopo de um usuário para `Docs` somaria na cota dele os bytes de `docs`, e reindexar uma pasta apagaria linhas da outra. A pesquisa por nome continua sem diferenciar maiúsculas porque usa a coluna `name_lc` com o termo já em minúsculas.
+- DSN: `file:<path>?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=foreign_keys(ON)&_pragma=case_sensitive_like(ON)&_txlock=immediate`. `case_sensitive_like` porque os `LIKE` de prefixo de caminho no índice (`path LIKE 'Docs/%'`) não podem casar `docs/…`: senão estreitar o escopo de um usuário para `Docs` somaria na cota dele os bytes de `docs`, e reindexar uma pasta apagaria linhas da outra. A pesquisa por nome continua sem diferenciar maiúsculas nem acentos porque compara a coluna `name_fold` com o termo já dobrado por `vfs.Fold`.
 - Dois pools: escrita (`MaxOpenConns(1)`) e leitura (`MaxOpenConns(8)`). Métodos de repositório usam `db.w` para `INSERT/UPDATE/DELETE` e `db.r` para `SELECT`.
 - `db.Now` é injetável (testes de expiração).
 
@@ -45,8 +45,8 @@ uploads(id /*hex 16 bytes*/, user_id → users CASCADE, dir /*base-relativo*/, n
 audit_log(id, ts, user_id, username, ip, action, detail /*JSON*/)   -- índice: ts
 trash(id /*hex 16 bytes*/, user_id → users CASCADE, trash_dir /*base-relativo: <escopo>/.filezam-trash*/, name, path /*original, base-relativo*/,
       type, size, deleted_at, pending /*1 até o item chegar inteiro, 013*/)   -- índices: deleted_at, path   (004), pending parcial (013)
-file_index(path PK /*base-relativo*/, parent, name, name_lc, type, size, mtime, gen)   -- índices: name_lc, parent   (005)
-index_state(id=1, last_full_at, entries, gen)   (005)
+file_index(path PK /*base-relativo*/, parent, name, name_fold /*vfs.Fold(name); name_lc até a 016*/, type, size, mtime, gen)   -- índices: name_fold, parent   (005)
+index_state(id=1, last_full_at, entries, gen, fold /*versão da dobra das linhas, 016*/)   (005)
 jobs(id, user_id → users CASCADE, type, label, state, done, total, bytes_done, bytes_total, error, warnings, started_at, finished_at)   -- índice: (user_id, started_at)   (008)
 job_cleanup(job_id → jobs CASCADE, path /*base-relativo*/, mode /*'temps'|'tree'*/)   -- PK (job_id, path)   (012)
 notifications(id, user_id → users CASCADE, kind, group_key, data /*JSON; caminhos base-relativos*/, created_at, updated_at, read_at)
@@ -72,6 +72,7 @@ Migrações aplicadas depois de `001_init.sql`:
 | 013 | `013_trash_pending.sql` | `trash.pending` (1 enquanto o item não chegou inteiro à lixeira; a manutenção retoma as pendentes de um processo que caiu) com índice parcial |
 | 014 | `014_share_broken.sql` | `shares.broken_since`: quando a manutenção deixou de achar o item do link; limpo se ele voltar, e o link é revogado depois de 24 h |
 | 015 | `015_notifications.sql` | Tabela `notifications`: avisos por usuário (`kind` + `data` JSON, texto montado na interface); `group_key` junta eventos em série numa notificação só enquanto ela não é lida. Apagadas 30 dias depois da última atualização |
+| 016 | `016_index_fold.sql` | `file_index.name_lc` vira `name_fold` (nome dobrado por `vfs.Fold`: sem maiúsculas, acentos e cedilha) e `index_state.fold` guarda a versão da dobra. Depois das migrações, o `Open` compara `fold` com `vfs.FoldVersion` e, se estiver atrás, redobra as linhas em lotes de 2 000 por `rowid` — a pesquisa continua saindo do índice sem esperar a próxima varredura. Mudar o resultado de `Fold` para algum nome exige subir `FoldVersion` |
 
 Todos os timestamps são segundos Unix, exceto `uploads.mtime` (ms, vindo do cliente).
 

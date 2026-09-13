@@ -18,7 +18,7 @@ Um único processo: servidor HTTP, workers de jobs e tarefas de manutenção. Se
 | `cmd/filezam` | Subcomandos `serve`, `healthcheck`, `reset-admin`, `version`; sinal de parada, shutdown gracioso | config, server, store, vfs |
 | `internal/config` | Parse e validação das variáveis de ambiente (`Config`) | — |
 | `internal/server` | Roteamento, middlewares, handlers, sessões, SPA, auditoria | todos abaixo |
-| `internal/vfs` | **Núcleo de segurança**: normalização de caminhos, `Root`, listagem, pesquisa (`Find`), cópia, movimento, remoção, zip, arquivos `.part` | `os.Root`, `x/sys/unix` |
+| `internal/vfs` | **Núcleo de segurança**: normalização de caminhos, `Root`, listagem, pesquisa (`Find`, comparação por `Fold`), cópia, movimento, remoção, zip, arquivos `.part` | `os.Root`, `x/sys/unix`, `x/text/unicode/norm` |
 | `internal/uploads` | Sessões chunked: bitset, escrita por offset, finalização, limpeza | store, vfs |
 | `internal/thumbs` | Geração e cache em disco de miniaturas (`DataDir/thumbs`) | vfs |
 | `internal/index` | Índice de nomes em SQLite: varredura completa periódica (`WalkEntries`) e ajustes pontuais chamados pelos handlers | store, vfs |

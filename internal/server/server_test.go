@@ -697,6 +697,13 @@ func TestSearch(t *testing.T) {
 	if hit["dir"] != "Relatórios 2026" || hit["entry"].(map[string]any)["name"] != "Balanço.XLSX" {
 		t.Fatalf("hit: %v", hit)
 	}
+	// sem diferenciar maiúsculas, acentos e cedilha, no nome do arquivo e no da pasta
+	for _, q := range []string{"BALANCO", "balanço", "relatorios"} {
+		if o = bob.expect("GET", "/api/files/search?path=&q="+url.QueryEscape(q), nil, 200); len(o["results"].([]any)) != 1 {
+			t.Fatalf("accent-insensitive search %q: %v", q, o)
+		}
+	}
+	bob.expect("GET", "/api/files/search?path=&q=%CC%81", nil, 400)     // acento solto dobraria para vazio
 	o = bob.expect("GET", "/api/files/search?path=&q=secret", nil, 200) // teamB/secret.txt fica fora do escopo
 	if len(o["results"].([]any)) != 0 {
 		t.Fatalf("scope leak: %v", o)
@@ -1059,6 +1066,13 @@ func TestSearchIndex(t *testing.T) {
 	}
 	if o = admin.expect("GET", "/api/files/search?path=teamB&q=secret", nil, 200); len(o["results"].([]any)) != 1 || o["results"].([]any)[0].(map[string]any)["dir"] != "teamB" {
 		t.Fatalf("admin subfolder search: %v", o)
+	}
+	os.WriteFile(filepath.Join(root, "teamA", "pub", "Previsão Orçamentária.ods"), []byte("x"), 0o644)
+	if ok, err := s.indexer.FullScan(context.Background()); !ok || err != nil {
+		t.Fatal(ok, err)
+	}
+	if o = bob.expect("GET", "/api/files/search?path=&q=PREVISAO%20ORCAMENTARIA", nil, 200); o["source"] != "index" || len(o["results"].([]any)) != 1 {
+		t.Fatalf("accent-insensitive index search: %v", o)
 	}
 	// fantasma: apagado fora do app some da resposta sem nova varredura
 	os.Remove(filepath.Join(root, "teamA", "pub", "relx2026a.xlsx"))

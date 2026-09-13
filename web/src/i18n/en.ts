@@ -88,7 +88,7 @@ export const en: Strings = {
   searchHere: 'Search from this folder',
   searchResults: (n: number) => (n === 0 ? 'No results' : n === 1 ? '1 result' : `${n} results`),
   searchPartial: 'Partial results: the search stopped at the time or item limit. Search from a more specific folder.',
-  searchHint: 'Looks for names in every subfolder of the chosen folder, within what you can access. File contents are not searched.',
+  searchHint: 'Looks for names in every subfolder of the chosen folder, within what you can access, ignoring case and accents. File contents are not searched.',
   searchFolder: 'Folder',
   openFolder: 'Open folder',
   zoom: 'List zoom',

@@ -4,6 +4,9 @@ Todas as mudanças relevantes do Filezam ficam registradas aqui. O formato segue
 
 ## [Não lançado]
 
+### Alterado
+- **Pesquisa sem acentos nem maiúsculas**: "acao" acha "Relatório de Ação.pdf", "BALANÇO" acha "balanco.xlsx", e nomes gravados pelo macOS casam com os do Windows. Vale para a pesquisa, para o filtro da pasta e para a digitação que salta para um item. O índice existente é convertido sozinho na atualização, sem esperar a próxima varredura.
+
 ## [1.2.0] - 2026-09-13
 
 ### Adicionado

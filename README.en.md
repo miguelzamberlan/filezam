@@ -54,7 +54,7 @@ It is a personal, free and open-source project. It fits home servers, small offi
 
 - **Users and scopes**: username and password login, admin/user roles, each account reaching the whole root or one subfolder that it sees as if it were the root.
 - **Full management**: browse, create folders, rename, copy, cut/paste (move), delete, download file or ZIP, favorites, properties (computed size, item count, active links) and free disk space.
-- **Search** by name across every subfolder the user can reach, answered by a SQLite index (periodic rescan) and verified on disk.
+- **Search** by name across every subfolder the user can reach, ignoring case and accents, answered by a SQLite index (periodic rescan) and verified on disk.
 - **Trash** with configurable retention and restore to the original place. `Shift+Del` deletes permanently.
 - **Previews** for images, video, audio, PDF, text and rendered Markdown, without leaving the page.
 - **Serious uploads**: multi-GB files in parallel resumable chunks, whole folders by drag and drop, thousands of small files batched, all with a progress panel, pause and retry.

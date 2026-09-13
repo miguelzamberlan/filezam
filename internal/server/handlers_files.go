@@ -1054,7 +1054,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
-	if q == "" || len(q) > 255 {
+	if vfs.Fold(q) == "" || len(q) > 255 { // só acentos soltos dobram para vazio e casariam tudo
 		return errorf(http.StatusBadRequest, "bad_query", "q is required (1-255 bytes)")
 	}
 	limit := searchMaxResults

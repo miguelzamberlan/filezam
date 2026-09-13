@@ -86,7 +86,7 @@ export const ptBR = {
   searchHere: 'Pesquisar a partir desta pasta',
   searchResults: (n: number) => (n === 0 ? 'Nenhum resultado' : n === 1 ? '1 resultado' : `${n} resultados`),
   searchPartial: 'Resultados parciais: a pesquisa parou no limite de tempo ou de itens. Pesquise a partir de uma pasta mais específica.',
-  searchHint: 'Procura pelo nome em todas as subpastas da pasta escolhida, dentro do que você tem acesso. Não procura no conteúdo dos arquivos.',
+  searchHint: 'Procura pelo nome em todas as subpastas da pasta escolhida, dentro do que você tem acesso, sem diferenciar maiúsculas nem acentos. Não procura no conteúdo dos arquivos.',
   searchFolder: 'Pasta',
   openFolder: 'Abrir pasta',
   zoom: 'Zoom da listagem',

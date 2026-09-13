@@ -52,7 +52,7 @@ Três prioridades guiam cada decisão, nesta ordem:
 
 - **Usuários e escopos**: login com usuário e senha, perfis administrador/usuário, cada conta com acesso à raiz inteira ou a uma subpasta que ela enxerga como se fosse a raiz.
 - **Gerenciamento completo**: navegar, criar pastas, renomear, copiar, recortar/colar (mover), excluir, baixar arquivo ou ZIP, favoritos, propriedades (tamanho calculado, quantidade de itens, links ativos) e espaço livre em disco.
-- **Pesquisa** por nome em todas as subpastas às quais o usuário tem acesso, respondida por um índice em SQLite (varredura periódica) e conferida no disco.
+- **Pesquisa** por nome em todas as subpastas às quais o usuário tem acesso, sem diferenciar maiúsculas, acentos nem cedilha, respondida por um índice em SQLite (varredura periódica) e conferida no disco.
 - **Lixeira** com retenção configurável e restauração ao lugar original. `Shift+Del` apaga de vez.
 - **Visualização** de imagens, vídeo, áudio, PDF, texto e Markdown formatado sem sair da página.
 - **Uploads sérios**: arquivos de vários GB em blocos paralelos com retomada, pastas inteiras por arrastar e soltar, milhares de arquivos pequenos em lote, tudo com painel de progresso, pausa e repetição de falhas.

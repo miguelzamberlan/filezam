@@ -3,9 +3,13 @@ package store
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/miguelzamberlan/filezam/internal/vfs"
 )
 
 // Simula um banco já existente (só a migração 001) e confere que 002 sobe sem perder dados.
@@ -89,6 +93,58 @@ func TestSlugUniqueIndexIsPartial(t *testing.T) {
 	}
 	if err := mk("h5", "vendas"); err != ErrConflict {
 		t.Fatalf("revoked slug reclaimed: %v", err)
+	}
+}
+
+// Um banco de antes da 016 guarda o nome só em minúsculas: ao abrir, as linhas são redobradas
+// e a pesquisa sem acento já acha o nome acentuado, sem esperar a próxima varredura.
+func TestUpgradeRefoldsIndex(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "r.db")
+	raw, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := raw.Exec(`CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL)`); err != nil {
+		t.Fatal(err)
+	}
+	for v := 1; v <= 15; v++ {
+		names, _ := migrationFS.ReadDir("migrations")
+		for _, n := range names {
+			if strings.HasPrefix(n.Name(), fmt.Sprintf("%03d_", v)) {
+				body, _ := migrationFS.ReadFile("migrations/" + n.Name())
+				if _, err := raw.Exec(string(body)); err != nil {
+					t.Fatalf("%s: %v", n.Name(), err)
+				}
+				raw.Exec(`INSERT INTO schema_migrations VALUES(?, 0)`, v)
+			}
+		}
+	}
+	// 2 500 linhas: passa de um lote da redobra
+	for i := range 2500 {
+		name := fmt.Sprintf("arquivo %d.txt", i)
+		if i == 2400 {
+			name = "Relatório de AÇÃO.pdf"
+		}
+		if _, err := raw.Exec(`INSERT INTO file_index(path, parent, name, name_lc, type, size, mtime, gen) VALUES(?, '', ?, ?, 'file', 1, 0, 1)`, name, name, strings.ToLower(name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	raw.Close()
+
+	db, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	ctx := context.Background()
+	for _, q := range []string{"relatorio de acao", "AÇÃO", "ação"} {
+		if got, err := db.SearchIndex(ctx, "", q, 10); err != nil || len(got) != 1 || got[0].Name != "Relatório de AÇÃO.pdf" {
+			t.Fatalf("search %q after upgrade: %+v %v", q, got, err)
+		}
+	}
+	var fold int64
+	if err := db.r.QueryRowContext(ctx, `SELECT fold FROM index_state WHERE id=1`).Scan(&fold); err != nil || fold != vfs.FoldVersion {
+		t.Fatalf("fold version: %d %v", fold, err)
 	}
 }
 

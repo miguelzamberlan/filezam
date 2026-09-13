@@ -56,6 +56,10 @@ func Open(path string) (*DB, error) {
 		db.Close()
 		return nil, err
 	}
+	if err := db.refoldIndex(context.Background()); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("refold name index: %w", err)
+	}
 	return db, nil
 }
 

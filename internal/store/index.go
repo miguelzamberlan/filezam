@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"strings"
+
+	"github.com/miguelzamberlan/filezam/internal/vfs"
 )
 
 // IndexRow is one entry of the file name index (path is base-relative).
@@ -45,14 +47,14 @@ func (db *DB) UpsertIndexBatch(ctx context.Context, rows []IndexRow, gen int64) 
 		return err
 	}
 	defer tx.Rollback()
-	st, err := tx.PrepareContext(ctx, `INSERT INTO file_index(path, parent, name, name_lc, type, size, mtime, gen) VALUES(?,?,?,?,?,?,?,?)
-		ON CONFLICT(path) DO UPDATE SET parent=excluded.parent, name=excluded.name, name_lc=excluded.name_lc, type=excluded.type, size=excluded.size, mtime=excluded.mtime, gen=excluded.gen`)
+	st, err := tx.PrepareContext(ctx, `INSERT INTO file_index(path, parent, name, name_fold, type, size, mtime, gen) VALUES(?,?,?,?,?,?,?,?)
+		ON CONFLICT(path) DO UPDATE SET parent=excluded.parent, name=excluded.name, name_fold=excluded.name_fold, type=excluded.type, size=excluded.size, mtime=excluded.mtime, gen=excluded.gen`)
 	if err != nil {
 		return err
 	}
 	defer st.Close()
 	for _, r := range rows {
-		if _, err := st.ExecContext(ctx, r.Path, parentOf(r.Path), r.Name, strings.ToLower(r.Name), r.Type, r.Size, r.Mtime, gen); err != nil {
+		if _, err := st.ExecContext(ctx, r.Path, parentOf(r.Path), r.Name, vfs.Fold(r.Name), r.Type, r.Size, r.Mtime, gen); err != nil {
 			return err
 		}
 	}
@@ -82,15 +84,15 @@ func (db *DB) DeleteIndexChildren(ctx context.Context, dir string) error {
 }
 
 // SearchIndex returns up to limit rows under prefix ("" = everything) whose name contains q
-// (case-insensitive substring; % and _ in q are literal).
+// (substring compared through vfs.Fold: no case, no accents; % and _ in q are literal).
 func (db *DB) SearchIndex(ctx context.Context, prefix, q string, limit int) ([]IndexRow, error) {
-	args := []any{"%" + likeEscape(strings.ToLower(q)) + "%"}
-	sqlq := `SELECT path, name, type, size, mtime FROM file_index WHERE name_lc LIKE ? ESCAPE '\'`
+	args := []any{"%" + likeEscape(vfs.Fold(q)) + "%"}
+	sqlq := `SELECT path, name, type, size, mtime FROM file_index WHERE name_fold LIKE ? ESCAPE '\'`
 	if prefix != "" {
 		sqlq += ` AND path LIKE ? ESCAPE '\'`
 		args = append(args, likeEscape(prefix)+"/%")
 	}
-	sqlq += ` ORDER BY name_lc, path LIMIT ?`
+	sqlq += ` ORDER BY name_fold, path LIMIT ?`
 	args = append(args, limit)
 	rows, err := db.r.QueryContext(ctx, sqlq, args...)
 	if err != nil {
@@ -106,6 +108,65 @@ func (db *DB) SearchIndex(ctx context.Context, prefix, q string, limit int) ([]I
 		out = append(out, r)
 	}
 	return out, rows.Err()
+}
+
+const refoldBatch = 2000
+
+// refoldIndex rewrites name_fold of every row when the stored fold version is behind
+// vfs.FoldVersion, so an upgrade keeps answering from the index instead of waiting for the
+// next full scan (which would leave accented searches missing until then). Runs once per
+// version, in batches by rowid so a big index never sits in memory or in one transaction.
+func (db *DB) refoldIndex(ctx context.Context) error {
+	var fold int64
+	if err := db.w.QueryRowContext(ctx, `SELECT fold FROM index_state WHERE id=1`).Scan(&fold); err != nil {
+		return err
+	}
+	if fold >= vfs.FoldVersion {
+		return nil
+	}
+	type row struct {
+		id   int64
+		name string
+	}
+	var last int64
+	for {
+		rs, err := db.w.QueryContext(ctx, `SELECT rowid, name FROM file_index WHERE rowid>? ORDER BY rowid LIMIT ?`, last, refoldBatch)
+		if err != nil {
+			return err
+		}
+		var batch []row
+		for rs.Next() {
+			var r row
+			if err := rs.Scan(&r.id, &r.name); err != nil {
+				rs.Close()
+				return err
+			}
+			batch = append(batch, r)
+		}
+		rs.Close()
+		if err := rs.Err(); err != nil {
+			return err
+		}
+		if len(batch) == 0 {
+			break
+		}
+		tx, err := db.w.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		for _, r := range batch {
+			if _, err := tx.ExecContext(ctx, `UPDATE file_index SET name_fold=? WHERE rowid=?`, vfs.Fold(r.name), r.id); err != nil {
+				tx.Rollback()
+				return err
+			}
+		}
+		if err := tx.Commit(); err != nil {
+			return err
+		}
+		last = batch[len(batch)-1].id
+	}
+	_, err := db.w.ExecContext(ctx, `UPDATE index_state SET fold=? WHERE id=1`, vfs.FoldVersion)
+	return err
 }
 
 // IndexSumSize sums file sizes under prefix ("" = everything) from the index.

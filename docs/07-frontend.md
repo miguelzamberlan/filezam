@@ -14,7 +14,8 @@ web/src/
   api/client.ts       fetch tipado (X-Filezam, 401 → /login), ApiError, objeto Api
   api/types.ts        Tipos espelhando docs/04
   lib/                paths (join/dirname/encode/uniqueName), naturalSort, format,
-                      clipboard (copyText com fallback), share (shareLink)
+                      clipboard (copyText com fallback), share (shareLink), fold (comparação sem
+                      acentos)
   store/ui.ts         zustand: seleção, âncora, foco, clipboard, ordenação, visão, filtro
   store/jobs.ts       zustand: jobs acompanhados pelos toasts
   upload/manager.ts   UploadManager (sem React) — fila, modos, slots, retries, conflitos, retomada
@@ -64,7 +65,7 @@ Concentra as ações. Convenções:
 - Colar: se algum nome já existe no destino, pergunta uma vez (`dialogs.conflict`) e envia a política à API; `cut` limpa o clipboard após o job.
 - Soltar arquivos: no fundo → pasta atual; sobre uma linha de pasta → dentro dela (destaque azul). Tipos sem `Files` são ignorados.
 - Arrastar e soltar interno: linhas são `draggable`; o `dataTransfer` leva `application/x-filezam` (JSON com os nomes; a seleção inteira se o item arrastado estiver nela). Pastas da listagem e os ancestrais da trilha aceitam o drop e chamam `moveInto(dest, names)`, que lista o destino, pergunta uma vez em caso de conflito (`dialogs.conflict`) e dispara `Api.move`. Soltar sobre um item da própria seleção ou dentro dele mesmo é recusado. No toque não há arraste: use recortar/colar.
-- Listagem paginada: o servidor filtra ocultos e ordena; a página seguinte é pedida quando a rolagem virtual chega a 20 linhas do fim (`onEndReached`). Enquanto faltam páginas a ordem do servidor é mantida (sem `sortEntries` no cliente) e o rodapé mostra "N de total carregados"; o filtro da pasta só peneira o que já foi carregado.
+- Listagem paginada: o servidor filtra ocultos e ordena; a página seguinte é pedida quando a rolagem virtual chega a 20 linhas do fim (`onEndReached`). Enquanto faltam páginas a ordem do servidor é mantida (sem `sortEntries` no cliente) e o rodapé mostra "N de total carregados"; o filtro da pasta só peneira o que já foi carregado. O filtro e a digitação que salta para o prefixo comparam por `lib/fold.ts` (espelho de `vfs.Fold`: sem maiúsculas, acentos e cedilha), como a pesquisa do servidor.
 - Excluir: com `config.trashRetention > 0` o item vai para a lixeira (confirmação leve, respeitando `confirmDelete`); `Shift+Del` ou "Excluir de vez" no menu apagam permanentemente (confirmação sempre, com a caixa `requireCheck` de `dialogs.confirm`, que começa desmarcada e libera o botão; o mesmo vale para excluir de vez/esvaziar na Lixeira). Compartilhar aceita pasta ou arquivo (`ShareDialog` recebe `kind`) e senha opcional.
 - Erros da API viram toast com `errorMessage(code)`.
 

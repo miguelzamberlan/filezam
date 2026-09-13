@@ -20,10 +20,10 @@ type SearchLimits struct {
 }
 
 // Find walks p (lstat only, symlinks never followed) and returns the entries
-// whose name contains q, case-insensitively. Reserved names are skipped. It
+// whose name contains q, compared through Fold (no case, no accents). Reserved names are skipped. It
 // stops early at the limits or when ctx is done, reporting partial=true.
 func (r *Root) Find(ctx context.Context, p, q string, lim SearchLimits) (hits []Found, partial bool, err error) {
-	q = strings.ToLower(strings.TrimSpace(q))
+	q = Fold(strings.TrimSpace(q))
 	if q == "" {
 		return nil, false, errors.New("empty query")
 	}
@@ -41,7 +41,7 @@ func (r *Root) Find(ctx context.Context, p, q string, lim SearchLimits) (hits []
 		if strings.HasPrefix(name, ReservedPrefix) {
 			return nil
 		}
-		if !strings.Contains(strings.ToLower(name), q) {
+		if !strings.Contains(Fold(name), q) {
 			return nil
 		}
 		hits = append(hits, Found{Dir: Dir(path), Entry: entryFromInfo(r, Dir(path), fi)})

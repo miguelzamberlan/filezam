@@ -64,24 +64,34 @@ func eq(a []string, b ...string) bool {
 }
 
 func TestFullScanAndSearch(t *testing.T) {
-	ix, _, _ := newIndexer(t)
+	ix, _, root := newIndexer(t)
 	if ix.Ready() {
 		t.Fatal("ready before the first scan")
 	}
+	os.WriteFile(filepath.Join(root, "fotos", "Açaí na praça.jpg"), []byte("x"), 0o644)
 	ctx := context.Background()
 	if ran, err := ix.FullScan(ctx); !ran || err != nil {
 		t.Fatal(ran, err)
 	}
 	st := ix.Status(ctx)
-	// docs, docs/sub, fotos + 3 arquivos; lixeira e partes de upload nunca entram
-	if !st.Ready || st.Entries != 6 || st.LastFullAt == nil {
+	// docs, docs/sub, fotos + 4 arquivos; lixeira e partes de upload nunca entram
+	if !st.Ready || st.Entries != 7 || st.LastFullAt == nil {
 		t.Fatalf("status: %+v", st)
 	}
 	// nome: substring sem diferenciar maiúsculas; prefixo do caminho: exato (LIKE sensível)
 	if got := search(t, ix, "", "RELATORIO"); !eq(got, "docs/relatorio.pdf", "docs/sub/Relatorio-final.txt") {
 		t.Fatalf("search: %v", got)
 	}
-	if got := search(t, ix, "fotos", "a"); !eq(got, "fotos/praia.jpg") {
+	// sem acentos nem cedilha, dos dois lados
+	for _, q := range []string{"acai na praca", "AÇAÍ", "praça"} {
+		if got := search(t, ix, "", q); !eq(got, "fotos/Açaí na praça.jpg") {
+			t.Fatalf("accent-insensitive search %q: %v", q, got)
+		}
+	}
+	if got := search(t, ix, "", "praia"); !eq(got, "fotos/praia.jpg") {
+		t.Fatalf("search: %v", got)
+	}
+	if got := search(t, ix, "fotos", "i"); !eq(got, "fotos/Açaí na praça.jpg", "fotos/praia.jpg") {
 		t.Fatalf("prefix search: %v", got)
 	}
 	if got := search(t, ix, "Fotos", "a"); len(got) != 0 {

@@ -19,7 +19,7 @@ Funcionais:
 - Notificações por usuário (sino no menu), genéricas: hoje avisam de arquivos recebidos por link e de links revogados porque o item sumiu.
 - O administrador liga, desliga e limita esses dois recursos numa tela de configurações globais.
 - Lixeira com retenção configurável pelo administrador e restauração ao local original.
-- Pesquisa por nome em todas as subpastas do escopo, servida por um índice em SQLite atualizado por varreduras periódicas e pelas próprias operações do app.
+- Pesquisa por nome em todas as subpastas do escopo, sem diferenciar maiúsculas, acentos nem cedilha, servida por um índice em SQLite atualizado por varreduras periódicas e pelas próprias operações do app.
 - Interface em pt-BR e inglês.
 - Upload de arquivos grandes, pastas inteiras e milhares de arquivos pequenos, sem travar a interface, com retomada.
 

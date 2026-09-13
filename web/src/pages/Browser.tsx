@@ -6,6 +6,7 @@ import type { Conflict, Entry } from '../api/types'
 import { useAuth, useFavorites, useInvalidateDirs, useListing } from '../hooks'
 import { basename, decodePath, dirname, encodePath, isExtractable, join } from '../lib/paths'
 import { sortEntries } from '../lib/naturalSort'
+import { fold } from '../lib/fold'
 import { useUI, ZOOM_STEPS } from '../store/ui'
 import { useJobs } from '../store/jobs'
 import { S, errorMessage } from '../strings'
@@ -72,8 +73,8 @@ export default function Browser() {
   const paged = !!listing.data && listing.data.entries.length < listing.data.total
   const entries = useMemo(() => {
     const all = listing.data?.entries ?? []
-    const f = ui.filter.trim().toLowerCase()
-    const filtered = f ? all.filter((e) => e.name.toLowerCase().includes(f)) : all
+    const f = fold(ui.filter.trim())
+    const filtered = f ? all.filter((e) => fold(e.name).includes(f)) : all
     return paged ? filtered : sortEntries(filtered, ui.sort)
   }, [listing.data, ui.filter, ui.sort, paged])
   const hiddenCount = listing.data?.hidden ?? 0
@@ -453,9 +454,9 @@ export default function Browser() {
           const ta = typeahead.current
           ta.buf = now - ta.t > 700 ? ev.key : ta.buf + ev.key
           ta.t = now
-          const q = ta.buf.toLowerCase()
+          const q = fold(ta.buf)
           const start = ta.buf.length === 1 ? idx + 1 : 0
-          const found = [...entries.slice(start), ...entries.slice(0, start)].find((e) => e.name.toLowerCase().startsWith(q))
+          const found = [...entries.slice(start), ...entries.slice(0, start)].find((e) => fold(e.name).startsWith(q))
           if (found) ui.setSelection(new Set([found.name]), found.name, found.name)
           break
         } else return
