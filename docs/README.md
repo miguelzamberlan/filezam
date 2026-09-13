@@ -11,7 +11,7 @@ Especificações do projeto, na ordem sugerida de leitura. Cada documento é a f
 | 05 | [Protocolo de upload](05-uploads.md) | Modos lote/único/chunked, sessões, retomada, conflitos, limpeza |
 | 06 | [Banco de dados](06-banco-de-dados.md) | Esquema SQLite, migrações, convenções de caminho |
 | 07 | [Frontend](07-frontend.md) | Estrutura React, estado, gerenciador de uploads, componentes, teclado, i18n |
-| 08 | [Operação](08-operacao.md) | Deploy com Docker, variáveis, proxy reverso, backup, atualização, diagnóstico |
+| 08 | [Operação](08-operacao.md) | Deploy com Docker, pastas e montagens, variáveis, proxy reverso, backup, atualização, diagnóstico |
 | 09 | [Testes](09-testes.md) | Suítes automatizadas, como rodar, checklist manual |
 | 10 | [Roadmap e limitações](10-roadmap.md) | Limitações conhecidas e melhorias planejadas |
 

@@ -6,12 +6,37 @@ Este documento cobre as formas de rodar o Filezam (máquina local, servidor com 
 
 | Caminho no container | O que é | Regras |
 |---|---|---|
-| `/data` (`FILEZAM_ROOT`) | A pasta que os usuários veem. Para expor várias pastas do host, monte-as como subpastas (`/mnt/midia:/data/midia`). | Nunca pode ser `/`. Tudo que está nela é alcançável por um admin. |
+| `/data` (`FILEZAM_ROOT`) | A pasta que os usuários veem. Para expor várias pastas do host, monte-as como subpastas ([abaixo](#expondo-várias-pastas-do-host)). | Nunca pode ser `/`. Tudo que está nela é alcançável por um admin. |
 | `/config` (`FILEZAM_DATA_DIR`) | Banco SQLite (usuários, sessões, links, lixeira, índice, auditoria) e `secret.key` (chave do 2FA). | **Fora** de `/data`; o app recusa iniciar se estiver dentro. Nunca é servida. Backup da pasta inteira. |
 
 O processo roda **sem root** e precisa de permissão de escrita nas duas pastas. Na imagem, o usuário padrão é o `nonroot` do distroless (uid/gid `65532`) e as duas pastas já existem na imagem com esse dono, então volumes nomeados criados pelo Docker nascem graváveis. Com *bind mounts* de pastas do host, o dono é o da pasta no host: por isso o `docker-compose.yml` do repositório roda o container como `PUID:PGID` (o seu usuário) e traz um serviço `init` que ajusta o dono de `/config` e dos arquivos do Filezam dentro dela (`filezam.db*`, `secret.key`; nunca recursivo, e ele se recusa a rodar se `/config` tiver subpastas, sinal de `FILEZAM_HOST_CONFIG` errado) e de `/data`, só se estiver vazia. Se a pasta não for gravável, o app encerra na inicialização com a mensagem `directory /config is not writable by uid N` e o `chown` sugerido.
 
 Discos NTFS/exFAT montados com `uid=`/`gid=` funcionam: basta que o `uid` do mount seja o mesmo `PUID`. Nunca use `PUID=0`.
+
+## Expondo várias pastas do host
+
+O Filezam expõe **uma raiz só**. Para alcançar pastas espalhadas pelo host (outro disco, um compartilhamento Samba, uma pasta de mídia), monte cada uma como **subpasta de `/data`** no `docker-compose.yml`:
+
+```yaml
+    volumes:
+      - ${FILEZAM_HOST_ROOT:-./data}:/data
+      - /mnt/midia:/data/midia                 # aparece como a pasta "midia" na raiz
+      - /mnt/backup/projetos:/data/projetos
+      - ${FILEZAM_HOST_CONFIG:-./config}:/config
+```
+
+Os usuários veem `midia/` e `projetos/` como pastas normais dentro da raiz. Para parametrizar, crie variáveis próprias no `.env` (`FILEZAM_HOST_MIDIA=/mnt/midia`) e use `${FILEZAM_HOST_MIDIA}:/data/midia`: o `.env` sozinho não resolve, quem decide a montagem é o compose. Não existe variável que aceite uma lista de pastas.
+
+O que muda com mais de uma montagem:
+
+- **As permissões são por sua conta.** O serviço `init` só acerta o dono de `/config` e de `/data` (esta apenas se estiver vazia); as pastas extras já precisam pertencer a `PUID:PGID` no host, ou estar montadas com `uid=`/`gid=` iguais no caso de NTFS/exFAT.
+- **Cada montagem costuma ser um sistema de arquivos diferente.** Mover, ou mandar para a lixeira, atravessando montagens não é um `rename`: o kernel devolve `EXDEV`, o Filezam detecta e cai em copiar + apagar. Funciona, mas é lento com arquivo grande e não é atômico. Como a lixeira fica em `<escopo>/.filezam-trash`, na raiz do escopo, excluir algo de uma submontagem já copia os bytes entre discos — considere `FILEZAM_TRASH_RETENTION=0` se isso incomodar.
+- **A regra de caixa vale para cada pasta montada**: todas precisam estar num sistema de arquivos que diferencie maiúsculas (próxima seção), não só a raiz.
+- **O espaço livre** nunca soma as montagens. Na interface é o do sistema de arquivos que contém a raiz do escopo de quem está olhando (um usuário com escopo em `midia/` vê o disco de `/mnt/midia`; um admin na raiz vê o disco de `/data`); em `filezam_disk_free_bytes` é sempre o de `FILEZAM_ROOT`.
+- **Symlink não substitui a montagem.** Todo acesso passa pelo `os.Root`, que recusa link apontando para fora da raiz; tem que ser bind mount.
+- **Backup**: o que está numa pasta extra não entra num backup de `FILEZAM_HOST_ROOT`. Trate cada montagem separadamente.
+
+Se a intenção é cada usuário ver uma pasta diferente, isso não é montagem: é o **escopo** da conta, definido em Administração → Usuários e apontando para a subpasta.
 
 ## Sistema de arquivos da pasta de dados
 

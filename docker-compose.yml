@@ -50,8 +50,10 @@ services:
       # FILEZAM_METRICS_TOKEN: ""            # enables GET /metrics (Prometheus, Bearer token)
       # FILEZAM_SECRET_KEY: ""               # 64 hex; empty = /config/secret.key (back it up with the DB)
     volumes:
-      # Root folder exposed by the file manager. Mount more host folders as
-      # subfolders of /data to expose several locations (e.g. /mnt/media:/data/media).
+      # Root folder exposed by the file manager. Mount more host folders as subfolders
+      # of /data to expose several locations (e.g. /mnt/media:/data/media); they must
+      # already be writable by PUID:PGID. See docs/08-operacao.md, "Expondo várias
+      # pastas do host".
       - ${FILEZAM_HOST_ROOT:-./data}:/data
       # Database, name index and secret.key (2FA key); never served to users. Back up the whole folder.
       - ${FILEZAM_HOST_CONFIG:-./config}:/config

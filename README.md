@@ -174,10 +174,24 @@ Se a pasta de dados pertence a outro usuário (compartilhada com Samba, por exem
 
 | Volume | Conteúdo |
 |---|---|
-| `${FILEZAM_HOST_ROOT}` → `/data` | Pasta raiz exibida pelo gestor. Para expor várias pastas do host, monte-as como subpastas: `- /mnt/midia:/data/midia`. |
+| `${FILEZAM_HOST_ROOT}` → `/data` | Pasta raiz exibida pelo gestor. Para expor várias pastas do host, monte-as como subpastas (logo abaixo). |
 | `${FILEZAM_HOST_CONFIG}` → `/config` | Banco SQLite (usuários, sessões, links, lixeira, índice, auditoria) e `secret.key` (2FA). Nunca é servido e não pode ficar dentro de `/data`. Faça backup da pasta inteira. |
 
 O container roda sem root, como `PUID:PGID`, e as duas pastas precisam ser graváveis por esse usuário. Como o Docker cria pastas de *bind mount* inexistentes como `root`, o compose traz um serviço `init` (Alpine, executa uma vez) que ajusta o dono de `/config` e dos arquivos do Filezam dentro dela (nunca recursivamente, e ele se recusa a mexer numa pasta que tenha subpastas, para um `FILEZAM_HOST_CONFIG` errado não alterar uma árvore inteira do host) e, só se `/data` estiver vazia, também dela. Ele nunca altera o dono de uma pasta de dados que já tenha conteúdo. Se a pasta não for gravável, o app encerra na inicialização com o `chown` sugerido. Nunca use `PUID=0`.
+
+### Expondo várias pastas do host
+
+O Filezam expõe uma raiz só, mas você pode montar quantas pastas do host quiser **como subpastas** dela, no `docker-compose.yml`. Não há variável de ambiente para isso: quem monta é o compose.
+
+```yaml
+    volumes:
+      - ${FILEZAM_HOST_ROOT:-./data}:/data
+      - /mnt/midia:/data/midia                 # aparece como a pasta "midia" na raiz
+      - /mnt/backup/projetos:/data/projetos
+      - ${FILEZAM_HOST_CONFIG:-./config}:/config
+```
+
+Ressalvas: as pastas extras já precisam ser graváveis por `PUID:PGID` (o serviço `init` não mexe nelas); mover ou excluir atravessando montagens vira cópia + remoção, porque são sistemas de arquivos diferentes, e a lixeira fica sempre na raiz do escopo; o espaço livre mostrado é o do disco que contém a raiz do escopo, nunca a soma das montagens; e symlink não serve de atalho — o `os.Root` recusa link para fora da raiz, tem que ser bind mount. Detalhes em [`docs/08`](docs/08-operacao.md#expondo-várias-pastas-do-host).
 
 ### Variáveis de ambiente
 
