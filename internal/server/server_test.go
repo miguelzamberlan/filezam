@@ -2880,3 +2880,97 @@ func TestInterruptedJobsAreCleanedUp(t *testing.T) {
 		t.Fatal("single-file message")
 	}
 }
+
+// Uma queda no meio da exclusão para a lixeira é retomada pela manutenção: a exclusão termina,
+// a cópia parcial entre dispositivos é completada, a linha sem item some — e nada acontece com o
+// que é deste processo ou com um disco que não está montado.
+func TestPendingTrashIsRecovered(t *testing.T) {
+	admin, s, root := newEnv(t)
+	s.cfg.TrashRetention = time.Hour
+	admin.login("admin", "admin")
+	admin.expect("POST", "/api/auth/password", map[string]string{"current": "admin", "new": "correct horse battery"}, 200)
+	ctx := context.Background()
+	write := func(rel, body string) {
+		t.Helper()
+		p := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	exists := func(rel string) bool {
+		_, err := os.Lstat(filepath.Join(root, filepath.FromSlash(rel)))
+		return err == nil
+	}
+	trashDir := "teamA/" + vfs.TrashDirName
+	old := s.started.Unix() - 60
+	add := func(id, path, typ string, deletedAt int64) {
+		t.Helper()
+		dir := trashDir
+		if strings.HasPrefix(path, "hd/") {
+			dir = "hd/" + vfs.TrashDirName
+		}
+		it := &store.TrashItem{ID: id, UserID: 1, TrashDir: dir, Name: vfs.Base(path), Path: path, Type: typ, DeletedAt: deletedAt, Pending: true}
+		if err := s.db.AddTrash(ctx, it); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// 1. caiu antes de mover: a origem inteira ainda está no lugar
+	write("teamA/antes.txt", "a")
+	add("antes0000000000000000000000000000", "teamA/antes.txt", "file", old)
+	// 2. caiu no meio da cópia entre dispositivos: parte na lixeira (arquivos inteiros + temporário)
+	write("teamA/album/1.jpg", "um")
+	write("teamA/album/2.jpg", "dois")
+	write(trashDir+"/meio0000000000000000000000000000/album/1.jpg", "um")
+	write(trashDir+"/meio0000000000000000000000000000/album/"+vfs.CopyTempPrefix("meio0000000000000000000000000000")+"x", "do")
+	add("meio0000000000000000000000000000", "teamA/album", "dir", old)
+	// 3. o movimento terminou, faltou marcar a linha
+	write(trashDir+"/fim00000000000000000000000000000/pronto.txt", "p")
+	add("fim00000000000000000000000000000", "teamA/pronto.txt", "file", old)
+	// 4. linha sem item, com o disco montado
+	add("fantasma000000000000000000000000", "teamA/sumiu.txt", "file", old)
+	// 5. lixeira num disco não montado: nem origem, nem a pasta da lixeira
+	add("semdisco000000000000000000000000", "hd/pasta/x.txt", "file", old)
+	// 6. exclusão deste processo, possivelmente em andamento: não se toca
+	write("teamA/agora.txt", "n")
+	add("agora000000000000000000000000000", "teamA/agora.txt", "file", time.Now().Unix()+5)
+
+	s.recoverPendingTrash(ctx)
+
+	if exists("teamA/antes.txt") || !exists(trashDir+"/antes0000000000000000000000000000/antes.txt") {
+		t.Fatal("deletion that never started was not finished")
+	}
+	if exists("teamA/album") || !exists(trashDir+"/meio0000000000000000000000000000/album/2.jpg") {
+		t.Fatal("cross-device copy was not completed")
+	}
+	if exists(trashDir + "/meio0000000000000000000000000000/album/" + vfs.CopyTempPrefix("meio0000000000000000000000000000") + "x") {
+		t.Fatal("temporary left in the trash")
+	}
+	if !exists("teamA/agora.txt") {
+		t.Fatal("touched a deletion of the current process")
+	}
+	pending := map[string]bool{}
+	all, _ := s.db.ListTrash(ctx, 0)
+	for _, it := range all {
+		pending[it.ID] = it.Pending
+	}
+	for id, want := range map[string]bool{"antes0000000000000000000000000000": false, "meio0000000000000000000000000000": false, "fim00000000000000000000000000000": false, "semdisco000000000000000000000000": true, "agora000000000000000000000000000": true} {
+		if got, ok := pending[id]; !ok || got != want {
+			t.Fatalf("%s: pending=%v present=%v, want pending=%v", id, got, ok, want)
+		}
+	}
+	if _, ok := pending["fantasma000000000000000000000000"]; ok {
+		t.Fatal("ghost row kept although the disk is mounted")
+	}
+	// Restaurar o que a recuperação concluiu devolve o item inteiro.
+	o := admin.expect("POST", "/api/trash/restore", map[string]any{"ids": []string{"meio0000000000000000000000000000"}}, 200)
+	if len(o["restored"].([]any)) != 1 || !exists("teamA/album/1.jpg") || !exists("teamA/album/2.jpg") {
+		t.Fatalf("restore after recovery: %v", o)
+	}
+	// A retenção não apaga a lixeira de uma exclusão pendente.
+	if items, _ := s.db.ListTrashBefore(ctx, time.Now().Add(time.Hour).Unix()); len(items) != 2 {
+		t.Fatalf("sweep should skip pending rows: %d", len(items))
+	}
+}

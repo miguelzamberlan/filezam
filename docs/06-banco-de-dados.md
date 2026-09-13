@@ -44,7 +44,7 @@ uploads(id /*hex 16 bytes*/, user_id → users CASCADE, dir /*base-relativo*/, n
 
 audit_log(id, ts, user_id, username, ip, action, detail /*JSON*/)   -- índice: ts
 trash(id /*hex 16 bytes*/, user_id → users CASCADE, trash_dir /*base-relativo: <escopo>/.filezam-trash*/, name, path /*original, base-relativo*/,
-      type, size, deleted_at)   -- índices: deleted_at, path   (004)
+      type, size, deleted_at, pending /*1 até o item chegar inteiro, 013*/)   -- índices: deleted_at, path   (004), pending parcial (013)
 file_index(path PK /*base-relativo*/, parent, name, name_lc, type, size, mtime, gen)   -- índices: name_lc, parent   (005)
 index_state(id=1, last_full_at, entries, gen)   (005)
 jobs(id, user_id → users CASCADE, type, label, state, done, total, bytes_done, bytes_total, error, warnings, started_at, finished_at)   -- índice: (user_id, started_at)   (008)
@@ -67,6 +67,7 @@ Migrações aplicadas depois de `001_init.sql`:
 | 010 | `010_upload_target_per_user.sql` | Índice único de `uploads` passa de `(dir, name)` para `(user_id, dir, name)`: a sessão parada de um usuário não bloqueia outro |
 | 011 | `011_settings_slug_drop.sql` | Tabela `settings` (configurações globais do admin); `shares.slug` com índice único parcial, `shares.mode` e os tetos do link de envio; tabela `share_uploads` (recibo de cada arquivo recebido, com o nome no disco e o nome pedido); `uploads.share_id`/`uploads.sender`/`uploads.sent_name` |
 | 012 | `012_job_cleanup.sql` | Tabela `job_cleanup(job_id, path, mode)`: o que um job em andamento precisa desfazer se o processo cair (temporários de cópia com a marca do job, ou o caminho inteiro de uma extração/compactação). Apagada ao terminar; a manutenção consome as linhas de jobs que não estão mais rodando |
+| 013 | `013_trash_pending.sql` | `trash.pending` (1 enquanto o item não chegou inteiro à lixeira; a manutenção retoma as pendentes de um processo que caiu) com índice parcial |
 
 Todos os timestamps são segundos Unix, exceto `uploads.mtime` (ms, vindo do cliente).
 

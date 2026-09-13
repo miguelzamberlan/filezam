@@ -31,24 +31,89 @@ func (s *Server) trashOne(ctx context.Context, root *vfs.Root, u *store.User, p 
 	if err != nil {
 		return err
 	}
-	// A linha vem antes do movimento: uma queda no meio deixa, no pior caso, uma linha sem
-	// item (restaurar responde not_found e a apaga; a retenção também a limpa), nunca um item
-	// escondido na lixeira sem linha — esse ficaria invisível e fora da cota para sempre.
-	item := &store.TrashItem{ID: id, UserID: u.ID, TrashDir: vfs.Join(u.Scope, vfs.TrashDirName), Name: vfs.Base(p), Path: vfs.Join(u.Scope, p), Type: e.Type, Size: e.Size, DeletedAt: time.Now().Unix()}
-	if err := s.db.AddTrash(context.Background(), item); err != nil {
+	// A linha vem antes do movimento, pendente: nunca fica item escondido na lixeira sem linha
+	// (invisível e fora da cota para sempre). Se o processo cair no meio, recoverPendingTrash
+	// retoma a exclusão a partir dela.
+	item := &store.TrashItem{ID: id, UserID: u.ID, TrashDir: vfs.Join(u.Scope, vfs.TrashDirName), Name: vfs.Base(p), Path: vfs.Join(u.Scope, p), Type: e.Type, Size: e.Size, DeletedAt: time.Now().Unix(), Pending: true}
+	bg := context.Background()
+	if err := s.db.AddTrash(bg, item); err != nil {
 		return err
 	}
 	if err := root.MoveToTrash(ctx, p, vfs.TrashDirName, id); err != nil {
-		// Nada chegou à lixeira: desfaz a linha. Se algo chegou (cópia entre dispositivos
-		// interrompida), a linha fica para o item continuar visível e restaurável.
-		if _, serr := root.StatReserved(vfs.Join(vfs.TrashDirName, id), item.Name); serr != nil {
-			_ = root.RemoveTrashItem(context.Background(), vfs.TrashDirName, id)
-			_ = s.db.DeleteTrash(context.Background(), id)
+		if errors.Is(err, vfs.ErrSourceNotRemoved) {
+			// O item já está inteiro na lixeira; o que sobrou na origem é o resto de uma remoção
+			// que falhou. A linha fica, concluída, para ele seguir restaurável.
+			_ = s.db.FinishTrash(bg, id)
+			s.indexTree(item.Path)
+			return err
 		}
+		// A cópia não terminou, então a origem está inteira: a lixeira parcial e a linha somem.
+		_ = root.RemoveTrashItem(bg, vfs.TrashDirName, id)
+		_ = s.db.DeleteTrash(bg, id)
 		return err
+	}
+	if err := s.db.FinishTrash(bg, id); err != nil {
+		s.log.Warn("trash finish", "id", id, "err", err)
 	}
 	s.indexRemove(item.Path)
 	return nil
+}
+
+// recoverPendingTrash resumes deletions that a crash cut short. Só olha linhas de antes deste
+// processo subir: as mais novas podem estar em andamento agora.
+//
+//   - origem sumiu e o item está na lixeira: o movimento terminou; limpa temporários e conclui.
+//   - origem existe: a exclusão foi pedida e não terminou; retoma (copia o que falta pulando o que
+//     já chegou inteiro, depois remove a origem).
+//   - nenhum dos dois: linha sem item. Apaga a linha — mas só se a pasta da lixeira existe. O perigo
+//     é um item escondido na lixeira sem linha, e ele só pode estar numa lixeira que não se vê
+//     (disco não montado); com a lixeira à vista e sem o item, não há nada escondido em lugar
+//     nenhum. Sem ela, espera a próxima rodada.
+func (s *Server) recoverPendingTrash(ctx context.Context) {
+	items, err := s.db.ListPendingTrash(ctx, s.started.Unix())
+	if err != nil {
+		s.log.Warn("trash recovery", "err", err)
+		return
+	}
+	exists := func(p string) bool {
+		if p == "" {
+			return true
+		}
+		_, err := s.base.StatReserved(vfs.Dir(p), vfs.Base(p))
+		return err == nil
+	}
+	for _, it := range items {
+		if err := ctx.Err(); err != nil {
+			return
+		}
+		inTrash := exists(vfs.Join(it.TrashDir, it.ID, it.Name))
+		switch {
+		case exists(it.Path):
+			s.dropShares(it.Path)
+			if err := s.base.ResumeMoveToTrash(ctx, it.Path, it.TrashDir, it.ID); err != nil {
+				s.log.Warn("trash recovery: resume", "id", it.ID, "path", it.Path, "err", err)
+				continue
+			}
+			s.indexRemove(it.Path)
+			s.log.Info("trash recovery: deletion finished", "id", it.ID, "path", it.Path)
+		case inTrash:
+			if _, err := s.base.RemoveTemps(ctx, vfs.Join(it.TrashDir, it.ID, it.Name), it.ID); err != nil {
+				s.log.Warn("trash recovery: temps", "id", it.ID, "err", err)
+				continue
+			}
+		case exists(it.TrashDir):
+			_ = s.base.RemoveTrashItem(ctx, it.TrashDir, it.ID)
+			if err := s.db.DeleteTrash(ctx, it.ID); err != nil {
+				s.log.Warn("trash recovery: ghost row", "id", it.ID, "err", err)
+			}
+			continue
+		default:
+			continue // disco não montado
+		}
+		if err := s.db.FinishTrash(ctx, it.ID); err != nil {
+			s.log.Warn("trash recovery: finish", "id", it.ID, "err", err)
+		}
+	}
 }
 
 // visibleTrash lists the rows the caller may act on: their own, or every row whose original

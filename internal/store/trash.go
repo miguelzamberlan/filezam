@@ -13,21 +13,23 @@ type TrashItem struct {
 	Type      string
 	Size      int64
 	DeletedAt int64
+	// Pending: a exclusão começou e o item ainda não chegou inteiro à lixeira (migração 013).
+	Pending bool
 }
 
-const trashCols = `t.id, t.user_id, COALESCE(u.username,''), t.trash_dir, t.name, t.path, t.type, t.size, t.deleted_at`
+const trashCols = `t.id, t.user_id, COALESCE(u.username,''), t.trash_dir, t.name, t.path, t.type, t.size, t.deleted_at, t.pending`
 
 func scanTrash(row interface{ Scan(...any) error }) (*TrashItem, error) {
 	var t TrashItem
-	if err := row.Scan(&t.ID, &t.UserID, &t.UserName, &t.TrashDir, &t.Name, &t.Path, &t.Type, &t.Size, &t.DeletedAt); err != nil {
+	if err := row.Scan(&t.ID, &t.UserID, &t.UserName, &t.TrashDir, &t.Name, &t.Path, &t.Type, &t.Size, &t.DeletedAt, &t.Pending); err != nil {
 		return nil, mapErr(err)
 	}
 	return &t, nil
 }
 
 func (db *DB) AddTrash(ctx context.Context, t *TrashItem) error {
-	_, err := db.w.ExecContext(ctx, `INSERT INTO trash(id, user_id, trash_dir, name, path, type, size, deleted_at) VALUES(?,?,?,?,?,?,?,?)`,
-		t.ID, t.UserID, t.TrashDir, t.Name, t.Path, t.Type, t.Size, t.DeletedAt)
+	_, err := db.w.ExecContext(ctx, `INSERT INTO trash(id, user_id, trash_dir, name, path, type, size, deleted_at, pending) VALUES(?,?,?,?,?,?,?,?,?)`,
+		t.ID, t.UserID, t.TrashDir, t.Name, t.Path, t.Type, t.Size, t.DeletedAt, t.Pending)
 	return mapErr(err)
 }
 
@@ -46,9 +48,22 @@ func (db *DB) ListTrash(ctx context.Context, userID int64) ([]*TrashItem, error)
 	return db.queryTrash(ctx, q+` ORDER BY t.deleted_at DESC, t.name`, args...)
 }
 
-// ListTrashBefore lists items deleted before the given unix time (for the retention sweep).
+// ListTrashBefore lists finished items deleted before the given unix time (for the retention
+// sweep). Pendentes ficam de fora: apagar a lixeira de uma exclusão que não terminou deixaria a
+// origem à vista sem linha nenhuma.
 func (db *DB) ListTrashBefore(ctx context.Context, before int64) ([]*TrashItem, error) {
-	return db.queryTrash(ctx, `SELECT `+trashCols+` FROM trash t LEFT JOIN users u ON u.id=t.user_id WHERE t.deleted_at<? ORDER BY t.deleted_at`, before)
+	return db.queryTrash(ctx, `SELECT `+trashCols+` FROM trash t LEFT JOIN users u ON u.id=t.user_id WHERE t.deleted_at<? AND t.pending=0 ORDER BY t.deleted_at`, before)
+}
+
+// ListPendingTrash lists deletions that started before the given unix time and never finished.
+func (db *DB) ListPendingTrash(ctx context.Context, before int64) ([]*TrashItem, error) {
+	return db.queryTrash(ctx, `SELECT `+trashCols+` FROM trash t LEFT JOIN users u ON u.id=t.user_id WHERE t.pending=1 AND t.deleted_at<? ORDER BY t.deleted_at`, before)
+}
+
+// FinishTrash marks a deletion complete: the item is whole inside the trash.
+func (db *DB) FinishTrash(ctx context.Context, id string) error {
+	_, err := db.w.ExecContext(ctx, `UPDATE trash SET pending=0 WHERE id=?`, id)
+	return err
 }
 
 func (db *DB) queryTrash(ctx context.Context, q string, args ...any) ([]*TrashItem, error) {

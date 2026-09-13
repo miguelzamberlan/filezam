@@ -32,6 +32,7 @@ type Server struct {
 	jobs      *jobs.Manager
 	indexer   *index.Indexer // nil quando FILEZAM_INDEX_INTERVAL=0
 	indexWake chan struct{}  // avisa o laço do índice que o intervalo mudou
+	started   time.Time      // subida do processo: separa o que um processo anterior deixou pela metade
 	metrics   *metrics.Registry
 	log       *slog.Logger
 	version   string
@@ -103,6 +104,7 @@ func New(cfg *config.Config, db *store.DB, base *vfs.Root, log *slog.Logger, ver
 	s.secretKey = key
 	s.pending = newPendingState()
 	s.indexWake = make(chan struct{}, 1)
+	s.started = time.Now()
 	// O cache de miniaturas vive no DataDir, fora da árvore do usuário: não entra em backup de
 	// conteúdo, não aparece em listagem nem em zip, e segue o precedente do banco e do secret.key.
 	if tc, err := thumbs.New(filepath.Join(cfg.DataDir, "thumbs"), log); err != nil {
@@ -209,6 +211,7 @@ func (s *Server) StartBackground() {
 			s.log.Warn("prune audit", "err", err)
 		}
 		s.recoverInterruptedJobs(ctx)
+		s.recoverPendingTrash(ctx)
 		s.sweepTrash(ctx)
 		if err := s.db.PruneJobs(ctx, time.Now().Add(-30*24*time.Hour).Unix()); err != nil {
 			s.log.Warn("prune jobs", "err", err)
