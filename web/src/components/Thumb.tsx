@@ -11,6 +11,12 @@ export function canThumb(e: Entry): boolean {
   return e.type === 'file' && THUMBABLE.has(extOf(e.name))
 }
 
+/** URL da miniatura. Carrega o mtime para que o endereço mude quando o arquivo muda — é o que
+ * permite ao servidor mandar guardar a resposta sem revalidar, e ao preview reaproveitar a mesma. */
+export function thumbUrl(path: string, e: Entry): string {
+  return `/api/files/thumb?path=${encodeURIComponent(path)}&v=${e.mtime}`
+}
+
 /**
  * Miniatura de uma imagem, com o ícone por tipo como base e como rede de proteção.
  *
@@ -18,9 +24,6 @@ export function canThumb(e: Entry): boolean {
  * "pula" enquanto as imagens chegam, e qualquer falha (formato sem decodificador, imagem grande
  * demais, recurso desligado) simplesmente deixa o ícone à mostra. `loading="lazy"` mais a
  * virtualização do FileList garantem que só o que está na tela é pedido.
- *
- * A URL carrega o mtime para que o endereço mude quando o arquivo muda — é o que permite ao
- * servidor mandar guardar a resposta sem revalidar.
  */
 export default function Thumb({ entry, path, size }: { entry: Entry; path: string; size: number }) {
   const [ok, setOk] = useState(true)
@@ -30,7 +33,7 @@ export default function Thumb({ entry, path, size }: { entry: Entry; path: strin
       {iconFor(entry.name, entry.type, size)}
       {show && (
         <img
-          src={`/api/files/thumb?path=${encodeURIComponent(path)}&v=${entry.mtime}`}
+          src={thumbUrl(path, entry)}
           alt=""
           loading="lazy"
           decoding="async"

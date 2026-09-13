@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { Entry } from '../api/types'
 import { extOf, formatBytes, formatDate } from '../lib/format'
 import { S } from '../strings'
@@ -43,13 +43,64 @@ export interface PreviewProps {
   maxText: number
   /** URL inline de um caminho relativo à pasta (imagens/links relativos do Markdown); omitido quando irmãos não são alcançáveis. */
   assetUrl?: (relPath: string) => string
+  /** URL da miniatura já em cache, mostrada enquanto a imagem original chega; null quando não há. */
+  thumbFor?: (e: Entry) => string | null
   /** Abre o arquivo no editor; ausente onde não se edita (link público). */
   onEdit?: (e: Entry) => void
   onClose: () => void
   onIndex: (i: number) => void
 }
 
-export default function Preview({ entries, index, urlFor, maxText, assetUrl, onEdit, onClose, onIndex }: PreviewProps) {
+// Quantas imagens vizinhas ficam pré-carregadas de cada lado. Uma basta para as setas; mais que isso
+// gasta banda do servidor com fotos que talvez ninguém abra.
+const PRELOAD = 1
+
+/**
+ * Imagem do preview. Montada com `key` pela URL: reaproveitar o mesmo <img> trocando só o `src`
+ * deixava a foto anterior na tela até a nova terminar de chegar, enquanto o nome no topo já tinha
+ * mudado — parecia que a seta não tinha feito nada. Um elemento novo começa vazio; por baixo vai a
+ * miniatura (que a listagem já baixou e o navegador guarda) com um indicador de carregamento, e a
+ * original entra por cima quando termina. Vizinha já pré-carregada aparece direto, sem o fade.
+ */
+function ImageView({ src, thumb, alt, onClose, onReady }: { src: string; thumb: string | null; alt: string; onClose: () => void; onReady: (src: string) => void }) {
+  const ref = useRef<HTMLImageElement>(null)
+  const [loaded, setLoaded] = useState(false)
+  const [instant, setInstant] = useState(false)
+  const [thumbOk, setThumbOk] = useState(true)
+  // Antes da pintura: se o navegador já tem a imagem, nem miniatura nem transição.
+  useLayoutEffect(() => {
+    if (ref.current?.complete && ref.current.naturalWidth > 0) {
+      setInstant(true)
+      setLoaded(true)
+    }
+  }, [])
+  useEffect(() => {
+    if (loaded) onReady(src)
+  }, [loaded, src, onReady])
+  return (
+    <div className="relative flex h-full w-full items-center justify-center" onClick={(ev) => (ev.stopPropagation(), ev.target === ev.currentTarget && onClose())}>
+      {!loaded && thumb && thumbOk && (
+        <img src={thumb} alt="" aria-hidden onError={() => setThumbOk(false)} className="absolute inset-0 h-full w-full object-contain blur-sm" />
+      )}
+      {!loaded && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="rounded-full bg-black/50 p-3"><ISpinner size={28} /></span>
+        </div>
+      )}
+      <img
+        ref={ref}
+        src={src}
+        alt={alt}
+        decoding="async"
+        onLoad={() => setLoaded(true)}
+        onError={() => setLoaded(true)}
+        className={`relative max-h-full max-w-full object-contain ${instant ? '' : 'transition-opacity duration-150'} ${loaded ? 'opacity-100' : 'opacity-0'}`}
+      />
+    </div>
+  )
+}
+
+export default function Preview({ entries, index, urlFor, maxText, assetUrl, thumbFor, onEdit, onClose, onIndex }: PreviewProps) {
   const e = entries[index]
   const kind = previewKind(e)
   const isMd = kind === 'text' && MD.has(extOf(e.name))
@@ -73,6 +124,26 @@ export default function Preview({ entries, index, urlFor, maxText, assetUrl, onE
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
   }, [onClose, onIndex, prev, next])
+
+  // Pré-carrega as imagens vizinhas para a seta mostrar a próxima sem espera. Só depois de a imagem
+  // atual terminar: antes, as vizinhas dividiriam a banda com ela e a foto aberta demoraria mais. Sem
+  // cancelar na troca: a vizinha que acabou de virar a atual é o download que o <img> aproveita.
+  const [readySrc, setReadySrc] = useState<string | null>(null)
+  const nearKey = [...previewable.slice(Math.max(0, pos - PRELOAD), pos), ...previewable.slice(pos + 1, pos + 1 + PRELOAD)]
+    .map((i) => entries[i])
+    .filter((x) => previewKind(x) === 'image')
+    .map((x) => urlFor(x, true))
+    .join('\n')
+  const current = urlFor(e, true)
+  const currentReady = kind !== 'image' || readySrc === current
+  useEffect(() => {
+    if (!nearKey || !currentReady) return
+    for (const url of nearKey.split('\n')) {
+      const img = new Image()
+      img.decoding = 'async'
+      img.src = url
+    }
+  }, [nearKey, currentReady])
 
   useEffect(() => {
     setText(null)
@@ -109,12 +180,12 @@ export default function Preview({ entries, index, urlFor, maxText, assetUrl, onE
       </div>
       <div className="relative flex min-h-0 flex-1 items-center justify-center p-4" onClick={(ev) => ev.target === ev.currentTarget && onClose()}>
         {prev >= 0 && (
-          <button className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-white/10 p-2 hover:bg-white/25" onClick={(ev) => (ev.stopPropagation(), onIndex(prev))}><IChevronLeft size={24} /></button>
+          <button className="absolute left-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/10 p-2 hover:bg-white/25" onClick={(ev) => (ev.stopPropagation(), onIndex(prev))}><IChevronLeft size={24} /></button>
         )}
         {next >= 0 && (
-          <button className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-white/10 p-2 hover:bg-white/25" onClick={(ev) => (ev.stopPropagation(), onIndex(next))}><IChevronRight size={24} /></button>
+          <button className="absolute right-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/10 p-2 hover:bg-white/25" onClick={(ev) => (ev.stopPropagation(), onIndex(next))}><IChevronRight size={24} /></button>
         )}
-        {kind === 'image' && <img src={src} alt={e.name} className="max-h-full max-w-full object-contain" onClick={(ev) => ev.stopPropagation()} />}
+        {kind === 'image' && <ImageView key={src} src={src} thumb={thumbFor?.(e) ?? null} alt={e.name} onClose={onClose} onReady={setReadySrc} />}
         {kind === 'video' && <video src={src} controls autoPlay preload="metadata" className="max-h-full max-w-full" onClick={(ev) => ev.stopPropagation()} />}
         {kind === 'audio' && <audio src={src} controls autoPlay className="w-full max-w-lg" onClick={(ev) => ev.stopPropagation()} />}
         {/* Sem atributo sandbox: o Chrome recusa o visualizador de PDF em frames com sandbox (mesmo com allow-scripts); a resposta já vem com CSP `sandbox` do servidor, que isola o documento. */}

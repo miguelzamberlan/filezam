@@ -9,6 +9,9 @@ Todas as mudanças relevantes do Filezam ficam registradas aqui. O formato segue
 - Documentação de **como expor várias pastas do host**: a resposta estava numa célula de tabela e não dizia o que muda com mais de uma montagem. Agora é uma seção própria em `docs/08-operacao.md`, resumida no README, com o exemplo de `volumes` e as ressalvas — dono das pastas extras (o serviço `init` não mexe nelas), mover e excluir entre sistemas de arquivos virando cópia + remoção, espaço livre por escopo e symlink recusado pelo `os.Root`.
 - O **README em inglês** deixa de ser um resumo e passa a ter as mesmas seções do português: sumário, funcionalidades completas, os quatro cenários de instalação com os blocos de configuração, pastas e permissões, como usar (usuários, links públicos, links de recebimento, uploads, interface e atalhos), documentação, contribuição e roadmap.
 
+### Corrigido
+- **Passar fotos com as setas** no visualizador não deixa mais a foto anterior na tela enquanto a próxima carrega — o nome mudava no topo e parecia que nada tinha acontecido. Agora a foto nova começa pela miniatura desfocada, com um indicador de carregamento, e a anterior e a próxima de cada foto já ficam pré-carregadas, então avançar uma a uma é instantâneo.
+
 ## [1.1.0] - 2026-09-12
 
 ### Adicionado

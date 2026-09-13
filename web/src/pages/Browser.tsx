@@ -15,6 +15,7 @@ import FileList, { DRAG_MIME, setDragging } from '../components/FileList'
 import Breadcrumb from '../components/Breadcrumb'
 import ContextMenu, { type MenuItem } from '../components/ContextMenu'
 import Preview, { previewKind } from '../components/Preview'
+import { canThumb, thumbUrl } from '../components/Thumb'
 import Editor, { canEdit } from '../components/Editor'
 import ShareDialog from '../components/ShareDialog'
 import InfoDialog from '../components/InfoDialog'
@@ -56,6 +57,7 @@ export default function Browser() {
   const [editing, setEditing] = useState<Entry | null>(null)
   const maxText = cfg?.previewMaxText ?? 1 << 20
   const archiveOn = cfg?.extractEnabled !== false
+  const thumbsOn = cfg?.thumbsEnabled !== false && ui.prefs.thumbs !== false
   const [dragOver, setDragOver] = useState(false)
   const [dragOverName, setDragOverName] = useState<string | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
@@ -577,7 +579,7 @@ export default function Browser() {
             focused={ui.focused}
             cutNames={cutNames}
             view={ui.view}
-            thumbs={cfg?.thumbsEnabled !== false && ui.prefs.thumbs !== false}
+            thumbs={thumbsOn}
             path={path}
             sort={ui.sort}
             onSort={ui.setSort}
@@ -619,7 +621,7 @@ export default function Browser() {
         />
       )}
       {preview !== null && entries[preview] && (
-        <Preview entries={entries} index={preview} urlFor={(e, inline) => Api.contentUrl(join(path, e.name), inline)} maxText={maxText} assetUrl={(p) => Api.contentUrl(join(path, p), true)} onClose={() => setPreview(null)} onIndex={setPreview} onEdit={(e) => (setPreview(null), setEditing(e))} />
+        <Preview entries={entries} index={preview} urlFor={(e, inline) => Api.contentUrl(join(path, e.name), inline)} maxText={maxText} assetUrl={(p) => Api.contentUrl(join(path, p), true)} thumbFor={(e) => (thumbsOn && canThumb(e) ? thumbUrl(join(path, e.name), e) : null)} onClose={() => setPreview(null)} onIndex={setPreview} onEdit={(e) => (setPreview(null), setEditing(e))} />
       )}
       {info !== null && <InfoDialog path={info} onClose={() => setInfo(null)} />}
       {share !== null && <ShareDialog path={share} name={shareName} kind={share !== path && byName.get(basename(share))?.type === 'file' ? 'file' : 'dir'} maxTtl={cfg?.shareMaxTtl ?? 30 * 86400} onClose={() => setShare(null)} onCreated={() => qc.invalidateQueries({ queryKey: ['shares'] })} />}
