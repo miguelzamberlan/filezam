@@ -371,6 +371,7 @@ export const en: Strings = {
     [/^interrupted by server restart; the partial extraction was removed/, () => 'Interrupted by a server restart. The partial extraction was removed.'],
     [/^interrupted by server restart; the unfinished \.zip was removed/, () => 'Interrupted by a server restart. The unfinished .zip was removed.'],
     [/^interrupted by server restart/, () => 'Interrupted by a server restart.'],
+    [/^archive too large to extract/, () => 'The archive went past the limit during extraction, and what had come out was removed. Download it and extract it on your computer.'],
     [/^partial copy: (\d+) of (\d+) files copied/, (m) => `Partial copy: ${m[1]} of ${m[2]} files copied. The finished ones stayed at the destination; the unfinished one was removed.`],
   ] as [RegExp, (m: RegExpMatchArray) => string][],
   errorCodes: {
@@ -420,7 +421,7 @@ export const en: Strings = {
     modified: 'The file changed on the server since it was opened.',
     bad_archive: 'This file is not a .zip that Filezam can open.',
     archive_encrypted: 'This .zip is password-protected. Filezam does not extract password-protected archives: extract it on your computer and upload the contents.',
-    archive_too_large: 'Archive too large to extract.',
+    archive_too_large: 'This archive is too large to extract on the server without weighing on it. Download it and extract it on your computer.',
     no_thumb: 'No thumbnail for this file.',
     timeout: 'The transfer stalled and was dropped. Try again.',
     incomplete_body: 'The transfer ended before all bytes arrived. Try again.',

@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"hash/crc32"
@@ -823,7 +824,7 @@ func TestExtractRefusesEncryptedArchive(t *testing.T) {
 		{name: "pasta/a.txt", body: "cifrado a", raw: true, method: zip.Store, flags: 0x1, declare: 9},
 		{name: "b.txt", body: "cifrado b", raw: true, method: zip.Store, flags: 0x1, declare: 9},
 	})
-	if err := r.CheckZip("senha.zip"); !errors.Is(err, ErrArchiveEncrypted) {
+	if err := r.CheckZip("senha.zip", bigLimits); !errors.Is(err, ErrArchiveEncrypted) {
 		t.Fatalf("CheckZip: want ErrArchiveEncrypted, got %v", err)
 	}
 	if _, err := r.ExtractZip(context.Background(), "senha.zip", "saida", bigLimits, nil); !errors.Is(err, ErrArchiveEncrypted) {
@@ -837,15 +838,15 @@ func TestExtractRefusesEncryptedArchive(t *testing.T) {
 		{name: "cifrado.txt", body: "cifrado", raw: true, method: zip.Store, flags: 0x1, declare: 7},
 		{name: "claro.txt", body: "claro"},
 	})
-	if err := r.CheckZip("misto.zip"); err != nil {
+	if err := r.CheckZip("misto.zip", bigLimits); err != nil {
 		t.Fatalf("mixed archive refused: %v", err)
 	}
 	// Só pastas não é "protegido por senha", e .txt renomeado para .zip continua bad_archive.
 	makeZip(t, root, "pastas.zip", []zipEntry{{name: "x/"}, {name: "x/y/"}})
-	if err := r.CheckZip("pastas.zip"); err != nil {
+	if err := r.CheckZip("pastas.zip", bigLimits); err != nil {
 		t.Fatalf("folders-only archive refused: %v", err)
 	}
-	if err := r.CheckZip("a/file.txt"); !errors.Is(err, ErrBadArchive) {
+	if err := r.CheckZip("a/file.txt", bigLimits); !errors.Is(err, ErrBadArchive) {
 		t.Fatalf("not a zip: want ErrBadArchive, got %v", err)
 	}
 	checkCanary(t, outside)
@@ -1016,4 +1017,81 @@ func TestRemoveTempsOnlyTouchesTaggedTemporaries(t *testing.T) {
 		t.Fatalf("missing target: %d %v", n, err)
 	}
 	checkCanary(t, outside)
+}
+
+// O índice do zip é medido antes de o archive/zip carregá-lo: registro final mentindo o número
+// de entradas ou o tamanho não faz o leitor alocar além do que foi contado, zip64 é lido direito,
+// e o total declarado acima do teto é recusado sem começar.
+func TestZipIndexIsBoundedBeforeLoading(t *testing.T) {
+	r, root, _ := fixture(t)
+	build := func(n int, body string) []byte {
+		t.Helper()
+		var buf bytes.Buffer
+		zw := zip.NewWriter(&buf)
+		for i := 0; i < n; i++ {
+			w, err := zw.CreateHeader(&zip.FileHeader{Name: fmt.Sprintf("f%05d.txt", i), Method: zip.Store})
+			if err != nil {
+				t.Fatal(err)
+			}
+			w.Write([]byte(body))
+		}
+		if err := zw.Close(); err != nil {
+			t.Fatal(err)
+		}
+		return buf.Bytes()
+	}
+	save := func(name string, b []byte) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(root, name), b, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	eocd := func(b []byte) int { return bytes.LastIndex(b, []byte{'P', 'K', 5, 6}) }
+
+	// Dez entradas de verdade, registro final dizendo uma e índice do tamanho de um cabeçalho:
+	// o leitor só enxerga a primeira.
+	b := build(10, "x")
+	e := eocd(b)
+	first := 46 + len("f00000.txt")
+	binary.LittleEndian.PutUint16(b[e+8:], 1)
+	binary.LittleEndian.PutUint16(b[e+10:], 1)
+	binary.LittleEndian.PutUint32(b[e+12:], uint32(first))
+	save("mentiroso.zip", b)
+	if err := r.Mkdir("s1"); err != nil {
+		t.Fatal(err)
+	}
+	// Sem a faixa escondida o archive/zip leria os dez e recusaria pela contagem; com ela, abre
+	// exatamente o que foi medido.
+	res, err := r.ExtractZip(context.Background(), "mentiroso.zip", "s1", bigLimits, nil)
+	if err != nil || res.Files != 1 {
+		t.Fatalf("reader must see only the declared index: %+v %v", res, err)
+	}
+
+	// Registro final dizendo 3 entradas com 10 cabeçalhos reais no índice: a contagem manda.
+	b = build(10, "x")
+	e = eocd(b)
+	binary.LittleEndian.PutUint16(b[e+8:], 3)
+	binary.LittleEndian.PutUint16(b[e+10:], 3)
+	save("subconta.zip", b)
+	if err := r.CheckZip("subconta.zip", ExtractLimits{MaxBytes: 1 << 20, MaxEntries: 5}); !errors.Is(err, ErrArchiveLimit) {
+		t.Fatalf("understated entries: want ErrArchiveLimit, got %v", err)
+	}
+
+	// zip64 (mais de 65 535 entradas): contado pelo registro zip64.
+	save("zip64.zip", build(66000, ""))
+	if err := r.CheckZip("zip64.zip", ExtractLimits{MaxBytes: 1 << 20, MaxEntries: 70000}); err != nil {
+		t.Fatalf("zip64 within limits: %v", err)
+	}
+	if err := r.CheckZip("zip64.zip", ExtractLimits{MaxBytes: 1 << 20, MaxEntries: 60000}); !errors.Is(err, ErrArchiveLimit) {
+		t.Fatalf("zip64 above the entry cap: %v", err)
+	}
+
+	// Total declarado acima do teto de bytes: recusado antes de extrair.
+	save("declara.zip", build(3, strings.Repeat("a", 1000)))
+	if err := r.CheckZip("declara.zip", ExtractLimits{MaxBytes: 2000, MaxEntries: 10}); !errors.Is(err, ErrArchiveLimit) {
+		t.Fatalf("declared size above MaxBytes: %v", err)
+	}
+	if err := r.CheckZip("declara.zip", ExtractLimits{MaxBytes: 4000, MaxEntries: 10}); err != nil {
+		t.Fatalf("declared size within MaxBytes: %v", err)
+	}
 }

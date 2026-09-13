@@ -87,12 +87,11 @@ func (s *Server) handleExtract(w http.ResponseWriter, r *http.Request) error {
 	// Zip corrompido ou protegido por senha é recusado na hora, com código próprio, em vez de
 	// virar um job falhado (ou uma pasta só com subpastas vazias). Dentro dos semáforos, porque
 	// abrir o zip carrega o diretório central na memória.
-	if err := root.CheckZip(p); err != nil {
+	lim := vfs.ExtractLimits{MaxBytes: set.ExtractMaxBytes, MaxEntries: int(set.ExtractMaxEntries)}
+	if err := root.CheckZip(p, lim); err != nil {
 		release()
 		return err
 	}
-
-	lim := vfs.ExtractLimits{MaxBytes: set.ExtractMaxBytes, MaxEntries: int(set.ExtractMaxEntries)}
 	parent := vfs.Dir(p)
 	j, err := s.startJob(u, "extract", jobLabel([]string{p}, parent), parentDirs(nil, parent), func(ctx context.Context, j *jobs.Job) error {
 		// Os semáforos são soltos aqui dentro: o job sobrevive à requisição que o criou.

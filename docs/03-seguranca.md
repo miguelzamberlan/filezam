@@ -100,8 +100,20 @@ sustenta que isso seja seguro:
   pior caso realista é consumo de disco e CPU, ambos limitados.
 - **Nomes legados**: um zip sem o bit UTF-8 traz os nomes na code page do sistema que compactou; eles
   são convertidos de CP437 antes de validar, senão todo arquivo com acento seria recusado.
-- Limitações aceitas: o diretório central é carregado inteiro na memória pelo `archive/zip`
-  (mitigado pelo teto de tamanho do arquivo e pelos semáforos); `.tar.gz` ainda não é suportado; e
+- **Índice medido antes de ser carregado.** O `archive/zip` lê o diretório central inteiro para a
+  memória antes de qualquer filtro, e um `.zip` só de cabeçalhos é pequeno em disco e grande na RAM.
+  Antes de entregar o arquivo à biblioteca, `openZip` lê o registro final (e o zip64) — alguns
+  kilobytes do fim — e recusa com `ErrArchiveLimit` mais entradas que `extract_max_entries` ou mais
+  de 64 MiB de índice (`MaxZipCentralDir`). Como o registro final é escolhido por quem montou o
+  arquivo, `countZipHeaders` percorre os cabeçalhos do índice declarado sem alocar nada por entrada
+  e é a contagem que vale; e o leitor da biblioteca, que não para no tamanho declarado e segue lendo
+  enquanto acha a assinatura, recebe um `ReaderAt` com a faixa entre o fim do índice e o registro
+  final zerada (`boundedZip`), então enxerga exatamente o que foi contado. Por fim, `CheckZip` soma
+  os tamanhos descomprimidos declarados: acima de `extract_max_bytes` a extração certamente
+  estouraria (o cabeçalho só mente para menos com proveito, e isso continua pego na escrita). Tudo
+  isso roda na requisição, dentro dos semáforos, e responde 413 `archive_too_large` com a orientação
+  de baixar e descompactar no computador.
+- Limitações aceitas: `.tar.gz` ainda não é suportado; e
   trocar o arquivo por fora (Samba) durante a leitura faz a extração falhar, sem escapar do sandbox.
 
 ## Miniaturas

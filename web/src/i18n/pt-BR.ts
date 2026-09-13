@@ -371,6 +371,7 @@ export const ptBR = {
     [/^interrupted by server restart; the partial extraction was removed/, () => 'Interrompida pelo reinício do servidor. A extração pela metade foi apagada.'],
     [/^interrupted by server restart; the unfinished \.zip was removed/, () => 'Interrompida pelo reinício do servidor. O .zip pela metade foi apagado.'],
     [/^interrupted by server restart/, () => 'Interrompida pelo reinício do servidor.'],
+    [/^archive too large to extract/, () => 'O arquivo compactado passou do limite durante a extração, e o que já tinha saído foi apagado. Baixe e descompacte no seu computador.'],
     [/^partial copy: (\d+) of (\d+) files copied/, (m) => `Cópia parcial: ${m[1]} de ${m[2]} arquivos copiados. Os completos ficaram no destino; o que estava pela metade foi apagado.`],
   ] as [RegExp, (m: RegExpMatchArray) => string][],
   errorCodes: {
@@ -420,7 +421,7 @@ export const ptBR = {
     modified: 'O arquivo mudou no servidor desde que foi aberto.',
     bad_archive: 'Este arquivo não é um .zip que o Filezam consiga abrir.',
     archive_encrypted: 'Este .zip é protegido por senha. O Filezam não extrai arquivos com senha: extraia no computador e envie o conteúdo.',
-    archive_too_large: 'Arquivo compactado grande demais para extrair.',
+    archive_too_large: 'Este arquivo compactado é grande demais para extrair no servidor sem pesar no funcionamento dele. Baixe e descompacte no seu computador.',
     // Só aparece se algo pedir a miniatura fora da lista de arquivos: lá o <img> que falha
     // volta para o ícone sem mostrar erro nenhum.
     no_thumb: 'Não há miniatura para este arquivo.',

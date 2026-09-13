@@ -73,14 +73,11 @@ func (r *Root) ExtractZip(ctx context.Context, src, dstDir string, lim ExtractLi
 	if lim.MaxBytes <= 0 || lim.MaxEntries <= 0 {
 		return res, fmt.Errorf("%w: limits required", ErrArchiveLimit)
 	}
-	zr, f, err := r.openZip(src)
+	zr, f, err := r.openZip(src, lim)
 	if err != nil {
 		return res, err
 	}
 	defer f.Close()
-	if len(zr.File) > lim.MaxEntries {
-		return res, fmt.Errorf("%w: %d entries", ErrArchiveLimit, len(zr.File))
-	}
 	// Conferido de novo aqui, e não só em CheckZip: o arquivo pode ter sido trocado entre a
 	// requisição e o job.
 	if encryptedOnly(zr) {
@@ -143,11 +140,14 @@ func (r *Root) ExtractZip(ctx context.Context, src, dstDir string, lim ExtractLi
 	return res, nil
 }
 
-// CheckZip confere, sem escrever nada, que src abre como zip e que não está inteiro protegido por
-// senha. Existe para recusar na hora, com um código de erro, o que o job só descobriria depois de
-// criar a pasta de destino.
-func (r *Root) CheckZip(src string) error {
-	zr, f, err := r.openZip(src)
+// CheckZip confere, sem escrever nada, que src abre como zip, que cabe nos limites e que não está
+// inteiro protegido por senha. Existe para recusar na hora, com um código de erro, o que o job só
+// descobriria depois de criar a pasta de destino. O tamanho descomprimido declarado mente, mas só
+// para menos (para mais, quem montou o arquivo só se prejudica): somado acima de MaxBytes, a
+// extração certamente estouraria, e não vale começar. A mentira para menos continua pega durante
+// a escrita, que conta os bytes de verdade.
+func (r *Root) CheckZip(src string, lim ExtractLimits) error {
+	zr, f, err := r.openZip(src, lim)
 	if err != nil {
 		return err
 	}
@@ -155,12 +155,21 @@ func (r *Root) CheckZip(src string) error {
 	if encryptedOnly(zr) {
 		return ErrArchiveEncrypted
 	}
+	var declared uint64
+	for _, e := range zr.File {
+		declared += e.UncompressedSize64
+		if declared > uint64(lim.MaxBytes) {
+			return fmt.Errorf("%w: declares more than %d bytes", ErrArchiveLimit, lim.MaxBytes)
+		}
+	}
 	return nil
 }
 
-// openZip abre src como zip, conferindo a assinatura antes de entregar o arquivo ao archive/zip.
-// Quem chama fecha o io.Closer.
-func (r *Root) openZip(src string) (*zip.Reader, io.Closer, error) {
+// openZip abre src como zip, conferindo a assinatura e o tamanho do índice antes de entregar o
+// arquivo ao archive/zip, que carrega o diretório central inteiro na memória: número de entradas
+// e bytes de índice são lidos do registro final, sem alocar nada proporcional a eles. Quem chama
+// fecha o io.Closer.
+func (r *Root) openZip(src string, lim ExtractLimits) (*zip.Reader, io.Closer, error) {
 	f, fi, err := r.OpenFile(src)
 	if err != nil {
 		return nil, nil, err
@@ -170,14 +179,27 @@ func (r *Root) openZip(src string) (*zip.Reader, io.Closer, error) {
 		f.Close()
 		return nil, nil, ErrBadArchive
 	}
-	if _, err := f.Seek(0, io.SeekStart); err != nil {
+	d, err := zipDirectory(f, fi.Size())
+	if err != nil {
 		f.Close()
-		return nil, nil, MapError(err)
+		return nil, nil, err
 	}
-	zr, err := zip.NewReader(f, fi.Size())
+	if d.entries > uint64(lim.MaxEntries) || d.size > MaxZipCentralDir {
+		f.Close()
+		return nil, nil, fmt.Errorf("%w: %d entries, %d bytes of index", ErrArchiveLimit, d.entries, d.size)
+	}
+	if _, err := countZipHeaders(f, d, lim.MaxEntries); err != nil {
+		f.Close()
+		return nil, nil, err
+	}
+	zr, err := zip.NewReader(boundedZip{r: f, gapFrom: d.offset + d.size, gapTo: d.end}, fi.Size())
 	if err != nil {
 		f.Close()
 		return nil, nil, fmt.Errorf("%w: %v", ErrBadArchive, err)
+	}
+	if len(zr.File) > lim.MaxEntries {
+		f.Close()
+		return nil, nil, fmt.Errorf("%w: %d entries", ErrArchiveLimit, len(zr.File))
 	}
 	return zr, f, nil
 }

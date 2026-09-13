@@ -10,7 +10,7 @@ describe('jobText', () => {
     expect(jobText('partial copy: 3 of 4 files copied; the finished ones were kept, the unfinished one was removed')).toContain('3 de 4')
   })
   it('deixa passar o que não conhece', () => {
-    expect(jobText('archive too large to extract')).toBe('archive too large to extract')
+    expect(jobText('something the server never said')).toBe('something the server never said')
   })
   it('segue o idioma ativo', () => {
     applyLocale('en')

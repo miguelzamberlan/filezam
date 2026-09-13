@@ -2402,7 +2402,8 @@ func TestExtractAndArchive(t *testing.T) {
 	_ = s
 }
 
-// A bomba de descompressão falha o job e não deixa a pasta pela metade.
+// A bomba de descompressão é recusada: declarada acima do teto, na hora (413, sem job nem pasta);
+// mentindo o tamanho, o job é que para quando os bytes reais passam do teto (TestExtractBombs).
 func TestExtractBombFailsJob(t *testing.T) {
 	admin, _, root := newEnv(t)
 	admin.login("admin", "admin")
@@ -2411,9 +2412,8 @@ func TestExtractBombFailsJob(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "teamA", "bomba.zip"), zipBytes(t, map[string]string{"zeros.bin": strings.Repeat("\x00", 4<<20)}), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	j := waitJob(t, admin, admin.expect("POST", "/api/files/extract", map[string]any{"path": "teamA/bomba.zip"}, 200))
-	if j["state"] != "failed" {
-		t.Fatalf("bomb job: %v", j)
+	if o := admin.expect("POST", "/api/files/extract", map[string]any{"path": "teamA/bomba.zip"}, 413); code(o) != "archive_too_large" {
+		t.Fatalf("bomb: %v", o)
 	}
 	if _, err := os.Stat(filepath.Join(root, "teamA", "bomba")); !os.IsNotExist(err) {
 		t.Fatalf("destination folder left behind: %v", err)

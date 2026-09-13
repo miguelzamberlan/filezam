@@ -72,6 +72,8 @@ func toAPIError(err error) *apiError {
 		return errBadArchive
 	case errors.Is(err, vfs.ErrArchiveEncrypted):
 		return errArchiveEncrypted
+	case errors.Is(err, vfs.ErrArchiveLimit):
+		return errorf(http.StatusRequestEntityTooLarge, "archive_too_large", "archive too large to extract on the server")
 	case errors.Is(err, vfs.ErrNotDir):
 		return errorf(http.StatusConflict, "not_dir", "not a directory")
 	case errors.Is(err, vfs.ErrNoSpace):

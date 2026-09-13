@@ -100,7 +100,8 @@ README.md README.en.md CONTRIBUTING.md SECURITY.md CODE_OF_CONDUCT.md CLAUDE.md
 | Extrações simultâneas no servidor | 2 (`extractGlobalMax`) | `archiveSem` |
 | Bytes escritos por extração | `extract_max_bytes` (10 GiB) | contados de verdade, não do cabeçalho |
 | Entradas por arquivo compactado | `extract_max_entries` (50 000) | a cota limita bytes, não inodes |
-| Tamanho do arquivo a extrair | `extract_max_archive` (2 GiB) | único teto antes de o zip ser carregado na memória |
+| Tamanho do arquivo a extrair | `extract_max_archive` (2 GiB) | conferido antes de abrir o arquivo |
+| Índice do zip | 64 MiB (`vfs.MaxZipCentralDir`) e `extract_max_entries` contadas nos cabeçalhos | medido no registro final e percorrido sem alocar, antes de o `archive/zip` carregá-lo |
 | Gerações de miniatura por usuário | 4; o excedente espera até 20 s antes de cair no ícone | `thumbSem` |
 | Pixels de uma imagem para miniatura | `thumbs_max_pixels` (50 MP) | lido do cabeçalho, antes de decodificar |
 | Cache de miniaturas em disco | `thumbs_cache_max` (2 GiB) | varredura horária recolhe as mais antigas |
