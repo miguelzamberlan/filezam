@@ -59,6 +59,7 @@ Concentra as ações. Convenções:
 
 - Seleção: clique = única; Ctrl/Cmd = alternar; Shift = intervalo desde a âncora; clique no fundo limpa.
 - Abrir: pasta navega; arquivo com preview abre o modal; senão baixa por `<a download>` invisível.
+- Baixar pasta ou seleção em zip passa por `downloadZip` (`components/ZipParts.tsx`): pede `zip/plan`; com uma parte só, dispara o zip direto; com mais, abre um diálogo com uma linha por parte (`<a download>` com `from`/`to` e o nome "pasta (parte i de n)"), marcando as já clicadas. Toast "Preparando o download…" se o plano passar de 700 ms; `timeout` do plano cai no zip único. O mesmo helper serve ao `PublicShare`.
 - Colar: se algum nome já existe no destino, pergunta uma vez (`dialogs.conflict`) e envia a política à API; `cut` limpa o clipboard após o job.
 - Soltar arquivos: no fundo → pasta atual; sobre uma linha de pasta → dentro dela (destaque azul). Tipos sem `Files` são ignorados.
 - Arrastar e soltar interno: linhas são `draggable`; o `dataTransfer` leva `application/x-filezam` (JSON com os nomes; a seleção inteira se o item arrastado estiver nela). Pastas da listagem e os ancestrais da trilha aceitam o drop e chamam `moveInto(dest, names)`, que lista o destino, pergunta uma vez em caso de conflito (`dialogs.conflict`) e dispara `Api.move`. Soltar sobre um item da própria seleção ou dentro dele mesmo é recusado. No toque não há arraste: use recortar/colar.

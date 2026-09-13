@@ -266,3 +266,18 @@ export interface EntryInfo {
   shares?: Share[]
   favorite?: boolean
 }
+
+/** Uma parte de um download em zip dividido: entradas com nome em [from, to) ('' = aberto). */
+export interface ZipPart {
+  from: string
+  to: string
+  files: number
+  bytes: number
+}
+
+export interface ZipPlan {
+  partSize: number
+  parts: ZipPart[]
+  files: number
+  bytes: number
+}

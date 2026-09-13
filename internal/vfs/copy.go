@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"slices"
 	"strings"
 	"time"
 )
@@ -135,6 +136,9 @@ func (r *Root) walkDir(ctx context.Context, p string, depth int, fn func(path st
 		}
 		return nil
 	}
+	// Em ordem de nome, não na ordem do diretório: o zip dividido em partes depende de a mesma
+	// árvore ser percorrida sempre na mesma sequência (ver ZipOrder).
+	slices.SortFunc(des, func(a, b fs.DirEntry) int { return strings.Compare(a.Name(), b.Name()) })
 	for _, de := range des {
 		if err := ctx.Err(); err != nil {
 			return err

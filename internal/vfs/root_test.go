@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"testing"
@@ -1094,4 +1095,91 @@ func TestZipIndexIsBoundedBeforeLoading(t *testing.T) {
 	if err := r.CheckZip("declara.zip", ExtractLimits{MaxBytes: 4000, MaxEntries: 10}); err != nil {
 		t.Fatalf("declared size within MaxBytes: %v", err)
 	}
+}
+
+// Um zip dividido em partes cobre cada arquivo exatamente uma vez, cada parte é um zip completo,
+// um arquivo maior que o teto vai sozinho e as fronteiras por nome não duplicam nada se a pasta
+// mudar entre o plano e o download.
+func TestZipPartsCoverEveryFileOnce(t *testing.T) {
+	r, root, outside := fixture(t)
+	write := func(rel string, size int) {
+		t.Helper()
+		p := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, bytes.Repeat([]byte("z"), size), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("fotos/a/1.jpg", 40)
+	write("fotos/a/2.jpg", 40)
+	write("fotos/a b/3.jpg", 40)
+	write("fotos/grande.mov", 250)
+	write("fotos/z.txt", 10)
+	if err := os.MkdirAll(filepath.Join(root, "fotos", "vazia"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if ZipOrder("fotos/a/2.jpg", "fotos/a b/3.jpg") >= 0 || ZipOrder("fotos/a", "fotos/a/1.jpg") >= 0 {
+		t.Fatal("ZipOrder must follow the walk: a folder and its contents come before a sibling")
+	}
+	ctx := context.Background()
+	parts, err := r.PlanZipParts(ctx, []string{"fotos"}, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(parts) != 4 || parts[0].From != "" || parts[len(parts)-1].To != "" {
+		t.Fatalf("plan: %+v", parts)
+	}
+	for i := 1; i < len(parts); i++ {
+		if parts[i].From != parts[i-1].To {
+			t.Fatalf("parts must be contiguous: %+v", parts)
+		}
+	}
+	entries := func(part ZipPart) []string {
+		t.Helper()
+		var buf bytes.Buffer
+		if err := r.WriteZipPart(ctx, &buf, []string{"fotos"}, part); err != nil {
+			t.Fatal(err)
+		}
+		zr, err := zip.NewReader(bytes.NewReader(buf.Bytes()), int64(buf.Len()))
+		if err != nil {
+			t.Fatalf("part is not a valid zip: %v", err)
+		}
+		var names []string
+		for _, f := range zr.File {
+			if !strings.HasSuffix(f.Name, "/") {
+				names = append(names, f.Name)
+			}
+		}
+		return names
+	}
+	// Muda a pasta depois do plano: um arquivo novo entra em exatamente uma parte.
+	write("fotos/a/15.jpg", 5)
+	seen := map[string]int{}
+	for _, p := range parts {
+		got := entries(p)
+		if len(got) == 0 {
+			t.Fatalf("empty part %+v", p)
+		}
+		for _, n := range got {
+			seen[n]++
+		}
+		if slices.Contains(got, "fotos/grande.mov") && len(got) != 1 {
+			t.Fatalf("file larger than the part size must go alone: %v", got)
+		}
+	}
+	for _, n := range entries(ZipPart{}) {
+		if seen[n] != 1 {
+			t.Fatalf("%s appears in %d parts (%v)", n, seen[n], seen)
+		}
+	}
+	if len(seen) != 6 {
+		t.Fatalf("files covered: %v", seen)
+	}
+	// Tudo abaixo do teto: uma parte só, com a pasta inteira.
+	if one, _ := r.PlanZipParts(ctx, []string{"fotos"}, ZipPartSize); len(one) != 1 || one[0].Files != 6 {
+		t.Fatalf("single part: %+v", one)
+	}
+	checkCanary(t, outside)
 }

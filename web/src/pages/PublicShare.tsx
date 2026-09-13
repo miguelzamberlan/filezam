@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Api, ApiError } from '../api/client'
 import type { Entry } from '../api/types'
 import { formatBytes, formatDate, formatRelative } from '../lib/format'
-import { decodePath, encodePath, join, dirname } from '../lib/paths'
+import { basename, decodePath, encodePath, join, dirname } from '../lib/paths'
 import { sortEntries, type Sort } from '../lib/naturalSort'
 import { S, errorMessage } from '../strings'
 import FileList from '../components/FileList'
@@ -13,6 +13,8 @@ import Preview, { previewKind } from '../components/Preview'
 import ContextMenu from '../components/ContextMenu'
 import { IDownload, ISpinner, IArrowUp, IEye, IKey, iconFor } from '../components/Icons'
 import PublicDrop from './PublicDrop'
+import { toast } from '../components/dialogs'
+import { downloadZip } from '../components/ZipParts'
 
 // Página pública de um link: pasta (listagem somente leitura), arquivo único (cartão com
 // download/preview) ou caixa de recebimento (PublicDrop, só envio). Links com senha mostram o
@@ -61,8 +63,16 @@ export default function PublicShare() {
   const downloadSel = () => {
     const sel = entries.filter((e) => selection.has(e.name))
     if (sel.length === 1 && sel[0].type === 'file') window.location.href = urlFor(sel[0], false)
-    else if (sel.length === 0) window.location.href = Api.publicZipUrl(token, [path])
-    else window.location.href = Api.publicZipUrl(token, sel.map((e) => join(path, e.name)))
+    else {
+      const paths = sel.length === 0 ? [path] : sel.map((e) => join(path, e.name))
+      const name = sel.length === 1 ? sel[0].name : basename(path) || info.data?.name || 'filezam'
+      downloadZip({
+        plan: () => Api.publicZipPlan(token, paths),
+        url: (part, partName) => Api.publicZipUrl(token, paths, partName, part),
+        name,
+        start: (u) => (window.location.href = u),
+      }).catch((e) => toast(e instanceof ApiError ? errorMessage(e.code, e.message) : String(e), 'error'))
+    }
   }
   const unlock = async (ev: React.FormEvent) => {
     ev.preventDefault()

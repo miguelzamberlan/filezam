@@ -3058,3 +3058,72 @@ func TestBrokenSharesAreRevokedAfterGrace(t *testing.T) {
 		}
 	}
 }
+
+// Download em partes: o plano divide pelo tamanho, cada parte baixa como um zip completo com o
+// nome pedido e o conjunto das partes tem cada arquivo uma vez, no logado e no link público.
+func TestZipDownloadInParts(t *testing.T) {
+	admin, _, root := newEnv(t)
+	admin.login("admin", "admin")
+	admin.expect("POST", "/api/auth/password", map[string]string{"current": "admin", "new": "correct horse battery"}, 200)
+	old := zipPartSize
+	zipPartSize = 100
+	t.Cleanup(func() { zipPartSize = old })
+	for i, size := range []int{60, 60, 60, 300} {
+		os.WriteFile(filepath.Join(root, "teamA", "pub", fmt.Sprintf("f%d.bin", i)), bytes.Repeat([]byte("x"), size), 0o644)
+	}
+	readZip := func(c *client, u string) ([]string, string) {
+		t.Helper()
+		resp, _ := c.do("GET", u, nil, nil)
+		body, _ := io.ReadAll(resp.Body)
+		if resp.StatusCode != 200 {
+			t.Fatalf("GET %s: %d %s", u, resp.StatusCode, body)
+		}
+		zr, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
+		if err != nil {
+			t.Fatalf("part is not a zip: %v", err)
+		}
+		var names []string
+		for _, f := range zr.File {
+			if !strings.HasSuffix(f.Name, "/") {
+				names = append(names, f.Name)
+			}
+		}
+		return names, resp.Header.Get("Content-Disposition")
+	}
+	check := func(c *client, planURL, zipURL string) {
+		t.Helper()
+		plan := c.expect("GET", planURL, nil, 200)
+		parts := plan["parts"].([]any)
+		if len(parts) < 3 || plan["files"].(float64) != 5 {
+			t.Fatalf("plan: %v", plan)
+		}
+		seen := map[string]int{}
+		for i, p := range parts {
+			m := p.(map[string]any)
+			q := url.Values{"from": {m["from"].(string)}, "to": {m["to"].(string)}, "name": {fmt.Sprintf("pub (parte %d de %d)", i+1, len(parts))}}
+			names, disp := readZip(c, zipURL+"&"+q.Encode())
+			if !strings.Contains(disp, fmt.Sprintf("parte %d de %d", i+1, len(parts))) {
+				t.Fatalf("part filename: %q", disp)
+			}
+			for _, n := range names {
+				seen[n]++
+			}
+		}
+		if len(seen) != 5 {
+			t.Fatalf("parts cover: %v", seen)
+		}
+		for n, k := range seen {
+			if k != 1 {
+				t.Fatalf("%s in %d parts", n, k)
+			}
+		}
+	}
+	check(admin, "/api/files/zip/plan?path=teamA/pub", "/api/files/zip?path=teamA/pub")
+	admin.expect("GET", "/api/files/zip/plan?path=teamA/nao-existe", nil, 404)
+	admin.expect("GET", "/api/files/zip/plan", nil, 400)
+
+	tok := admin.expect("POST", "/api/shares", map[string]any{"path": "teamA/pub", "expiresIn": 600}, 201)["token"].(string)
+	pub := newPublic(t, admin.srv)
+	check(pub, "/api/public/"+tok+"/zip/plan?path=", "/api/public/"+tok+"/zip?path=")
+	pub.expect("GET", "/api/public/"+tok+"/zip/plan?path=../teamB", nil, 400)
+}

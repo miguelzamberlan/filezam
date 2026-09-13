@@ -386,6 +386,15 @@ No nginx, `proxy_read_timeout` e `proxy_send_timeout`; no Traefik, `respondingTi
 Cloudflare Tunnel, a conexão é mantida enquanto houver bytes fluindo, mas um HD lento com uma pausa
 longa entre arquivos pode encostar no limite. O Filezam em si não impõe tempo limite de escrita.
 
+**Acima de 2 GB, o download é dividido em partes.** Antes de começar, a interface pergunta ao
+servidor quanto a pasta (ou a seleção) pesa; passando de 2 GB, abre uma janela com uma parte de até
+2 GB por linha, cada uma com o seu botão — como o Google Drive faz. Cada parte é um `.zip` completo,
+que abre sozinho: basta extrair todas na mesma pasta. Uma parte que cair é baixada de novo sozinha,
+em vez de recomeçar dezenas de gigabytes, e nenhuma conexão precisa ficar de pé por horas. Um
+arquivo maior que 2 GB vai numa parte só dele. Vale no link público também, onde medir a pasta
+ocupa um dos dois downloads simultâneos do visitante. Se a pasta for grande demais para medir em
+60 s, a interface cai no zip único.
+
 Para arquivamentos muito grandes e repetidos, **Compactar em .zip** costuma servir melhor: gera o
 arquivo no servidor em segundo plano, com progresso e cancelamento, e o download que vem depois é
 de um arquivo comum — com tamanho conhecido e retomável.

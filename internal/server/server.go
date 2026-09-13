@@ -316,6 +316,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.Handle("PUT /api/files/content", user(s.handlePutContent))
 	mux.Handle("POST /api/files/batch", user(s.handleBatch))
 	mux.Handle("GET /api/files/zip", user(s.handleZip))
+	mux.Handle("GET /api/files/zip/plan", user(s.handleZipPlan))
 	mux.Handle("POST /api/files/mkdir", user(s.handleMkdir))
 	mux.Handle("POST /api/files/rename", user(s.handleRename))
 	mux.Handle("POST /api/files/delete", user(s.handleDelete))
@@ -354,6 +355,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.Handle("GET /api/public/{token}/list", s.h(s.handlePublicList))
 	mux.Handle("GET /api/public/{token}/content", s.h(s.handlePublicContent))
 	mux.Handle("GET /api/public/{token}/zip", s.h(s.handlePublicZip))
+	mux.Handle("GET /api/public/{token}/zip/plan", s.h(s.handlePublicZipPlan))
 	mux.Handle("POST /api/public/{token}/unlock", chain(s.h(s.handlePublicUnlock), s.csrf))
 
 	// Envio anônimo: mesmo padrão do unlock — CSRF sem sessão. A autorização é o token (ou o

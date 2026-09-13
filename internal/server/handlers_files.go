@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/miguelzamberlan/filezam/internal/auth"
 	"github.com/miguelzamberlan/filezam/internal/jobs"
@@ -279,7 +280,60 @@ func serveFile(w http.ResponseWriter, r *http.Request, root *vfs.Root, p string,
 }
 
 // serveZip streams a zip of paths.
+// zipPartQuery reads the optional part bounds of a split download (?from=&to=, entry names).
+// Só servem para comparar nomes dentro do zip, nunca para abrir nada no disco; mesmo assim têm
+// o tamanho e o UTF-8 de um caminho.
+func zipPartQuery(r *http.Request) (vfs.ZipPart, error) {
+	part := vfs.ZipPart{From: r.URL.Query().Get("from"), To: r.URL.Query().Get("to")}
+	for _, v := range []string{part.From, part.To} {
+		if len(v) > 4096 || !utf8.ValidString(v) {
+			return part, errorf(http.StatusBadRequest, "bad_query", "invalid part bound")
+		}
+	}
+	return part, nil
+}
+
+// zipPlanTimeout limits the scan that sizes a download: numa pasta enorme o plano desiste antes de
+// segurar a requisição por minutos, e a interface cai no zip único.
+const zipPlanTimeout = 60 * time.Second
+
+// zipPartSize is vfs.ZipPartSize; variável só para os testes dividirem pastas pequenas.
+var zipPartSize = vfs.ZipPartSize
+
+// serveZipPlan answers how a zip of paths splits into parts of at most vfs.ZipPartSize.
+func serveZipPlan(w http.ResponseWriter, r *http.Request, root *vfs.Root, paths []string) error {
+	if len(paths) == 0 {
+		return errorf(http.StatusBadRequest, "no_paths", "no paths given")
+	}
+	for _, p := range paths {
+		if _, err := root.Stat(p); err != nil {
+			return err
+		}
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), zipPlanTimeout)
+	defer cancel()
+	parts, err := root.PlanZipParts(ctx, paths, zipPartSize)
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return errorf(http.StatusServiceUnavailable, "timeout", "folder too large to size in time")
+		}
+		return err
+	}
+	var files int
+	var bytes int64
+	for _, p := range parts {
+		files += p.Files
+		bytes += p.Bytes
+	}
+	writeJSON(w, r, 200, map[string]any{"partSize": zipPartSize, "parts": parts, "files": files, "bytes": bytes})
+	return nil
+}
+
 func serveZip(w http.ResponseWriter, r *http.Request, root *vfs.Root, paths []string, name string) error {
+	part, err := zipPartQuery(r)
+	if err != nil {
+		return err
+	}
 	if len(paths) == 0 {
 		return errorf(http.StatusBadRequest, "no_paths", "no paths given")
 	}
@@ -300,11 +354,37 @@ func serveZip(w http.ResponseWriter, r *http.Request, root *vfs.Root, paths []st
 	h.Set("Cache-Control", "private, no-store")
 	h.Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name + ".zip"}))
 	w.WriteHeader(200)
-	if err := root.WriteZip(r.Context(), w, paths); err != nil {
+	if err := root.WriteZipPart(r.Context(), w, paths, part); err != nil {
 		// headers already sent; abort the connection so the client sees a failure
 		panic(http.ErrAbortHandler)
 	}
 	return nil
+}
+
+// zipPaths reads the ?path= list of a zip request.
+func zipPaths(r *http.Request) ([]string, error) {
+	var paths []string
+	for _, raw := range r.URL.Query()["path"] {
+		p, err := vfs.NormalizeWritable(raw) // recusa .filezam-* (lixeira, partes) também na leitura
+		if err != nil {
+			return nil, err
+		}
+		paths = append(paths, p)
+	}
+	return paths, nil
+}
+
+func (s *Server) handleZipPlan(w http.ResponseWriter, r *http.Request) error {
+	root, _, err := s.userRoot(r)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	paths, err := zipPaths(r)
+	if err != nil {
+		return err
+	}
+	return serveZipPlan(w, r, root, paths)
 }
 
 func (s *Server) handleZip(w http.ResponseWriter, r *http.Request) error {
@@ -318,13 +398,9 @@ func (s *Server) handleZip(w http.ResponseWriter, r *http.Request) error {
 		return errorf(http.StatusTooManyRequests, "busy", "too many concurrent zips")
 	}
 	defer s.zipSem.Release(zipKey)
-	var paths []string
-	for _, raw := range r.URL.Query()["path"] {
-		p, err := vfs.NormalizeWritable(raw) // recusa .filezam-* (lixeira, partes) também na leitura
-		if err != nil {
-			return err
-		}
-		paths = append(paths, p)
+	paths, err := zipPaths(r)
+	if err != nil {
+		return err
 	}
 	name := r.URL.Query().Get("name")
 	if name != "" && vfs.ValidName(name) != nil {

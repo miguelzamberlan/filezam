@@ -20,6 +20,7 @@ import Editor, { canEdit } from '../components/Editor'
 import ShareDialog from '../components/ShareDialog'
 import InfoDialog from '../components/InfoDialog'
 import { dialogs, toast, type ConfirmWarning } from '../components/dialogs'
+import { downloadZip } from '../components/ZipParts'
 import { useUploads } from '../components/UploadPanel'
 import { MenuButton } from '../components/Shell'
 import {
@@ -295,8 +296,14 @@ export default function Browser() {
 
   const download = (list = selectedEntries) => {
     if (list.length === 1 && list[0].type === 'file') return triggerDownload(Api.contentUrl(join(path, list[0].name)))
-    if (list.length === 0) return triggerDownload(Api.zipUrl([path], basename(path) || undefined))
-    triggerDownload(Api.zipUrl(list.map((e) => join(path, e.name))))
+    const paths = list.length === 0 ? [path] : list.map((e) => join(path, e.name))
+    const name = list.length === 0 ? basename(path) || undefined : list.length === 1 ? list[0].name : undefined
+    downloadZip({
+      plan: () => Api.zipPlan(paths),
+      url: (part, partName) => Api.zipUrl(paths, partName ?? name, part),
+      name: name ?? basename(path) ?? 'filezam',
+      start: triggerDownload,
+    }).catch(fail)
   }
 
   const toggleFavorite = async (p = path) => {

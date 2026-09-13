@@ -1,5 +1,5 @@
 import type {
-  AdminUser, AppConfig, AuditEntry, Conflict, DiskUsage, Entry, EntryInfo, Favorite, IndexStatus, Job, JobRecord, ListPage, Listing, PublicInfo, SearchResult, Settings, Share, TrashItem, UploadSession, User,
+  AdminUser, AppConfig, ZipPart, ZipPlan, AuditEntry, Conflict, DiskUsage, Entry, EntryInfo, Favorite, IndexStatus, Job, JobRecord, ListPage, Listing, PublicInfo, SearchResult, Settings, Share, TrashItem, UploadSession, User,
 } from './types'
 
 export class ApiError extends Error {
@@ -66,6 +66,18 @@ const q = (params: Record<string, string | number | boolean | undefined>) => {
   return s ? '?' + s : ''
 }
 
+// zipQuery monta ?path=…&name=…&from=…&to=… de um zip (ou de uma parte dele).
+function zipQuery(paths: string[], name?: string, part?: ZipPart | null): string {
+  const sp = new URLSearchParams()
+  for (const p of paths) sp.append('path', p)
+  if (name) sp.set('name', name)
+  if (part) {
+    sp.set('from', part.from)
+    sp.set('to', part.to)
+  }
+  return sp.toString()
+}
+
 export const Api = {
   // auth
   login: (username: string, password: string) => api<{ user?: User; totpRequired?: boolean; token?: string }>('POST', '/api/auth/login', { username, password }),
@@ -104,12 +116,8 @@ export const Api = {
   },
 
   contentUrl: (path: string, inline = false) => '/api/files/content' + q({ path, inline: inline ? 1 : undefined }),
-  zipUrl: (paths: string[], name?: string) => {
-    const sp = new URLSearchParams()
-    for (const p of paths) sp.append('path', p)
-    if (name) sp.set('name', name)
-    return '/api/files/zip?' + sp.toString()
-  },
+  zipUrl: (paths: string[], name?: string, part?: ZipPart | null) => '/api/files/zip?' + zipQuery(paths, name, part),
+  zipPlan: (paths: string[]) => api<ZipPlan>('GET', '/api/files/zip/plan?' + zipQuery(paths)),
   mkdir: (path: string) => api<{ path: string; entry: Entry }>('POST', '/api/files/mkdir', { path }),
   rename: (path: string, newName: string) => api<{ path: string; entry: Entry }>('POST', '/api/files/rename', { path, newName }),
   delete: (paths: string[], permanent = false) => api<{ job: Job }>('POST', '/api/files/delete', permanent ? { paths, permanent } : { paths }),
@@ -181,11 +189,8 @@ export const Api = {
   dropComplete: (token: string, id: string) => api<{ name: string; size: number }>('POST', `/api/public/${token}/uploads/${id}/complete`),
   dropAbort: (token: string, id: string) => api<{ ok: true }>('DELETE', `/api/public/${token}/uploads/${id}`),
 
-  publicZipUrl: (token: string, paths: string[]) => {
-    const sp = new URLSearchParams()
-    for (const p of paths) sp.append('path', p)
-    return `/api/public/${token}/zip?` + sp.toString()
-  },
+  publicZipUrl: (token: string, paths: string[], name?: string, part?: ZipPart | null) => `/api/public/${token}/zip?` + zipQuery(paths, name, part),
+  publicZipPlan: (token: string, paths: string[]) => api<ZipPlan>('GET', `/api/public/${token}/zip/plan?` + zipQuery(paths)),
 
   // admin
   adminUsers: () => api<{ users: AdminUser[] }>('GET', '/api/admin/users'),

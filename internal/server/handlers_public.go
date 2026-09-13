@@ -321,21 +321,57 @@ func (s *Server) handlePublicContent(w http.ResponseWriter, r *http.Request) err
 	return serveFile(w, r, root, p, queryBool(r, "inline"))
 }
 
-func (s *Server) handlePublicZip(w http.ResponseWriter, r *http.Request) error {
+// publicZipRoot opens the share for a zip or its plan, with the same checks.
+func (s *Server) publicZipRoot(r *http.Request) (*vfs.Root, *store.Share, []string, error) {
 	root, sh, err := s.shareRoot(r)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	fail := func(err error) (*vfs.Root, *store.Share, []string, error) {
+		root.Close()
+		return nil, nil, nil, err
+	}
+	if err := readable(sh); err != nil {
+		return fail(err)
+	}
+	if !shareUnlocked(r, sh) {
+		return fail(errShareLocked)
+	}
+	if sh.Kind == "file" {
+		return fail(vfs.ErrNotDir)
+	}
+	paths, err := zipPaths(r)
+	if err != nil {
+		return fail(err)
+	}
+	if len(paths) == 0 {
+		paths = []string{""}
+	}
+	return root, sh, paths, nil
+}
+
+// handlePublicZipPlan sizes a public zip. Conta como download: a varredura custa disco, e um
+// visitante anônimo não pode usá-la para martelar o servidor.
+func (s *Server) handlePublicZipPlan(w http.ResponseWriter, r *http.Request) error {
+	root, _, paths, err := s.publicZipRoot(r)
 	if err != nil {
 		return err
 	}
 	defer root.Close()
-	if err := readable(sh); err != nil {
+	release, err := s.acquirePublicDL(r)
+	if err != nil {
 		return err
 	}
-	if !shareUnlocked(r, sh) {
-		return errShareLocked
+	defer release()
+	return serveZipPlan(w, r, root, paths)
+}
+
+func (s *Server) handlePublicZip(w http.ResponseWriter, r *http.Request) error {
+	root, sh, paths, err := s.publicZipRoot(r)
+	if err != nil {
+		return err
 	}
-	if sh.Kind == "file" {
-		return vfs.ErrNotDir
-	}
+	defer root.Close()
 	release, err := s.acquirePublicDL(r)
 	if err != nil {
 		return err
@@ -350,20 +386,13 @@ func (s *Server) handlePublicZip(w http.ResponseWriter, r *http.Request) error {
 		return errorf(http.StatusTooManyRequests, "busy", "too many public zips in progress; try again later")
 	}
 	defer s.publicZip.Release()
-	var paths []string
-	for _, raw := range r.URL.Query()["path"] {
-		p, err := vfs.NormalizeWritable(raw) // recusa .filezam-* também na leitura
-		if err != nil {
-			return err
-		}
-		paths = append(paths, p)
-	}
-	if len(paths) == 0 {
-		paths = []string{""}
-	}
 	name := ""
 	if len(paths) == 1 && paths[0] == "" {
 		name = sh.Name
+	}
+	// A interface manda o nome de cada parte ("fotos (parte 1 de 3)").
+	if n := r.URL.Query().Get("name"); n != "" && vfs.ValidName(n) == nil {
+		name = n
 	}
 	return serveZip(w, r, root, paths, name)
 }
