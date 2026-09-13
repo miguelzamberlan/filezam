@@ -794,7 +794,7 @@ func TestExtractSkipsUnreadable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Files != 1 || res.Skipped != 3 {
+	if res.Files != 1 || res.Skipped != 3 || res.Encrypted != 1 {
 		t.Fatalf("result: %+v", res)
 	}
 	// A entrada cifrada não pode ter virado um arquivo com o texto cifrado dentro.
@@ -807,6 +807,46 @@ func TestExtractSkipsUnreadable(t *testing.T) {
 	// A duplicada não sobrescreve a primeira.
 	if b, _ := os.ReadFile(filepath.Join(root, "saida", "dup.txt")); string(b) != "primeira" {
 		t.Fatalf("duplicate overwrote: %q", b)
+	}
+	checkCanary(t, outside)
+}
+
+// Zip com todo arquivo protegido por senha é recusado antes de qualquer escrita: extrair só
+// criaria as pastas, vazias. Com parte dos arquivos legível, a extração segue e pula as cifradas.
+func TestExtractRefusesEncryptedArchive(t *testing.T) {
+	r, root, outside := fixture(t)
+	if err := r.Mkdir("saida"); err != nil {
+		t.Fatal(err)
+	}
+	makeZip(t, root, "senha.zip", []zipEntry{
+		{name: "pasta/"},
+		{name: "pasta/a.txt", body: "cifrado a", raw: true, method: zip.Store, flags: 0x1, declare: 9},
+		{name: "b.txt", body: "cifrado b", raw: true, method: zip.Store, flags: 0x1, declare: 9},
+	})
+	if err := r.CheckZip("senha.zip"); !errors.Is(err, ErrArchiveEncrypted) {
+		t.Fatalf("CheckZip: want ErrArchiveEncrypted, got %v", err)
+	}
+	if _, err := r.ExtractZip(context.Background(), "senha.zip", "saida", bigLimits, nil); !errors.Is(err, ErrArchiveEncrypted) {
+		t.Fatalf("ExtractZip: want ErrArchiveEncrypted, got %v", err)
+	}
+	if des, _ := os.ReadDir(filepath.Join(root, "saida")); len(des) != 0 {
+		t.Fatalf("encrypted archive wrote %d entries", len(des))
+	}
+
+	makeZip(t, root, "misto.zip", []zipEntry{
+		{name: "cifrado.txt", body: "cifrado", raw: true, method: zip.Store, flags: 0x1, declare: 7},
+		{name: "claro.txt", body: "claro"},
+	})
+	if err := r.CheckZip("misto.zip"); err != nil {
+		t.Fatalf("mixed archive refused: %v", err)
+	}
+	// Só pastas não é "protegido por senha", e .txt renomeado para .zip continua bad_archive.
+	makeZip(t, root, "pastas.zip", []zipEntry{{name: "x/"}, {name: "x/y/"}})
+	if err := r.CheckZip("pastas.zip"); err != nil {
+		t.Fatalf("folders-only archive refused: %v", err)
+	}
+	if err := r.CheckZip("a/file.txt"); !errors.Is(err, ErrBadArchive) {
+		t.Fatalf("not a zip: want ErrBadArchive, got %v", err)
 	}
 	checkCanary(t, outside)
 }

@@ -84,6 +84,13 @@ func (s *Server) handleExtract(w http.ResponseWriter, r *http.Request) error {
 		return errorf(http.StatusTooManyRequests, "busy", "too many extractions on the server; try again")
 	}
 	release := func() { s.archiveSem.Release(); s.extractSem.Release(key) }
+	// Zip corrompido ou protegido por senha é recusado na hora, com código próprio, em vez de
+	// virar um job falhado (ou uma pasta só com subpastas vazias). Dentro dos semáforos, porque
+	// abrir o zip carrega o diretório central na memória.
+	if err := root.CheckZip(p); err != nil {
+		release()
+		return err
+	}
 
 	lim := vfs.ExtractLimits{MaxBytes: set.ExtractMaxBytes, MaxEntries: int(set.ExtractMaxEntries)}
 	parent := vfs.Dir(p)
@@ -112,7 +119,10 @@ func (s *Server) handleExtract(w http.ResponseWriter, r *http.Request) error {
 		s.usageAdd(u.ID, res.Bytes)
 		s.indexTree(vfs.Join(u.Scope, dst))
 		j.AddDir(parent)
-		if res.Skipped > 0 {
+		switch {
+		case res.Encrypted > 0:
+			j.Warn(strconv.Itoa(res.Skipped) + " entries skipped (" + strconv.Itoa(res.Encrypted) + " password-protected)")
+		case res.Skipped > 0:
 			j.Warn(strconv.Itoa(res.Skipped) + " entries skipped")
 		}
 		return nil

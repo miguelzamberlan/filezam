@@ -82,7 +82,11 @@ sustenta que isso seja seguro:
   um symlink. Entrada duplicada dentro do mesmo arquivo vira aviso.
 - **Entrada cifrada é pulada explicitamente.** O `archive/zip` do Go não valida esse bit: sem a
   checagem, ele copiaria o texto cifrado para o disco com nome legítimo e só acusaria erro de
-  checksum no fim. Qualquer erro no meio da cópia também apaga o arquivo parcial.
+  checksum no fim. Qualquer erro no meio da cópia também apaga o arquivo parcial. Se **todo**
+  arquivo do zip é cifrado (o caso normal de um zip com senha), a extração é recusada inteira com
+  `archive_encrypted` — na requisição, por `CheckZip`, e de novo no job antes de escrever, caso o
+  arquivo tenha sido trocado no meio — em vez de terminar com uma pasta só de subpastas vazias. Não há
+  suporte a senha: nenhuma senha é pedida, testada ou guardada.
 - **Bomba de descompressão**: o tamanho descomprimido do cabeçalho é escolhido por quem monta o
   arquivo e mente, então ele nunca é usado como limite — contam os bytes que realmente passam pelo
   disco (`extract_max_bytes`). O número de entradas tem teto próprio (`extract_max_entries`), porque

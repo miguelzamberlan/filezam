@@ -24,12 +24,14 @@ type ExtractLimits struct {
 }
 
 // ExtractResult conta o que a extração fez. Skipped são entradas recusadas (nome inválido,
-// symlink, cifrada, duplicada) que viraram aviso em vez de derrubar o trabalho inteiro.
+// symlink, cifrada, duplicada) que viraram aviso em vez de derrubar o trabalho inteiro;
+// Encrypted é quantas delas foram puladas por estarem protegidas por senha.
 type ExtractResult struct {
-	Files   int
-	Dirs    int
-	Skipped int
-	Bytes   int64
+	Files     int
+	Dirs      int
+	Skipped   int
+	Encrypted int
+	Bytes     int64
 }
 
 // ErrArchiveLimit indica que a extração passou de MaxBytes ou MaxEntries.
@@ -37,6 +39,13 @@ var ErrArchiveLimit = errors.New("archive limit exceeded")
 
 // ErrBadArchive indica um arquivo que não é um formato suportado, ou que está corrompido.
 var ErrBadArchive = errors.New("not a readable archive")
+
+// ErrArchiveEncrypted indica um zip em que todo arquivo está protegido por senha. O extrator não
+// decifra, então seguir em frente só criaria as pastas, vazias.
+var ErrArchiveEncrypted = errors.New("archive is password-protected")
+
+// errEntryEncrypted é o aviso de uma entrada cifrada num zip que tem outras legíveis.
+var errEntryEncrypted = errors.New("password-protected, not supported")
 
 // zipMagic: assinatura de um arquivo zip (vazio ou não).
 func isZip(head []byte) bool {
@@ -64,24 +73,18 @@ func (r *Root) ExtractZip(ctx context.Context, src, dstDir string, lim ExtractLi
 	if lim.MaxBytes <= 0 || lim.MaxEntries <= 0 {
 		return res, fmt.Errorf("%w: limits required", ErrArchiveLimit)
 	}
-	f, fi, err := r.OpenFile(src)
+	zr, f, err := r.openZip(src)
 	if err != nil {
 		return res, err
 	}
 	defer f.Close()
-	head := make([]byte, 4)
-	if _, err := io.ReadFull(f, head); err != nil || !isZip(head) {
-		return res, ErrBadArchive
-	}
-	if _, err := f.Seek(0, io.SeekStart); err != nil {
-		return res, MapError(err)
-	}
-	zr, err := zip.NewReader(f, fi.Size())
-	if err != nil {
-		return res, fmt.Errorf("%w: %v", ErrBadArchive, err)
-	}
 	if len(zr.File) > lim.MaxEntries {
 		return res, fmt.Errorf("%w: %d entries", ErrArchiveLimit, len(zr.File))
+	}
+	// Conferido de novo aqui, e não só em CheckZip: o arquivo pode ter sido trocado entre a
+	// requisição e o job.
+	if encryptedOnly(zr) {
+		return res, ErrArchiveEncrypted
 	}
 	// A partir daqui tudo é relativo à pasta de destino, dentro do seu próprio os.Root.
 	dst, err := r.Sub(dstDir)
@@ -104,7 +107,8 @@ func (r *Root) ExtractZip(ctx context.Context, src, dstDir string, lim ExtractLi
 		// Bit 0 do descritor geral: conteúdo cifrado.
 		if e.Flags&0x1 != 0 {
 			res.Skipped++
-			prog.warn(e.Name, errors.New("encrypted"))
+			res.Encrypted++
+			prog.warn(e.Name, errEntryEncrypted)
 			continue
 		}
 		if isDir || e.FileInfo().IsDir() {
@@ -137,6 +141,62 @@ func (r *Root) ExtractZip(ctx context.Context, src, dstDir string, lim ExtractLi
 		}
 	}
 	return res, nil
+}
+
+// CheckZip confere, sem escrever nada, que src abre como zip e que não está inteiro protegido por
+// senha. Existe para recusar na hora, com um código de erro, o que o job só descobriria depois de
+// criar a pasta de destino.
+func (r *Root) CheckZip(src string) error {
+	zr, f, err := r.openZip(src)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if encryptedOnly(zr) {
+		return ErrArchiveEncrypted
+	}
+	return nil
+}
+
+// openZip abre src como zip, conferindo a assinatura antes de entregar o arquivo ao archive/zip.
+// Quem chama fecha o io.Closer.
+func (r *Root) openZip(src string) (*zip.Reader, io.Closer, error) {
+	f, fi, err := r.OpenFile(src)
+	if err != nil {
+		return nil, nil, err
+	}
+	head := make([]byte, 4)
+	if _, err := io.ReadFull(f, head); err != nil || !isZip(head) {
+		f.Close()
+		return nil, nil, ErrBadArchive
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		f.Close()
+		return nil, nil, MapError(err)
+	}
+	zr, err := zip.NewReader(f, fi.Size())
+	if err != nil {
+		f.Close()
+		return nil, nil, fmt.Errorf("%w: %v", ErrBadArchive, err)
+	}
+	return zr, f, nil
+}
+
+// encryptedOnly diz se todo arquivo do zip está cifrado (bit 0 do descritor geral). Diretórios
+// não contam: nenhuma ferramenta os cifra, e um zip só de pastas não é protegido por senha. Um
+// zip com parte dos arquivos cifrada segue extraindo o resto, com aviso por entrada.
+func encryptedOnly(zr *zip.Reader) bool {
+	files := 0
+	for _, e := range zr.File {
+		if strings.HasSuffix(e.Name, "/") || e.FileInfo().IsDir() {
+			continue
+		}
+		if e.Flags&0x1 == 0 {
+			return false
+		}
+		files++
+	}
+	return files > 0
 }
 
 // entryPath turns an archive entry name into a path relative to the destination, or reports that

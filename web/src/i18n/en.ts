@@ -390,6 +390,7 @@ export const en: Strings = {
     incomplete: 'The upload ended incomplete. Try again.',
     modified: 'The file changed on the server since it was opened.',
     bad_archive: 'This file is not a .zip that Filezam can open.',
+    archive_encrypted: 'This .zip is password-protected. Filezam does not extract password-protected archives: extract it on your computer and upload the contents.',
     archive_too_large: 'Archive too large to extract.',
     no_thumb: 'No thumbnail for this file.',
     timeout: 'The transfer stalled and was dropped. Try again.',

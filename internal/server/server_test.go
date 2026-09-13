@@ -2276,6 +2276,35 @@ func TestExtractAndArchive(t *testing.T) {
 	if o := admin.expect("POST", "/api/files/extract", map[string]any{"path": "teamA/pub/doc.txt"}, 400); code(o) != "bad_archive" {
 		t.Fatalf("not an archive: %v", o)
 	}
+	// Zip com todo arquivo protegido por senha também: nem job, nem pasta vazia ao lado.
+	var enc bytes.Buffer
+	zw := zip.NewWriter(&enc)
+	w, err := zw.CreateRaw(&zip.FileHeader{Name: "segredo.txt", Method: zip.Store, Flags: 0x1, CompressedSize64: 7, UncompressedSize64: 7})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Write([]byte("cifrado")); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "teamA", "senha.zip"), enc.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if o := admin.expect("POST", "/api/files/extract", map[string]any{"path": "teamA/senha.zip"}, 400); code(o) != "archive_encrypted" {
+		t.Fatalf("encrypted archive: %v", o)
+	}
+	if _, err := os.Stat(filepath.Join(root, "teamA", "senha")); !os.IsNotExist(err) {
+		t.Fatalf("destination folder created for encrypted archive: %v", err)
+	}
+	// E um .zip que não abre (conteúdo, não extensão) é bad_archive na hora.
+	if err := os.WriteFile(filepath.Join(root, "teamA", "falso.zip"), []byte("PK\x03\x04 lixo"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if o := admin.expect("POST", "/api/files/extract", map[string]any{"path": "teamA/falso.zip"}, 400); code(o) != "bad_archive" {
+		t.Fatalf("corrupt archive: %v", o)
+	}
 	if o := admin.expect("POST", "/api/files/extract", map[string]any{"path": "teamA/pub"}, 409); code(o) != "is_dir" {
 		t.Fatalf("folder: %v", o)
 	}

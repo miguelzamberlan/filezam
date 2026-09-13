@@ -5,6 +5,7 @@ Todas as mudanças relevantes do Filezam ficam registradas aqui. O formato segue
 ## [Não lançado]
 
 ### Alterado
+- **Extrair um `.zip` protegido por senha** agora avisa na hora que arquivos com senha não são suportados, em vez de terminar com uma pasta só de subpastas vazias e um aviso por arquivo. Um `.zip` corrompido também é recusado logo ao pedir a extração. Num zip em que só parte dos arquivos tem senha, o resto continua sendo extraído e o aviso diz quantos foram pulados por estarem protegidos.
 - Documentação de **como expor várias pastas do host**: a resposta estava numa célula de tabela e não dizia o que muda com mais de uma montagem. Agora é uma seção própria em `docs/08-operacao.md`, resumida no README, com o exemplo de `volumes` e as ressalvas — dono das pastas extras (o serviço `init` não mexe nelas), mover e excluir entre sistemas de arquivos virando cópia + remoção, espaço livre por escopo e symlink recusado pelo `os.Root`.
 - O **README em inglês** deixa de ser um resumo e passa a ter as mesmas seções do português: sumário, funcionalidades completas, os quatro cenários de instalação com os blocos de configuração, pastas e permissões, como usar (usuários, links públicos, links de recebimento, uploads, interface e atalhos), documentação, contribuição e roadmap.
 

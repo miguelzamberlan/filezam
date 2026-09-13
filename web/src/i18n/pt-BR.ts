@@ -388,6 +388,7 @@ export const ptBR = {
     incomplete: 'O envio ficou incompleto. Tente de novo.',
     modified: 'O arquivo mudou no servidor desde que foi aberto.',
     bad_archive: 'Este arquivo não é um .zip que o Filezam consiga abrir.',
+    archive_encrypted: 'Este .zip é protegido por senha. O Filezam não extrai arquivos com senha: extraia no computador e envie o conteúdo.',
     archive_too_large: 'Arquivo compactado grande demais para extrair.',
     // Só aparece se algo pedir a miniatura fora da lista de arquivos: lá o <img> que falha
     // volta para o ícone sem mostrar erro nenhum.
