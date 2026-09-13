@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatBytes, formatSpeed } from './format'
+import { formatBytes, formatSpeed, formatRelative } from './format'
 
 describe('formatSpeed', () => {
   it('sempre usa duas casas decimais, só a unidade muda', () => {
@@ -20,5 +20,14 @@ describe('formatBytes', () => {
   it('não imprime fração de byte', () => {
     expect(formatBytes(847.39)).toBe('847 B')
     expect(formatBytes(1536)).toBe('1.5 KB')
+  })
+})
+
+describe('formatRelative', () => {
+  it('não arredonda menos de um minuto para "0 min"', () => {
+    const now = Math.floor(Date.now() / 1000)
+    expect(formatRelative(now - 20)).toBe('há instantes')
+    expect(formatRelative(now + 20)).toBe('em instantes')
+    expect(formatRelative(now - 5 * 60)).toBe('há 5 min')
   })
 })

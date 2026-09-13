@@ -82,7 +82,9 @@ func (s *Server) handleAdminReindex(w http.ResponseWriter, r *http.Request) erro
 	go func() {
 		if _, err := s.indexer.FullScan(s.bg); err != nil {
 			s.log.Warn("index rebuild", "err", err)
+			return
 		}
+		s.wakeIndex() // a próxima periódica conta a partir desta
 	}()
 	writeJSON(w, r, 200, map[string]any{"started": true})
 	return nil

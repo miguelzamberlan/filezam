@@ -357,14 +357,19 @@ func (s *Server) handleAdminSettingsUpdate(w http.ResponseWriter, r *http.Reques
 	}
 	after := s.settings()
 	if after.IndexInterval != before.IndexInterval {
-		select {
-		case s.indexWake <- struct{}{}:
-		default:
-		}
+		s.wakeIndex()
 	}
 	s.audit(r, u, "settings.update", map[string]any{"before": before, "after": after})
 	writeJSON(w, r, 200, map[string]any{"settings": after, "dropTtlHardMax": int64(dropTTLHardMax.Seconds())})
 	return nil
+}
+
+// wakeIndex asks the index loop to re-arm its timer (intervalo mudou, ou uma varredura manual terminou).
+func (s *Server) wakeIndex() {
+	select {
+	case s.indexWake <- struct{}{}:
+	default:
+	}
 }
 
 func boolStr(b bool) string {

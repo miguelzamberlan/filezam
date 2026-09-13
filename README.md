@@ -254,7 +254,7 @@ Arquivos são gravados em `.filezam-upload-*.part` no diretório de destino e re
 
 - **Arquivos** (menu lateral) é a navegação em si. O filtro no alto da lista só peneira a pasta atual; **Pesquisar** procura pelo nome em todas as subpastas. O resultado leva à pasta com o item selecionado.
 - **Uploads** acontecem arrastando arquivos/pastas para a listagem ou pelos botões **Enviar arquivos**/**Enviar pasta**; o progresso aparece num painel flutuante com pausa, cancelamento e repetição de falhas.
-- **Lixeira**: o que você exclui fica lá pelo prazo de `FILEZAM_TRASH_RETENTION` e pode ser restaurado. Arquivos alterados por fora do Filezam (Samba, SSH) aparecem na pesquisa após a próxima varredura do índice ou ao clicar em **Reconstruir índice** (admin).
+- **Lixeira**: o que você exclui fica lá pelo prazo escolhido em **Configurações do sistema** (30 dias de fábrica) e pode ser restaurado. Arquivos alterados por fora do Filezam (Samba, SSH) aparecem na pesquisa após a próxima varredura do índice (intervalo também em **Configurações do sistema**) ou quando o admin clica em **Varrer agora**.
 - **Operações**: cópias, movimentações e exclusões em andamento, com cancelamento, e o histórico dos últimos 30 dias.
 - **Conta**: trocar senha e ativar a verificação em duas etapas escaneando o QR code no app autenticador; guarde os 10 códigos de recuperação. No login, "Confiar neste dispositivo por 30 dias" dispensa o código naquele navegador.
 - **Tema, cores e zoom** (engrenagem no rodapé do menu): claro, escuro ou igual ao sistema; cores de destaque com combinações prontas ou seletor livre; ampliação da listagem sem mexer no zoom do navegador. Tudo fica no navegador, por usuário.

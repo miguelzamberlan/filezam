@@ -1093,9 +1093,16 @@ func TestSearchIndex(t *testing.T) {
 		return len(o["results"].([]any)) == 0
 	})
 	// reindex manual
+	before := s.indexer.LastScanEnd()
 	if o = admin.expect("POST", "/api/admin/reindex", nil, 200); o["started"] != true {
 		t.Fatalf("reindex: %v", o)
 	}
+	// A varredura manual termina, fica visível no status (duração) e marca o fim de onde a
+	// próxima periódica passa a contar.
+	waitFor(t, "manual scan finished", func() bool {
+		st := admin.expect("GET", "/api/admin/index", nil, 200)
+		return st["running"] == false && st["lastMs"].(float64) > 0 && s.indexer.LastScanEnd().After(before)
+	})
 	bob.expect("POST", "/api/admin/reindex", nil, 403)
 }
 

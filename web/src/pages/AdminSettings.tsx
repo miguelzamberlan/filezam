@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Api, ApiError } from '../api/client'
 import type { Settings } from '../api/types'
-import { formatBytes, formatDuration } from '../lib/format'
+import { formatBytes, formatDuration, formatRelative } from '../lib/format'
 import { S, errorMessage } from '../strings'
 import { toast } from '../components/dialogs'
-import { ISpinner } from '../components/Icons'
+import { IRefresh, ISpinner } from '../components/Icons'
 import { MenuButton } from '../components/Shell'
 
 const GB = 1 << 30
@@ -53,7 +53,17 @@ function Num({ label, value, options, format, onPick, hint }: { label: string; v
 export default function AdminSettings() {
   const qc = useQueryClient()
   const q = useQuery({ queryKey: ['settings'], queryFn: () => Api.adminSettings() })
-  const index = useQuery({ queryKey: ['adminIndex'], queryFn: () => Api.adminIndex(), refetchInterval: 30_000 })
+  // Enquanto uma varredura roda, o status é consultado a cada 2 s para o botão e a duração
+  // atualizarem sozinhos quando ela termina.
+  const index = useQuery({ queryKey: ['adminIndex'], queryFn: () => Api.adminIndex(), refetchInterval: (q) => (q.state.data?.running ? 2000 : 30_000) })
+  const scanNow = useMutation({
+    mutationFn: () => Api.adminReindex(),
+    onSuccess: (r) => {
+      toast(r.started ? S.settingsIndexScanStarted : S.reindexRunning)
+      qc.invalidateQueries({ queryKey: ['adminIndex'] })
+    },
+    onError: (e) => toast(e instanceof ApiError ? errorMessage(e.code, e.message) : String(e), 'error'),
+  })
   const [form, setForm] = useState<Settings | null>(null)
   useEffect(() => {
     if (q.data) setForm(q.data.settings)
@@ -106,8 +116,22 @@ export default function AdminSettings() {
               options={[15 * 60, 30 * 60, HOUR, 2 * HOUR, 6 * HOUR, 12 * HOUR, 24 * HOUR]}
               format={(n) => (n < HOUR ? `${n / 60} ${S.minutes}` : n % HOUR === 0 ? `${n / HOUR} ${n === HOUR ? S.hour : S.hours}` : formatDuration(n))}
               onPick={(n) => { set({ indexInterval: n }); save.mutate({ indexInterval: n }) }}
-              hint={S.settingsIndexHint + (index.data?.lastMs ? ' ' + S.settingsIndexLast(index.data.entries ?? 0, index.data.lastMs < 1000 ? `${index.data.lastMs} ms` : formatDuration(index.data.lastMs / 1000)) : '')}
+              hint={S.settingsIndexHint}
             />
+          )}
+          {index.data?.enabled && (
+            <div className="flex flex-wrap items-center gap-3">
+              <button className="btn-ghost border border-neutral-300 text-sm dark:border-neutral-700" onClick={() => scanNow.mutate()} disabled={index.data.running || scanNow.isPending}>
+                {index.data.running || scanNow.isPending ? <ISpinner size={16} /> : <IRefresh size={16} />} {S.settingsIndexScanNow}
+              </button>
+              <span className="text-xs text-neutral-500">
+                {index.data.running
+                  ? S.settingsIndexScanning
+                  : index.data.lastFullAt
+                    ? S.settingsIndexLast(formatRelative(index.data.lastFullAt), index.data.entries ?? 0, index.data.lastMs ? (index.data.lastMs < 1000 ? `${index.data.lastMs} ms` : formatDuration(index.data.lastMs / 1000)) : '')
+                    : S.settingsIndexNever}
+              </span>
+            </div>
           )}
         </div>
         {form.dropEnabled && (

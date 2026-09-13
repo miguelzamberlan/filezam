@@ -234,11 +234,18 @@ func (s *Server) StartBackground() {
 				}
 			}
 			// O intervalo vem das configurações e pode mudar a qualquer momento: a próxima
-			// varredura é marcada a partir do fim da anterior, e mudar o valor no painel
-			// (indexWake) remarca na hora — encurtar para menos do que já passou varre já.
+			// varredura é marcada a partir do fim da anterior — seja ela periódica ou pedida na
+			// mão —, e indexWake remarca na hora quando o intervalo muda ou uma varredura manual
+			// termina. Encurtar para menos do que já passou varre já.
+			next := func() time.Duration {
+				last := s.indexer.LastScanEnd()
+				if last.IsZero() {
+					last = time.Now()
+				}
+				return max(0, time.Until(last.Add(s.indexInterval())))
+			}
 			scan()
-			last := time.Now()
-			t := time.NewTimer(s.indexInterval())
+			t := time.NewTimer(next())
 			defer t.Stop()
 			for {
 				select {
@@ -246,11 +253,10 @@ func (s *Server) StartBackground() {
 					return
 				case <-s.indexWake:
 					t.Stop()
-					t.Reset(max(0, time.Until(last.Add(s.indexInterval()))))
+					t.Reset(next())
 				case <-t.C:
 					scan()
-					last = time.Now()
-					t.Reset(s.indexInterval())
+					t.Reset(next())
 				}
 			}
 		}()

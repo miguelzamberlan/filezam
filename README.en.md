@@ -256,7 +256,7 @@ Files are written to `.filezam-upload-*.part` in the destination folder and rena
 
 - **Files** (side menu) is the browsing itself. The filter at the top of the list only sifts the current folder; **Search** looks for the name across every subfolder. The result takes you to the folder with the item selected.
 - **Uploads** happen by dragging files/folders onto the listing or through the **Upload files**/**Upload folder** buttons; progress shows in a floating panel with pause, cancel and retry.
-- **Trash**: whatever you delete stays there for `FILEZAM_TRASH_RETENTION` and can be restored. Files changed outside Filezam (Samba, SSH) appear in the search after the next index rescan or when an admin clicks **Rebuild index**.
+- **Trash**: whatever you delete stays there for the period chosen in **System settings** (30 days by default) and can be restored. Files changed outside Filezam (Samba, SSH) appear in the search after the next index rescan (interval also in **System settings**) or when an admin clicks **Scan now**.
 - **Operations**: copies, moves and deletions in progress, with cancellation, plus the history of the last 30 days.
 - **Account**: change the password and enable two-factor authentication by scanning the QR code in your authenticator app; keep the 10 recovery codes. At login, "Trust this device for 30 days" skips the code in that browser.
 - **Theme, colors and zoom** (gear at the bottom of the menu): light, dark or follow the system; accent colors from ready-made combinations or a free picker; listing zoom without touching the browser zoom. All of it stays in the browser, per user.

@@ -22,7 +22,8 @@ type Indexer struct {
 	log      *slog.Logger
 	interval func() time.Duration // lido a cada uso: o administrador muda no painel sem reiniciar
 
-	lastMs atomic.Int64 // duração da última varredura completa, para o painel mostrar o custo
+	lastMs  atomic.Int64 // duração da última varredura completa, para o painel mostrar o custo
+	lastEnd atomic.Int64 // fim da última varredura completa deste processo (unix nano; 0 = nenhuma)
 
 	scanMu  sync.Mutex // one full scan at a time
 	running atomic.Bool
@@ -39,6 +40,15 @@ func New(db *store.DB, base *vfs.Root, log *slog.Logger, interval func() time.Du
 
 // Interval is the current time between full scans.
 func (ix *Indexer) Interval() time.Duration { return ix.interval() }
+
+// LastScanEnd is when the last full scan of this process finished (zero time before the first).
+// Vale para qualquer varredura, a periódica ou a pedida pelo administrador.
+func (ix *Indexer) LastScanEnd() time.Time {
+	if n := ix.lastEnd.Load(); n > 0 {
+		return time.Unix(0, n)
+	}
+	return time.Time{}
+}
 
 // Ready reports whether at least one full scan has completed (now or in a previous run).
 func (ix *Indexer) Ready() bool { return ix.ready.Load() }
@@ -115,6 +125,7 @@ func (ix *Indexer) FullScan(ctx context.Context) (bool, error) {
 	}
 	ix.ready.Store(true)
 	ix.lastMs.Store(max(1, time.Since(start).Milliseconds()))
+	ix.lastEnd.Store(time.Now().UnixNano())
 	ix.log.Info("index full scan", "entries", n, "ms", time.Since(start).Milliseconds())
 	return true, nil
 }

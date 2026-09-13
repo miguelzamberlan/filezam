@@ -44,6 +44,8 @@ export function formatDate(msOrSec: number, isSec = false): string {
 export function formatRelative(sec: number): string {
   const diff = sec - Math.floor(Date.now() / 1000)
   const abs = Math.abs(diff)
+  // Menos de um minuto arredondaria para "há 0 min".
+  if (abs < 60) return diff < 0 ? S.relJustNow : S.relSoon
   const s = abs < 3600 ? Math.round(abs / 60) + ' min' : abs < 86400 ? Math.round(abs / 3600) + ' h' : Math.round(abs / 86400) + ' d'
   return diff < 0 ? S.relAgo(s) : S.relIn(s)
 }

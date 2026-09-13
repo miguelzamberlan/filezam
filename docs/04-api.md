@@ -216,7 +216,7 @@ antes de 429 `busy`.
 | GET | `/api/admin/dirs?path=` | A | `{path, dirs: [string]}` só diretórios reais da **raiz base**, para o seletor de escopo |
 | GET | `/metrics` | token | Prometheus text format; exige `FILEZAM_METRICS_TOKEN` (`Authorization: Bearer`) ou sessão admin; 404 quando desativado |
 | GET | `/api/admin/index` | A | `{enabled, ready, running, entries, lastFullAt, interval, lastMs}` do índice de nomes (`lastMs`: duração da última varredura completa deste processo, 0 antes da primeira) |
-| POST | `/api/admin/reindex` | A | Inicia uma varredura completa → `{started}` (`false` se já roda); 409 `unsupported` com índice desativado |
+| POST | `/api/admin/reindex` | A | Inicia uma varredura completa → `{started}` (`false` se já roda); 409 `unsupported` com índice desativado. Ao terminar, a próxima varredura periódica passa a contar a partir dela (botão **Varrer agora** em Configurações do sistema e **Reconstruir índice** na Pesquisa) |
 | GET | `/api/admin/audit?before=&limit=` | A | `{entries}` mais recentes primeiro; `before` = id para paginar; `limit` ≤ 500 |
 
 Regras de `username`: 2–64 caracteres de `A-Z a-z 0-9 . _ - @`, único sem distinção de caixa.
