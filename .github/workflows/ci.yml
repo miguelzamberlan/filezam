@@ -10,6 +10,13 @@ permissions:
   contents: read
 
 jobs:
+  headers:
+    name: Cabeçalhos de licença
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: scripts/license-header.sh check
+
   web:
     name: Frontend (tsc + vitest + build)
     runs-on: ubuntu-latest

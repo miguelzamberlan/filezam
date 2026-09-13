@@ -1,6 +1,6 @@
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 
-.PHONY: all web build test test-go test-web vuln dev run docker clean
+.PHONY: all web build test test-go test-web headers headers-apply vuln dev run docker clean
 
 all: build
 
@@ -12,7 +12,14 @@ web:
 build:
 	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=$(VERSION)" -o filezam ./cmd/filezam
 
-test: test-go test-web
+test: headers test-go test-web
+
+## License header on every source file (AGPL-3.0-only, see NOTICE.md); headers-apply adds missing ones
+headers:
+	scripts/license-header.sh check
+
+headers-apply:
+	scripts/license-header.sh apply
 
 test-go:
 	go test ./...

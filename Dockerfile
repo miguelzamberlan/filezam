@@ -27,7 +27,7 @@ FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c
 LABEL org.opencontainers.image.title="Filezam" \
       org.opencontainers.image.description="Self-hosted web file manager: one folder, users with scopes, resumable uploads, public links" \
       org.opencontainers.image.source="https://github.com/miguelzamberlan/filezam" \
-      org.opencontainers.image.licenses="MIT"
+      org.opencontainers.image.licenses="AGPL-3.0-only"
 COPY --from=build /filezam /filezam
 COPY --from=build --chown=65532:65532 /empty /data
 COPY --from=build --chown=65532:65532 /empty /config

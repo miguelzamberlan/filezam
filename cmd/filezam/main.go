@@ -1,3 +1,11 @@
+// Filezam - https://github.com/miguelzamberlan/filezam
+// Copyright (C) 2026 Miguel Zamberlan
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// Distribuído sob a GNU Affero General Public License v3 (LICENSE), sem garantia.
+// Aviso legal protegido pela seção 7(b) da AGPLv3 e pelo NOTICE.md: remover ou
+// alterar este cabeçalho viola a licença e os direitos autorais do autor.
+
 // Command filezam is the Filezam web file manager server.
 package main
 
@@ -116,7 +124,8 @@ func serve() error {
 	if err != nil {
 		return err
 	}
-	log.Info("filezam listening", "addr", ln.Addr().String(), "root", cfg.Root, "data", cfg.DataDir, "version", version)
+	log.Info("filezam listening", "addr", ln.Addr().String(), "root", cfg.Root, "data", cfg.DataDir, "version", version,
+		"license", "AGPL-3.0-only", "source", "https://github.com/miguelzamberlan/filezam")
 	errCh := make(chan error, 1)
 	go func() { errCh <- hs.Serve(ln) }()
 	stop := make(chan os.Signal, 1)

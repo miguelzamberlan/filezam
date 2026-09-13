@@ -1,3 +1,11 @@
+// Filezam - https://github.com/miguelzamberlan/filezam
+// Copyright (C) 2026 Miguel Zamberlan
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// Distribuído sob a GNU Affero General Public License v3 (LICENSE), sem garantia.
+// Aviso legal protegido pela seção 7(b) da AGPLv3 e pelo NOTICE.md: remover ou
+// alterar este cabeçalho viola a licença e os direitos autorais do autor.
+
 import { Navigate, Route, Routes, useLocation } from 'react-router'
 import { useAuth, useConfig } from './hooks'
 import { S } from './strings'
@@ -16,6 +24,7 @@ import AdminUsers from './pages/AdminUsers'
 import AdminAudit from './pages/AdminAudit'
 import PublicShare from './pages/PublicShare'
 import Shell from './components/Shell'
+import { WithCredits } from './components/Credits'
 import { DialogHost, ToastHost } from './components/dialogs'
 import { ISpinner } from './components/Icons'
 
@@ -44,13 +53,15 @@ export default function App() {
   return (
     <>
       <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/s/:token/*" element={<PublicShare />} />
+        <Route path="/login" element={<WithCredits><Login /></WithCredits>} />
+        <Route path="/s/:token/*" element={<WithCredits><PublicShare /></WithCredits>} />
         <Route
           path="/change-password"
           element={
             <Protected>
-              <ChangePassword />
+              <WithCredits>
+                <ChangePassword />
+              </WithCredits>
             </Protected>
           }
         />
@@ -58,7 +69,9 @@ export default function App() {
           path="/setup-2fa"
           element={
             <Protected>
-              <Setup2FA />
+              <WithCredits>
+                <Setup2FA />
+              </WithCredits>
             </Protected>
           }
         />

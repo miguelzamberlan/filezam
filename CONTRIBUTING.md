@@ -39,7 +39,8 @@ Elas existem porque o Filezam expõe um disco na internet; um PR que as viole n�
 - **Códigos de erro são estáveis**: um código novo entra em `internal/server/respond.go`, em `web/src/i18n/pt-BR.ts` **e** `web/src/i18n/en.ts` (`errorCodes`) e em `docs/04-api.md`.
 - **Mudança de esquema é uma migração nova** em `internal/store/migrations/NNN_*.sql`; nunca edite uma já aplicada.
 - **Todo endpoint que altera estado tem teste** em `internal/server/server_test.go`.
-- **Interface bilíngue**: todo texto novo existe em `pt-BR.ts` (referência) e em `en.ts`; o `tsc` falha se faltar uma chave.
+- **Interface em três idiomas**: todo texto novo existe em `pt-BR.ts` (referência), `en.ts` e `es.ts`; o `tsc` falha se faltar uma chave.
+- **Cabeçalho de licença em todo arquivo-fonte** (`.go`, `.ts`, `.tsx`, `.css`, `.sh`): `make headers-apply` coloca o bloco com `SPDX-License-Identifier: AGPL-3.0-only` nos arquivos novos, e `make test` e a CI falham sem ele. Os cabeçalhos existentes, o `LICENSE`, o `NOTICE.md` e os créditos da interface (`web/src/components/Credits.tsx`) não são removidos nem alterados.
 
 ## Fluxo de um PR
 
@@ -48,6 +49,16 @@ Elas existem porque o Filezam expõe um disco na internet; um PR que as viole n�
 3. `make test` verde. A CI do GitHub roda o mesmo conjunto mais `govulncheck`, `npm audit` e o build da imagem Docker; a `main` só aceita PR com a CI verde.
 4. Abra o PR descrevendo **o porquê** da mudança, não só o quê; o template traz o checklist.
 5. Commits podem ser em português ou inglês. Um commit por assunto facilita a revisão; o PR é integrado com *squash*.
+
+## Licença das contribuições
+
+O Filezam é distribuído sob a [AGPL-3.0-only](LICENSE) e também sob licença comercial, negociada pelo autor (a licença dual está descrita no [`NOTICE.md`](NOTICE.md)). Para que as duas continuem possíveis, o autor precisa poder distribuir todo o código nas duas. Por isso, ao abrir um pull request, você declara que:
+
+1. a contribuição é obra sua, ou você tem o direito de enviá-la, e ela não traz código de terceiros sob licença incompatível;
+2. a contribuição é licenciada sob a AGPL-3.0-only, como o resto do projeto;
+3. você concede a Miguel Zamberlan uma licença perpétua, mundial, gratuita, não exclusiva e irrevogável para usar, modificar, sublicenciar e distribuir a contribuição sob outros termos, inclusive comerciais. Você mantém os direitos autorais sobre o que escreveu e pode usá-lo como quiser.
+
+Sem essa concordância, o PR não é integrado. Se a contribuição cria arquivos novos, eles recebem o mesmo cabeçalho de licença dos demais (`make headers-apply`).
 
 ## Versões e lançamentos
 
@@ -78,7 +89,7 @@ Para publicar uma versão (mantenedor):
 | Protocolo de upload (servidor / cliente) | `internal/uploads/service.go` / `web/src/upload/manager.ts` |
 | Ações e teclado da listagem | `web/src/pages/Browser.tsx` |
 | Diálogos imperativos | `web/src/components/dialogs.tsx` |
-| Textos da interface | `web/src/i18n/pt-BR.ts`, `web/src/i18n/en.ts` |
+| Textos da interface | `web/src/i18n/pt-BR.ts`, `web/src/i18n/en.ts`, `web/src/i18n/es.ts` |
 | Estilos compostos (Tailwind 4 `@utility`) | `web/src/index.css` |
 
 Um passo a passo para adicionar uma funcionalidade de ponta a ponta está em [`docs/07-frontend.md`](docs/07-frontend.md#como-adicionar-uma-funcionalidade).

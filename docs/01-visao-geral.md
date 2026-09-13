@@ -92,7 +92,7 @@ Não há shell na imagem; o healthcheck é o subcomando `healthcheck` do própri
 
 ### ADR-12 · Interface em pt-BR num único arquivo de strings
 
-Todos os textos ficam em `web/src/i18n/pt-BR.ts` (referência) e `web/src/i18n/en.ts`, incluindo a tradução dos códigos de erro da API; `strings.ts` expõe o objeto `S` do idioma ativo (preferência `auto`/`pt-BR`/`en`). Um idioma novo é um arquivo em `i18n/` com as mesmas chaves, sem tocar nos componentes.
+Todos os textos ficam em `web/src/i18n/pt-BR.ts` (referência), `web/src/i18n/en.ts` e `web/src/i18n/es.ts`, incluindo a tradução dos códigos de erro da API; `strings.ts` expõe o objeto `S` do idioma ativo (preferência `auto`/`pt-BR`/`en`/`es`). Um idioma novo é um arquivo em `i18n/` com as mesmas chaves, sem tocar nos componentes.
 
 ### ADR-13 · Apelido de link com senha obrigatória, e que não volta ao pool
 
@@ -135,3 +135,9 @@ Sobra gerar sob demanda: só o que a virtualização da listagem mostra, guardad
 resposta é a única do produto que o navegador guarda, e isso só é seguro porque a URL carrega o
 `mtime`. O recurso é desligável pelo administrador e por cada usuário, porque velocidade é a
 prioridade declarada do projeto e nem toda instalação quer pagar essa CPU.
+
+### ADR: licença AGPL-3.0-only com opção comercial
+
+Até a 1.2.0 o Filezam foi MIT. A partir da versão seguinte é **AGPL-3.0-only**, em licença dual com uma licença comercial negociada pelo autor. A AGPL fecha a brecha que a GPL deixa para software usado pela rede: quem modifica o Filezam e o oferece como serviço precisa abrir o código das modificações a quem o usa, então ninguém fecha uma versão melhorada do projeto para vender como SaaS. A variante *only* deixa com o titular a decisão de adotar uma AGPL futura. A licença dual depende de o autor poder distribuir todo o código nos dois regimes, por isso o `CONTRIBUTING.md` pede, a cada PR, uma licença para relicenciar a contribuição.
+
+Os termos adicionais da seção 7 (`NOTICE.md`) são o que a AGPL permite acrescentar: preservar avisos legais e a atribuição de autoria (7(b)), marcar versões modificadas (7(c)) e não usar o nome para sugerir endosso (7(e)). Por isso o crédito da interface é apresentado como *Avisos Legais Apropriados* (versão, autor, licença, link do código-fonte) e não como propaganda: uma exigência fora da seção 7 seria uma "restrição adicional" que quem recebe o código pode simplesmente remover. Não há verificação técnica que impeça tirar o crédito num fork (qualquer uma seria removível no próprio código); a proteção é jurídica, e o link **Código-fonte** também é o meio de cumprir a seção 13.

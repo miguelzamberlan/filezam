@@ -9,13 +9,13 @@ web/src/
   main.tsx            QueryClientProvider + BrowserRouter
   App.tsx             Rotas e guarda de autenticação (Protected)
   hooks.ts            useAuth, useConfig, useListing, useInvalidateDirs, useFavorites
-  strings.ts          Objeto S com os textos do idioma ativo; i18n/pt-BR.ts (referência) e i18n/en.ts
+  strings.ts          Objeto S com os textos do idioma ativo; i18n/pt-BR.ts (referência), i18n/en.ts e i18n/es.ts
   index.css           Tailwind + utilitários próprios (@utility btn, input, card, menu…)
   api/client.ts       fetch tipado (X-Filezam, 401 → /login), ApiError, objeto Api
   api/types.ts        Tipos espelhando docs/04
   lib/                paths (join/dirname/encode/uniqueName), naturalSort, format,
                       clipboard (copyText com fallback), share (shareLink), fold (comparação sem
-                      acentos)
+                      acentos), about (nome, versão, autor, licença e URL do código-fonte)
   store/ui.ts         zustand: seleção, âncora, foco, clipboard, ordenação, visão, filtro
   store/jobs.ts       zustand: jobs acompanhados pelos toasts
   upload/manager.ts   UploadManager (sem React) — fila, modos, slots, retries, conflitos, retomada
@@ -73,7 +73,13 @@ Atalhos: `↑ ↓ Home End PgUp PgDn` (com Shift estende), `→ ←` na grade, `
 
 ## Idiomas (`strings.ts`, `i18n/`)
 
-`i18n/pt-BR.ts` é a referência; `i18n/en.ts` é tipado como `Strings = typeof ptBR`, então uma chave faltando quebra o `tsc`. `S` é um objeto mutável: `applyLocale()` (chamado em `main.tsx` antes do primeiro render, com `resolveLocale(prefs.lang)`: `auto` segue `navigator.language`, `pt*` → pt-BR, senão en) copia o idioma para dentro dele e ajusta `<html lang>`. Componentes leem `S.chave` no render; constantes de módulo (ex.: `OPTIONS` do `ShareDialog`) só mudam com recarga, por isso trocar o idioma em Configurações recarrega a página. Datas relativas usam `S.relAgo`/`S.relIn`; `formatDate` usa o locale do navegador. Para adicionar um idioma: novo arquivo em `i18n/`, entrada em `LOCALES`/`LOCALE_NAMES` e no tipo `Locale`.
+`i18n/pt-BR.ts` é a referência; `i18n/en.ts` e `i18n/es.ts` são tipados como `Strings = typeof ptBR`, então uma chave faltando quebra o `tsc`. `S` é um objeto mutável: `applyLocale()` (chamado em `main.tsx` antes do primeiro render, com `resolveLocale(prefs.lang)`: `auto` segue `navigator.language`, `pt*` → pt-BR, `es*` → es, senão en) copia o idioma para dentro dele e ajusta `<html lang>`. Componentes leem `S.chave` no render; constantes de módulo (ex.: `OPTIONS` do `ShareDialog`) só mudam com recarga, por isso trocar o idioma em Configurações recarrega a página. Datas relativas usam `S.relAgo`/`S.relIn`; `formatDate` usa o locale do navegador. Para adicionar um idioma: novo arquivo em `i18n/`, entrada em `LOCALES`/`LOCALE_NAMES` e no tipo `Locale`.
+
+## Créditos e versão (`components/Credits.tsx`, `lib/about.ts`)
+
+`Credits` mostra "Powered by Filezam vX.Y.Z · Desenvolvido originalmente por Miguel Zamberlan", a licença (AGPL-3.0, link para o texto da GNU) e **Código-fonte** (link para `APP.sourceUrl`). São os Avisos Legais Apropriados da AGPLv3 e a atribuição exigida pelo `NOTICE.md`: não se removem, e uma versão modificada troca só `sourceUrl` pelo endereço do próprio código (seção 13). Aparece em três lugares: no pé do menu lateral, abaixo do cartão da conta (`stacked`, uma informação por linha para caber nos 240 px), e numa faixa fixa embaixo das telas sem menu — login, troca de senha, 2FA e links públicos (leitura e recebimento) —, pelo `WithCredits` em `App.tsx`. Texto de 11 px em cinza, sem cor de destaque.
+
+A versão da interface tem uma fonte só, `web/package.json`: o `vite.config.ts` lê o número e o injeta como `__APP_VERSION__` (`define`, declarado em `globals.d.ts`), que `lib/about.ts` expõe como `APP.version`. O binário recebe a tag por `-X main.version` e a release recusa a tag se o `package.json` disser outro número, então os dois nunca divergem numa versão publicada. O mesmo `vite.config.ts` põe no topo do JS de entrada o comentário `/*! Filezam vX.Y.Z | (C) 2026 Miguel Zamberlan | AGPL-3.0-only | <repositório> */`, no `generateBundle` — o `output.banner` do Rollup passa antes do minificador, que o descartava.
 
 ## Celular e toque
 
@@ -208,4 +214,4 @@ Tailwind 4 via `@tailwindcss/vite`. Classes compostas são declaradas com `@util
 
 1. Endpoint: handler em `internal/server/handlers_*.go`, rota em `routes()` de `server.go`, código de erro em `respond.go` se novo, teste em `server_test.go`, doc em `docs/04`.
 2. Cliente: método em `api/client.ts` e tipo em `api/types.ts`.
-3. UI: ação na página, texto em `i18n/pt-BR.ts` e `i18n/en.ts`, tradução do código de erro em `errorCodes` dos dois.
+3. UI: ação na página, texto em `i18n/pt-BR.ts`, `i18n/en.ts` e `i18n/es.ts`, tradução do código de erro em `errorCodes` dos três.

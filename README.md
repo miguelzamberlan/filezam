@@ -8,9 +8,9 @@
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![SQLite](https://img.shields.io/badge/SQLite-sem%20CGO-003B57?logo=sqlite&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-distroless-2496ED?logo=docker&logoColor=white)
-[![Licença](https://img.shields.io/badge/licen%C3%A7a-MIT-green)](LICENSE)
+[![Licença](https://img.shields.io/badge/licen%C3%A7a-AGPL--3.0-blue)](LICENSE)
 
-🇧🇷 Português · [🇬🇧 English](README.en.md)
+🇧🇷 Português · [🇬🇧 English](README.en.md) · [🇪🇸 Español](README.es.md)
 
 <p align="center">
   <img src="docs/img/desktop-light.png" alt="Filezam no desktop, tema claro" width="49%">
@@ -63,7 +63,7 @@ Três prioridades guiam cada decisão, nesta ordem:
 - **Links para receber arquivos**: uma caixa de entrada pública para quem não tem conta enviar arquivos para uma pasta sua, com cota e vencimento obrigatórios. Quem envia não vê nem baixa o que já está lá.
 - **Verificação em duas etapas** (TOTP) com códigos de recuperação e "confiar neste dispositivo por 30 dias"; opcionalmente obrigatória para administradores.
 - **Administração**: usuários com cota de disco e redefinição de 2FA, auditoria de logins e alterações, bloqueio progressivo contra força bruta, histórico de operações e métricas Prometheus.
-- **Interface**: português ou inglês, tema claro/escuro/sistema, cores personalizáveis, zoom da listagem, ícones por tipo, arrastar e soltar para mover, listagem paginada para pastas enormes, atalhos de teclado e uso confortável no celular.
+- **Interface**: português, inglês ou espanhol, tema claro/escuro/sistema, cores personalizáveis, zoom da listagem, ícones por tipo, arrastar e soltar para mover, listagem paginada para pastas enormes, atalhos de teclado e uso confortável no celular.
 - **Operação**: binário estático, imagem `distroless` sem shell, rootfs somente leitura, SQLite embutido (sem CGO), migrações automáticas, healthcheck.
 
 <p align="center">
@@ -328,4 +328,9 @@ A versão atual é a **1.2.0**; o histórico está no [`CHANGELOG.md`](CHANGELOG
 
 **Miguel Zamberlan** ([@miguelzamberlan](https://github.com/miguelzamberlan)) é o autor e mantenedor: define as prioridades, revisa as contribuições e publica as versões. O Filezam é desenvolvido no tempo livre, com o apoio de ferramentas de IA para revisão e implementação, e todo o código passa por testes automatizados e verificação manual antes de entrar na `main`.
 
-[MIT](LICENSE) © 2026 Miguel Zamberlan. Use, modifique e distribua à vontade, mantendo o aviso de licença.
+Copyright (C) 2026 Miguel Zamberlan. O Filezam é software livre sob a **[GNU Affero General Public License v3](LICENSE)** (`AGPL-3.0-only`), em **licença dual**:
+
+- **AGPLv3, gratuita**: use, estude, modifique e distribua. Quem modificar o Filezam e oferecê-lo a usuários pela rede (servidor próprio, nuvem, SaaS) precisa disponibilizar a esses usuários o código-fonte das modificações, sob a mesma licença.
+- **Licença comercial**: para usar ou embutir o Filezam sem as obrigações da AGPL, fale com o autor pelo [perfil no GitHub](https://github.com/miguelzamberlan).
+
+Cópias, forks e trabalhos derivados precisam preservar os cabeçalhos de licença dos arquivos, o [`LICENSE`](LICENSE), o [`NOTICE.md`](NOTICE.md) e o crédito ao autor original exibido na interface (termos adicionais da seção 7 da AGPLv3, detalhados no `NOTICE.md`). As versões 1.0.0 a 1.2.0 foram publicadas sob a licença MIT.

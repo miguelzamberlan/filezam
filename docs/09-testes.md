@@ -13,11 +13,12 @@
 | Índice de nomes | `internal/index/indexer_test.go` | varredura completa sem lixeira nem partes, pesquisa (nome sem caixa nem acentos, prefixo exato, `%` literal), linhas velhas removidas por varredura/reindexação/`Touch`, uma varredura por vez | `go test ./internal/index/` |
 | Migrações e índice | `internal/store/migrations_test.go` | banco só com `001` + linhas antigas → `Open` aplica as migrações seguintes sem perder dados; `TestIndexLikeEscape` (`%`/`_` literais na pesquisa); `TestUpgradeRefoldsIndex` (banco da 015 com nomes só em minúsculas é redobrado em mais de um lote ao abrir e acha nome acentuado sem varredura); `TestSlugUniqueIndexIsPartial` (apelidos vazios coexistem, duplicado conflita, revogado não volta ao pool) | `go test ./internal/store/` |
 | Frontend puro | `web/src/**/*.test.ts` | `scheduler` (classify, pickBatch, backoff, chunkRange), `dropUploader` (fronteira PUT único/blocos, plano de blocos, limite do link não entra em retry), `paths` (incluindo `dirChain`: enviar uma pasta precisa avisar também as pastas acima, senão a listagem aberta fica desatualizada), `naturalSort`, `fold` (mesmos casos de `TestFold`) | `cd web && npx vitest run` |
-| Tipos | — | `tsc --noEmit` | `cd web && npm run typecheck` |
+| Tipos | — | `tsc --noEmit` (inclui as chaves de `en.ts` e `es.ts` contra `pt-BR.ts`) | `cd web && npm run typecheck` |
+| Cabeçalhos de licença | `scripts/license-header.sh` | todo `.go`, `.ts`, `.tsx`, `.css` e `.sh` do código tem o bloco `SPDX-License-Identifier: AGPL-3.0-only` nas primeiras linhas (migrações SQL ficam de fora) | `make headers` (`make headers-apply` corrige) |
 
 `make test` roda tudo. Um único teste Go: `go test ./internal/vfs/ -run TestEscapeAttemptsAreRefused -v`. Sem Go instalado: `docker run --rm -v "$PWD":/src -w /src -e GOFLAGS=-buildvcs=false golang:1.26-alpine go test ./...`.
 
-A CI do GitHub (`.github/workflows/ci.yml`) roda em cada push e PR: `tsc`, vitest, build do Vite, `npm audit --omit=dev`, `go vet`, `go test ./...`, build do binário, `govulncheck` e o build da imagem Docker. `TestShareBoundToInode` depende de o sistema de arquivos temporário **não** reutilizar o número de inode de uma pasta recém-apagada: passa em ext4 e tmpfs, falha em overlayfs (Docker sem `--tmpfs /tmp:exec`).
+A CI do GitHub (`.github/workflows/ci.yml`) roda em cada push e PR: cabeçalhos de licença, `tsc`, vitest, build do Vite, `npm audit --omit=dev`, `go vet`, `go test ./...`, build do binário, `govulncheck` e o build da imagem Docker. `TestShareBoundToInode` depende de o sistema de arquivos temporário **não** reutilizar o número de inode de uma pasta recém-apagada: passa em ext4 e tmpfs, falha em overlayfs (Docker sem `--tmpfs /tmp:exec`).
 
 Os testes de integração criam raiz e banco temporários; nada toca o sistema real. `db.Now` é injetável para testar expirações.
 

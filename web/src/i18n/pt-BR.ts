@@ -1,6 +1,18 @@
+// Filezam - https://github.com/miguelzamberlan/filezam
+// Copyright (C) 2026 Miguel Zamberlan
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// Distribuído sob a GNU Affero General Public License v3 (LICENSE), sem garantia.
+// Aviso legal protegido pela seção 7(b) da AGPLv3 e pelo NOTICE.md: remover ou
+// alterar este cabeçalho viola a licença e os direitos autorais do autor.
+
 // Português do Brasil: o idioma de referência. Toda chave nova entra aqui e em en.ts (o tipo Strings obriga).
 export const ptBR = {
   appName: 'Filezam',
+  // Créditos (components/Credits.tsx): o nome do projeto e do autor vêm de lib/about.ts, não se traduzem.
+  poweredBy: 'Powered by',
+  originallyBy: 'Desenvolvido originalmente por',
+  sourceCode: 'Código-fonte',
   login: 'Entrar',
   username: 'Usuário',
   password: 'Senha',

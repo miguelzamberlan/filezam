@@ -74,7 +74,9 @@ internal/store/migrations/NNN_*.sql # embutidas, aplicadas em ordem numérica
 web/                                 # projeto Vite (ver docs/07)
 docs/                                # esta documentação
 Dockerfile docker-compose.yml .env.example Makefile
-README.md README.en.md CONTRIBUTING.md SECURITY.md CODE_OF_CONDUCT.md CLAUDE.md
+README.md README.en.md README.es.md CONTRIBUTING.md SECURITY.md CODE_OF_CONDUCT.md CLAUDE.md
+LICENSE NOTICE.md                    # AGPL-3.0-only e termos adicionais (seção 7), licença dual
+scripts/license-header.sh            # aplica/confere o cabeçalho de licença dos arquivos-fonte
 .github/                             # CI (testes, govulncheck, npm audit, build da imagem), release para ghcr.io, templates
 ```
 

@@ -1,3 +1,11 @@
+// Filezam - https://github.com/miguelzamberlan/filezam
+// Copyright (C) 2026 Miguel Zamberlan
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// Distribuído sob a GNU Affero General Public License v3 (LICENSE), sem garantia.
+// Aviso legal protegido pela seção 7(b) da AGPLv3 e pelo NOTICE.md: remover ou
+// alterar este cabeçalho viola a licença e os direitos autorais do autor.
+
 import { useEffect, useRef } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
@@ -12,6 +20,7 @@ import UploadPanel, { useUploads } from './UploadPanel'
 import { IFolder, IStar, IShare, IUsers, ILog, ILogout, IMenu, IClose, IUpload, ISettings, ISearch, ITrash, IList, IBell } from './Icons'
 import { useUI } from '../store/ui'
 import DiskBar from './DiskBar'
+import Credits from './Credits'
 
 // MenuButton abre o menu lateral em telas estreitas; cada página o coloca na sua própria
 // primeira linha, para não gastar uma linha inteira só com o botão.
@@ -141,6 +150,7 @@ export default function Shell() {
           </NavLink>
           <button className="btn-ghost !p-2" onClick={logout} title={S.logout} aria-label={S.logout}><ILogout size={16} /></button>
         </div>
+        <Credits stacked className="mt-2 px-2.5" />
       </div>
     </nav>
   )

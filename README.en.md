@@ -8,16 +8,16 @@
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![SQLite](https://img.shields.io/badge/SQLite-no%20CGO-003B57?logo=sqlite&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-distroless-2496ED?logo=docker&logoColor=white)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 
-[🇧🇷 Português](README.md) · 🇬🇧 English
+[🇧🇷 Português](README.md) · 🇬🇧 English · [🇪🇸 Español](README.es.md)
 
 <p align="center">
   <img src="docs/img/desktop-light.png" alt="Filezam on desktop, light theme" width="49%">
   <img src="docs/img/desktop-dark.png" alt="Filezam on desktop, dark theme" width="49%">
 </p>
 
-> The full documentation (`docs/`), the changelog and `CONTRIBUTING.md` are written in Brazilian Portuguese; links to them below are marked *(Portuguese)*. The UI itself is available in English and Portuguese. Issues and pull requests in English are welcome.
+> The full documentation (`docs/`), the changelog and `CONTRIBUTING.md` are written in Brazilian Portuguese; links to them below are marked *(Portuguese)*. The UI itself is available in English, Portuguese and Spanish. Issues and pull requests in English are welcome.
 
 ## Table of contents
 
@@ -65,7 +65,7 @@ It is a personal, free and open-source project. It fits home servers, small offi
 - **Drop links**: a public inbox where people without an account send files into a folder of yours, with a mandatory quota and expiry. Senders never see or download what is already there.
 - **Two-factor authentication** (TOTP) with recovery codes and "trust this device for 30 days"; optionally mandatory for administrators.
 - **Administration**: users with disk quotas and 2FA reset, audit log of logins and changes, progressive brute-force lockout, operation history and Prometheus metrics.
-- **UI**: Portuguese or English, light/dark/system theme, custom colors, list zoom, per-type icons, drag and drop to move, paginated listing for huge folders, keyboard shortcuts and comfortable use on phones.
+- **UI**: Portuguese, English or Spanish, light/dark/system theme, custom colors, list zoom, per-type icons, drag and drop to move, paginated listing for huge folders, keyboard shortcuts and comfortable use on phones.
 - **Operations**: static binary, `distroless` image without a shell, read-only rootfs, embedded SQLite (no CGO), automatic migrations, healthcheck.
 
 <p align="center">
@@ -330,4 +330,9 @@ The current version is **1.2.0**; the history is in [`CHANGELOG.md`](CHANGELOG.m
 
 **Miguel Zamberlan** ([@miguelzamberlan](https://github.com/miguelzamberlan)) is the author and maintainer: they set the priorities, review contributions and publish the releases. Filezam is developed in spare time, with the help of AI tools for review and implementation, and all code goes through automated tests and manual verification before reaching `main`.
 
-[MIT](LICENSE) © 2026 Miguel Zamberlan. Use, modify and distribute freely, keeping the license notice.
+Copyright (C) 2026 Miguel Zamberlan. Filezam is free software under the **[GNU Affero General Public License v3](LICENSE)** (`AGPL-3.0-only`), under a **dual license**:
+
+- **AGPLv3, free of charge**: use, study, modify and distribute it. Whoever modifies Filezam and offers it to users over a network (own server, cloud, SaaS) must make the source code of the modifications available to those users, under the same license.
+- **Commercial license**: to use or embed Filezam without the AGPL obligations, contact the author through their [GitHub profile](https://github.com/miguelzamberlan).
+
+Copies, forks and derivative works must preserve the license headers in the files, [`LICENSE`](LICENSE), [`NOTICE.md`](NOTICE.md) and the credit to the original author shown in the interface (additional terms under AGPLv3 section 7, detailed in `NOTICE.md`). Versions 1.0.0 to 1.2.0 were released under the MIT license.
