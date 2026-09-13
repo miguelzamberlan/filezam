@@ -91,6 +91,60 @@ func (s *Server) dropShares(p string) {
 	}
 }
 
+// affectedLinksMax limita quantos links a resposta de handleSharesAffected descreve; a contagem
+// continua exata. O diálogo de confirmação só precisa de alguns nomes para ser concreto.
+const affectedLinksMax = 20
+
+// handleSharesAffected tells which live links an exclusion, move or rename of paths would take
+// down. É a pergunta que a interface faz antes de confirmar: o link não segue o item de
+// propósito (ver dropShares), então quem move uma pasta publicada precisa saber que vai ter de
+// criar o link de novo. Conta links de qualquer dono, porque todos caem; não devolve token nem
+// quem criou, só o caminho dentro do escopo de quem pergunta e o tipo do link.
+func (s *Server) handleSharesAffected(w http.ResponseWriter, r *http.Request) error {
+	u := userFrom(r)
+	var in struct {
+		Paths []string `json:"paths"`
+	}
+	if err := readJSON(r, &in); err != nil {
+		return err
+	}
+	paths, err := normalizeWritableList(in.Paths)
+	if err != nil {
+		return err
+	}
+	type link struct {
+		Path string `json:"path"`
+		Mode string `json:"mode"`
+		Slug string `json:"slug,omitempty"`
+	}
+	links := []link{}
+	count := 0
+	now := time.Now().Unix()
+	seen := map[int64]bool{}
+	for _, p := range paths {
+		shares, err := s.db.ListSharesUnder(r.Context(), vfs.Join(u.Scope, p))
+		if err != nil {
+			return err
+		}
+		for _, sh := range shares {
+			if sh.RevokedAt != nil || sh.ExpiresAt <= now || seen[sh.ID] {
+				continue
+			}
+			rel, ok := scopeRel(u.Scope, sh.Path)
+			if !ok {
+				continue
+			}
+			seen[sh.ID] = true
+			count++
+			if len(links) < affectedLinksMax {
+				links = append(links, link{Path: rel, Mode: sh.Mode, Slug: sh.Slug})
+			}
+		}
+	}
+	writeJSON(w, r, 200, map[string]any{"count": count, "links": links})
+	return nil
+}
+
 func (s *Server) handleShares(w http.ResponseWriter, r *http.Request) error {
 	u := userFrom(r)
 	uid := u.ID

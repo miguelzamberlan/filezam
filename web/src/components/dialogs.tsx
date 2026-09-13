@@ -4,9 +4,25 @@ import { S } from '../strings'
 import type { ConflictAnswer } from '../upload/manager'
 import { IAlert } from './Icons'
 
+/** Aviso destacado dentro de uma confirmação, com uma lista curta do que é afetado. */
+export interface ConfirmWarning {
+  title: string
+  text?: string
+  items?: string[]
+}
+
+interface ConfirmOpts {
+  title: string
+  message?: string
+  danger?: boolean
+  okLabel?: string
+  requireCheck?: string
+  warning?: ConfirmWarning
+}
+
 type Dialog =
   | { kind: 'prompt'; title: string; label?: string; initial?: string; selectExt?: boolean; validate?: (v: string) => string | null; resolve: (v: string | null) => void }
-  | { kind: 'confirm'; title: string; message?: string; danger?: boolean; okLabel?: string; requireCheck?: string; resolve: (ok: boolean) => void }
+  | { kind: 'confirm'; resolve: (ok: boolean) => void } & ConfirmOpts
   | { kind: 'conflict'; name: string; resolve: (a: ConflictAnswer) => void }
   | { kind: 'custom'; render: (close: () => void) => ReactNode; resolve: () => void }
 
@@ -27,7 +43,7 @@ export const dialogs = {
     return new Promise<string | null>((resolve) => useDialogs.getState().push({ kind: 'prompt', ...opts, resolve }))
   },
   // requireCheck: texto de uma caixa que começa desmarcada e precisa ser marcada para liberar o botão (ações irreversíveis).
-  confirm(opts: { title: string; message?: string; danger?: boolean; okLabel?: string; requireCheck?: string }) {
+  confirm(opts: ConfirmOpts) {
     return new Promise<boolean>((resolve) => useDialogs.getState().push({ kind: 'confirm', ...opts, resolve }))
   },
   conflict(name: string) {
@@ -107,6 +123,17 @@ function ConfirmDialog({ d, close }: { d: Extract<Dialog, { kind: 'confirm' }>; 
         <div className="min-w-0 flex-1">
           <h2 className="text-base font-semibold">{d.title}</h2>
           {d.message && <p className="mt-1 break-words text-sm text-neutral-600 dark:text-neutral-400">{d.message}</p>}
+          {d.warning && (
+            <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-100">
+              <p className="font-medium">{d.warning.title}</p>
+              {d.warning.text && <p className="mt-1">{d.warning.text}</p>}
+              {!!d.warning.items?.length && (
+                <ul className="mt-2 max-h-32 list-disc overflow-y-auto pl-5 text-xs">
+                  {d.warning.items.map((it, i) => <li key={i} className="break-all">{it}</li>)}
+                </ul>
+              )}
+            </div>
+          )}
           {d.requireCheck && (
             <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm">
               <input type="checkbox" className="h-4 w-4 accent-red-600" checked={checked} onChange={(e) => setChecked(e.target.checked)} autoFocus />

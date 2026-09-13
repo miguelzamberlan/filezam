@@ -331,6 +331,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 
 	mux.Handle("GET /api/shares", user(s.handleShares))
 	mux.Handle("POST /api/shares", user(s.handleShareCreate))
+	mux.Handle("POST /api/shares/affected", user(s.handleSharesAffected))
 	mux.Handle("DELETE /api/shares/{id}", user(s.handleShareDelete))
 
 	mux.Handle("GET /api/public/{token}", s.h(s.handlePublicInfo))

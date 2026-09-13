@@ -1497,6 +1497,30 @@ func TestSharesFollowAppChanges(t *testing.T) {
 	share("teamB/secret.txt")
 	share("teamB/b.txt")
 
+	// Antes de excluir, a interface pergunta quais links cairiam: a pasta e o arquivo dentro dela,
+	// sem o vizinho de mesmo prefixo, e só no escopo de quem pergunta, sem token.
+	o := admin.expect("POST", "/api/shares/affected", map[string]any{"paths": []string{"teamA/pub", "teamA/pub/doc.txt"}}, 200)
+	if o["count"].(float64) != 2 || len(o["links"].([]any)) != 2 {
+		t.Fatalf("affected: %v", o)
+	}
+	for _, l := range o["links"].([]any) {
+		if _, leak := l.(map[string]any)["token"]; leak {
+			t.Fatalf("affected leaks token: %v", l)
+		}
+	}
+	admin.expect("POST", "/api/admin/users", map[string]any{"username": "bia", "password": "biapassword1", "scope": "teamA"}, 201)
+	jar, _ := cookiejar.New(nil)
+	bia := &client{t: t, srv: admin.srv, c: &http.Client{Jar: jar}}
+	bia.login("bia", "biapassword1")
+	if o := bia.expect("POST", "/api/shares/affected", map[string]any{"paths": []string{"pub"}}, 200); o["count"].(float64) != 2 || o["links"].([]any)[0].(map[string]any)["path"] == "teamA/pub" {
+		t.Fatalf("affected for scoped user: %v", o)
+	}
+	if o := bia.expect("POST", "/api/shares/affected", map[string]any{"paths": []string{"pub2"}}, 200); o["count"].(float64) != 1 {
+		t.Fatalf("affected sibling: %v", o)
+	}
+	bia.expect("POST", "/api/shares/affected", map[string]any{"paths": []string{"../teamB"}}, 400)
+	bia.expect("POST", "/api/shares/affected", map[string]any{"paths": []string{}}, 400)
+
 	// excluir (lixeira) a pasta leva o link dela e o do arquivo dentro; "pub2" (mesmo prefixo) fica
 	waitJob(t, admin, admin.expect("POST", "/api/files/delete", map[string]any{"paths": []string{"teamA/pub"}}, 200))
 	if l := live(); l["teamA/pub"] || l["teamA/pub/doc.txt"] || !l["teamA/pub2"] {

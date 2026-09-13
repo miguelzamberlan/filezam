@@ -153,6 +153,7 @@ export const Api = {
     }),
   // purge libera o apelido de vez; sem ele um link com apelido é só revogado e o endereço
   // continua reservado a quem o criou.
+  sharesAffected: (paths: string[]) => api<{ count: number; links: { path: string; mode: 'read' | 'drop'; slug?: string }[] }>('POST', '/api/shares/affected', { paths }),
   deleteShare: (id: number, purge = false) => api<{ ok: true }>('DELETE', '/api/shares/' + id + (purge ? '?purge=1' : '')),
 
   // trash

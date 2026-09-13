@@ -19,7 +19,7 @@ import { canThumb, thumbUrl } from '../components/Thumb'
 import Editor, { canEdit } from '../components/Editor'
 import ShareDialog from '../components/ShareDialog'
 import InfoDialog from '../components/InfoDialog'
-import { dialogs, toast } from '../components/dialogs'
+import { dialogs, toast, type ConfirmWarning } from '../components/dialogs'
 import { useUploads } from '../components/UploadPanel'
 import { MenuButton } from '../components/Shell'
 import {
@@ -161,12 +161,34 @@ export default function Browser() {
     }
   }
 
+  // Excluir, mover ou renomear derruba os links públicos do item e de tudo dentro dele, de
+  // propósito: o link não segue o item. Antes de agir, pergunta ao servidor quais cairiam, para a
+  // confirmação dizer isso com os caminhos; null quando não há nenhum.
+  const linkWarning = async (paths: string[]): Promise<ConfirmWarning | null> => {
+    const aff = await Api.sharesAffected(paths)
+    if (aff.count === 0) return null
+    const byItem = new Map<string, number>()
+    for (const l of aff.links) {
+      const label = '/' + l.path + (l.mode === 'drop' ? ` (${S.shareModeDrop})` : '')
+      byItem.set(label, (byItem.get(label) ?? 0) + 1)
+    }
+    const items = [...byItem].map(([label, n]) => (n > 1 ? `${label} · ${S.linksCount(n)}` : label))
+    if (aff.count > aff.links.length) items.push(S.linksMore(aff.count - aff.links.length))
+    return { title: S.linksWillBreak(aff.count), text: S.linksWillBreakHint, items }
+  }
+  // Para renomear e mover, que não têm confirmação própria: só pergunta quando há link.
+  const confirmLinkLoss = async (paths: string[]) => {
+    const warning = await linkWarning(paths)
+    return !warning || dialogs.confirm({ title: warning.title, message: warning.text, warning: { title: S.linksAffected, items: warning.items }, okLabel: S.continueAnyway })
+  }
+
   const rename = async (e?: Entry) => {
     const target = e ?? (selectedEntries.length === 1 ? selectedEntries[0] : undefined)
     if (!target) return
     const name = await dialogs.prompt({ title: S.rename, label: S.renameTo, initial: target.name, selectExt: target.type === 'file', validate: (v) => (v.includes('/') ? S.errorCodes.invalid_name : null) })
     if (!name || name === target.name) return
     try {
+      if (!(await confirmLinkLoss([join(path, target.name)]))) return
       await Api.rename(join(path, target.name), name)
       await qc.invalidateQueries({ queryKey: ['list', path] })
       qc.invalidateQueries({ queryKey: ['favorites'] })
@@ -182,15 +204,17 @@ export default function Browser() {
   const remove = async (list = selectedEntries, permanent = false) => {
     if (list.length === 0) return
     const toTrash = trashOn && !permanent
-    if (toTrash ? ui.prefs.confirmDelete : true) {
-      const ok = await dialogs.confirm(
-        toTrash
-          ? { title: S.moveToTrashConfirm(list.length), message: (list.length === 1 ? list[0].name + ' — ' : '') + S.moveToTrashHint, okLabel: S.delete }
-          : { title: S.deleteConfirm(list.length), message: list.length === 1 ? list[0].name : S.deleteWarning, danger: true, okLabel: S.deleteForever, requireCheck: S.confirmIrreversible },
-      )
-      if (!ok) return
-    }
     try {
+      // Com link no meio a confirmação aparece mesmo para quem desligou a da lixeira.
+      const warning = await linkWarning(list.map((e) => join(path, e.name)))
+      if (toTrash ? ui.prefs.confirmDelete || warning : true) {
+        const ok = await dialogs.confirm(
+          toTrash
+            ? { title: S.moveToTrashConfirm(list.length), message: (list.length === 1 ? list[0].name + ' — ' : '') + S.moveToTrashHint, okLabel: S.delete, warning: warning ?? undefined }
+            : { title: S.deleteConfirm(list.length), message: list.length === 1 ? list[0].name : S.deleteWarning, danger: true, okLabel: S.deleteForever, requireCheck: S.confirmIrreversible, warning: warning ?? undefined },
+        )
+        if (!ok) return
+      }
       const { job } = await Api.delete(list.map((e) => join(path, e.name)), !toTrash)
       track(job)
       ui.clearSelection()
@@ -221,6 +245,7 @@ export default function Browser() {
     }
     try {
       const sources = c.names.map((n) => join(c.dir, n))
+      if (c.op === 'cut' && !(await confirmLinkLoss(sources))) return
       const { job } = c.op === 'copy' ? await Api.copy(sources, destDir, policy) : await Api.move(sources, destDir, policy)
       track(job)
       if (c.op === 'cut') ui.setClipboard(null)
@@ -251,6 +276,7 @@ export default function Browser() {
         if (ans.choice === 'cancel') return
         policy = ans.choice
       }
+      if (!(await confirmLinkLoss(names.map((n) => join(path, n))))) return
       const { job } = await Api.move(names.map((n) => join(path, n)), destDir, policy)
       track(job)
       ui.clearSelection()
