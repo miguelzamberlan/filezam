@@ -4,6 +4,8 @@ Todas as mudanças relevantes do Filezam ficam registradas aqui. O formato segue
 
 ## [Não lançado]
 
+## [1.1.1] - 2026-09-13
+
 ### Alterado
 - **Extrair um `.zip` protegido por senha** agora avisa na hora que arquivos com senha não são suportados, em vez de terminar com uma pasta só de subpastas vazias e um aviso por arquivo. Um `.zip` corrompido também é recusado logo ao pedir a extração. Num zip em que só parte dos arquivos tem senha, o resto continua sendo extraído e o aviso diz quantos foram pulados por estarem protegidos.
 - Documentação de **como expor várias pastas do host**: a resposta estava numa célula de tabela e não dizia o que muda com mais de uma montagem. Agora é uma seção própria em `docs/08-operacao.md`, resumida no README, com o exemplo de `volumes` e as ressalvas — dono das pastas extras (o serviço `init` não mexe nelas), mover e excluir entre sistemas de arquivos virando cópia + remoção, espaço livre por escopo e symlink recusado pelo `os.Root`.
@@ -83,6 +85,7 @@ Primeira versão pública.
 - `docker-compose.yml` de referência com serviço `init` para permissões, sub-rede fixa e contêiner somente leitura sem capabilities.
 - Documentação completa em `docs/`: arquitetura, segurança, API, uploads, banco, frontend, operação (Docker, Easypanel, systemd, proxies), testes e roadmap.
 
-[Não lançado]: https://github.com/miguelzamberlan/filezam/compare/v1.1.0...HEAD
+[Não lançado]: https://github.com/miguelzamberlan/filezam/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/miguelzamberlan/filezam/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/miguelzamberlan/filezam/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/miguelzamberlan/filezam/releases/tag/v1.0.0

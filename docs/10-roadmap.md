@@ -29,6 +29,10 @@
 - **Arrastar dentro da UI** só com mouse; no toque use recortar/colar.
 - **PDF no celular abre fora da interface**: navegadores móveis não mostram PDF em iframe, então o preview oferece nova aba/download. Mostrar dentro exigiria embutir o pdf.js (centenas de KB carregados sob demanda, worker próprio e revisão da CSP).
 
+## Versão 1.1.1
+
+Lançada em 2026-09-13 ([CHANGELOG](../CHANGELOG.md)). Versão de correção: extrair um `.zip` protegido por senha é recusado na hora com `archive_encrypted`, em vez de terminar com uma pasta de subpastas vazias; passar fotos com as setas no visualizador não deixa a foto anterior na tela enquanto a próxima carrega; e a documentação ganhou a seção de várias pastas do host e o README completo em inglês. Suporte a senha em zip (extrair ou compactar) continua fora: exigiria dependência externa para decifrar, e compactar com ZipCrypto daria falsa sensação de sigilo.
+
 ## Versão 1.1.0
 
 Lançada em 2026-09-12 ([CHANGELOG](../CHANGELOG.md)). Traz o editor de texto e markdown, o extrator e compactador de `.zip`, as miniaturas de imagem, o endereço personalizado no link público, o link público de recebimento de arquivos e a tela de configurações globais do administrador.
@@ -73,7 +77,7 @@ Não verificado manualmente antes do lançamento: o item 15 do checklist de [09]
 
 ## Feito
 
-Lixeira com retenção, índice de nomes em SQLite, link de arquivo único e senha no link, arrastar e soltar interno, listagem paginada, interface em inglês, histórico de operações persistido, métricas Prometheus, cota de disco por usuário com limites de zips/jobs, link amarrado ao inode e bloqueio de login silencioso por (usuário, IP) e verificação em duas etapas TOTP com códigos de recuperação e dispositivo confiável (setembro de 2026). Versão 1.0.0 pública (2026-09-10): revisão de segurança, validação em produção e pendências da auditoria resolvidas. Versão 1.1.0 (2026-09-12): editor de texto e markdown, extrator e compactador de `.zip`, miniaturas de imagem, endereço personalizado no link público (com senha obrigatória), link público de recebimento de arquivos e tela de configurações globais do administrador.
+Lixeira com retenção, índice de nomes em SQLite, link de arquivo único e senha no link, arrastar e soltar interno, listagem paginada, interface em inglês, histórico de operações persistido, métricas Prometheus, cota de disco por usuário com limites de zips/jobs, link amarrado ao inode e bloqueio de login silencioso por (usuário, IP) e verificação em duas etapas TOTP com códigos de recuperação e dispositivo confiável (setembro de 2026). Versão 1.0.0 pública (2026-09-10): revisão de segurança, validação em produção e pendências da auditoria resolvidas. Versão 1.1.0 (2026-09-12): editor de texto e markdown, extrator e compactador de `.zip`, miniaturas de imagem, endereço personalizado no link público (com senha obrigatória), link público de recebimento de arquivos e tela de configurações globais do administrador. Versão 1.1.1 (2026-09-13): `.zip` com senha recusado na hora e navegação entre fotos sem a imagem anterior na tela.
 
 ## Decisões e ideias descartadas
 
