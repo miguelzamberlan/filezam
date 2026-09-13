@@ -94,3 +94,57 @@ func (db *DB) CountJobs(ctx context.Context) (map[string]int64, error) {
 	}
 	return out, rows.Err()
 }
+
+// JobCleanup is something an interrupted job has to undo.
+type JobCleanup struct {
+	JobID string
+	Path  string // base-relativo
+	Mode  string // "temps" | "tree"
+	// Do job, para a mensagem que fica no histórico.
+	Type  string
+	Done  int
+	Total int
+}
+
+// AddJobCleanup records what to undo if the process dies while the job runs.
+func (db *DB) AddJobCleanup(ctx context.Context, jobID, path, mode string) error {
+	_, err := db.w.ExecContext(ctx, `INSERT OR IGNORE INTO job_cleanup(job_id, path, mode) VALUES(?,?,?)`, jobID, path, mode)
+	return err
+}
+
+// DeleteJobCleanup forgets the job's cleanup rows (the job ended on its own).
+func (db *DB) DeleteJobCleanup(ctx context.Context, jobID string) error {
+	_, err := db.w.ExecContext(ctx, `DELETE FROM job_cleanup WHERE job_id=?`, jobID)
+	return err
+}
+
+// DeleteJobCleanupPath forgets one row after it was dealt with.
+func (db *DB) DeleteJobCleanupPath(ctx context.Context, jobID, path string) error {
+	_, err := db.w.ExecContext(ctx, `DELETE FROM job_cleanup WHERE job_id=? AND path=?`, jobID, path)
+	return err
+}
+
+// ListOrphanCleanup returns the rows of jobs that are no longer running: quem terminou apagou as
+// suas, então o que sobra é de um processo que caiu.
+func (db *DB) ListOrphanCleanup(ctx context.Context) ([]JobCleanup, error) {
+	rows, err := db.r.QueryContext(ctx, `SELECT c.job_id, c.path, c.mode, j.type, j.done, j.total FROM job_cleanup c JOIN jobs j ON j.id=c.job_id WHERE j.state<>'running' ORDER BY c.job_id, c.path`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []JobCleanup{}
+	for rows.Next() {
+		var c JobCleanup
+		if err := rows.Scan(&c.JobID, &c.Path, &c.Mode, &c.Type, &c.Done, &c.Total); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+// SetJobError replaces the error text of a finished job.
+func (db *DB) SetJobError(ctx context.Context, id, msg string) error {
+	_, err := db.w.ExecContext(ctx, `UPDATE jobs SET error=? WHERE id=?`, msg, id)
+	return err
+}

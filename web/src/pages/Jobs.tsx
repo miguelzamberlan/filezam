@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Api } from '../api/client'
 import type { JobRecord } from '../api/types'
 import { formatBytes, formatDate, formatDuration } from '../lib/format'
-import { S, errorMessage } from '../strings'
+import { S, errorMessage, jobText } from '../strings'
 import { jobLabel } from '../lib/jobs'
 import { toast } from '../components/dialogs'
 import { ISpinner, ICheck, IAlert, IClose, IRefresh } from '../components/Icons'
@@ -37,14 +37,14 @@ export default function Jobs() {
     const dur = j.finishedAt ? j.finishedAt - j.startedAt : Math.max(0, Math.floor(Date.now() / 1000) - j.startedAt)
     return (
       <tr className="border-t border-neutral-200 dark:border-neutral-800">
-        <td className="px-3 py-1.5"><span className="flex items-center gap-1.5 whitespace-nowrap" title={j.error}>{stateIcon(j)} {stateLabel(j)}</span></td>
+        <td className="px-3 py-1.5"><span className="flex items-center gap-1.5 whitespace-nowrap" title={j.error ? jobText(j.error) : undefined}>{stateIcon(j)} {stateLabel(j)}</span></td>
         <td className="px-3 py-1.5">
           <div className="font-medium">{jobLabel(j.type)}</div>
           <div className="truncate text-xs text-neutral-500" title={j.label}>{j.label}</div>
           {j.state === 'running' && (
             <div className="mt-1 h-1 w-40 overflow-hidden rounded bg-neutral-200 dark:bg-neutral-800"><div className="h-full bg-accent" style={{ width: pct + '%' }} /></div>
           )}
-          {j.error && <div className="mt-0.5 text-xs text-red-600">{j.error}</div>}
+          {j.error && <div className="mt-0.5 text-xs text-red-600">{jobText(j.error)}</div>}
         </td>
         <td className="hidden whitespace-nowrap px-3 py-1.5 text-neutral-500 sm:table-cell">{S.jobItems(j.done, j.total)}{j.bytesTotal > 0 && ` · ${formatBytes(j.bytesDone)}`}{j.warnings > 0 && ` · ${S.jobWarnings(j.warnings)}`}</td>
         <td className="hidden whitespace-nowrap px-3 py-1.5 tabular-nums text-neutral-500 md:table-cell">{formatDate(j.startedAt, true)}</td>

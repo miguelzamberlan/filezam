@@ -68,8 +68,14 @@ func (r *Root) RemoveReserved(dir, name string) error {
 // Finalize atomically moves a part file to its final name.
 // With overwrite=false the operation fails with ErrExists if the target appeared.
 func (r *Root) Finalize(dir, id, name string, overwrite bool) error {
-	part := Join(dir, PartName(id))
-	final := Join(dir, name)
+	return r.publish(Join(dir, PartName(id)), Join(dir, name), overwrite)
+}
+
+// publish gives a finished temporary file its final name. Com overwrite=false falha com
+// ErrExists se o nome apareceu nesse meio tempo: o hardlink não sobrescreve, e só onde o sistema
+// de arquivos não tem hardlink cai numa checagem seguida de rename.
+func (r *Root) publish(part, final string, overwrite bool) error {
+	name := Base(final)
 	if overwrite {
 		if fi, err := r.r.Lstat(final); err == nil && fi.IsDir() {
 			return fmt.Errorf("%w: %s", ErrIsDir, name)

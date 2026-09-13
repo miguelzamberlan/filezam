@@ -923,3 +923,97 @@ func TestExtractRoundTrip(t *testing.T) {
 		t.Fatalf("nested content: %q", b)
 	}
 }
+
+// A cópia grava num temporário e só publica no fim: cancelada no meio, não sobra nem o arquivo
+// com o nome legítimo nem o temporário, e "substituir" não destrói o original antes da hora.
+func TestCopyPublishesOnlyWhenComplete(t *testing.T) {
+	r, root, outside := fixture(t)
+	big := filepath.Join(root, "grande.bin")
+	if err := os.WriteFile(big, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Truncate(big, copyChunk+1024); err != nil {
+		t.Fatal(err)
+	}
+	cancelAfterFirstChunk := func() (context.Context, *Progress) {
+		ctx, cancel := context.WithCancel(context.Background())
+		return ctx, &Progress{Tag: "job1", Add: func(files int, bytes int64) {
+			if bytes > 0 {
+				cancel()
+			}
+		}}
+	}
+	ctx, prog := cancelAfterFirstChunk()
+	if err := r.CopyTree(ctx, "grande.bin", "a/copia.bin", ConflictRename, prog); !errors.Is(err, context.Canceled) {
+		t.Fatalf("want context.Canceled, got %v", err)
+	}
+	des, _ := os.ReadDir(filepath.Join(root, "a"))
+	for _, d := range des {
+		if d.Name() == "copia.bin" || strings.HasPrefix(d.Name(), ReservedPrefix) {
+			t.Fatalf("cancelled copy left %s behind", d.Name())
+		}
+	}
+
+	// Substituir cancelado no meio: o destino antigo continua intacto.
+	ctx, prog = cancelAfterFirstChunk()
+	if err := r.CopyTree(ctx, "grande.bin", "a/file.txt", ConflictOverwrite, prog); !errors.Is(err, context.Canceled) {
+		t.Fatalf("overwrite: want context.Canceled, got %v", err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(root, "a", "file.txt")); len(b) == 0 || len(b) > 1024 {
+		t.Fatalf("overwrite destroyed the original before finishing: %d bytes", len(b))
+	}
+
+	// Terminada, a cópia aparece inteira e o temporário some.
+	if err := r.CopyTree(context.Background(), "a", "b", ConflictRename, &Progress{Tag: "job2"}); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(root, "b", "sub", "deep.txt")); len(b) == 0 {
+		t.Fatal("copied tree incomplete")
+	}
+	checkCanary(t, outside)
+}
+
+// Depois de uma queda sobram só temporários com o Tag da operação: RemoveTemps apaga esses, na
+// pasta do destino e abaixo dela, e mais nada — nem os de outra operação, nem arquivos comuns,
+// nem o que está do outro lado de um symlink.
+func TestRemoveTempsOnlyTouchesTaggedTemporaries(t *testing.T) {
+	r, root, outside := fixture(t)
+	must := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	write := func(p string) {
+		t.Helper()
+		must(os.MkdirAll(filepath.Dir(p), 0o755))
+		must(os.WriteFile(p, []byte("x"), 0o644))
+	}
+	tagged := CopyTempPrefix("job9")
+	write(filepath.Join(root, "dst", tagged+"aaa"))                 // temporário do arquivo solto
+	write(filepath.Join(root, "dst", "pasta", tagged+"bbb"))        // dentro da árvore copiada
+	write(filepath.Join(root, "dst", "pasta", "sub", tagged+"ccc")) // mais fundo
+	write(filepath.Join(root, "dst", CopyTempPrefix("outro")+"ddd"))
+	write(filepath.Join(root, "dst", "pasta", "pronto.txt"))
+	write(filepath.Join(outside, tagged+"eee"))
+	must(os.Symlink("../../outside", filepath.Join(root, "dst", "pasta", "fora")))
+	must(os.MkdirAll(filepath.Join(root, "dst", tagged+"dir"), 0o755)) // pasta com o prefixo não é temporário
+
+	n, err := r.RemoveTemps(context.Background(), "dst/pasta", "job9")
+	if err != nil || n != 3 {
+		t.Fatalf("removed %d, err %v", n, err)
+	}
+	for _, keep := range []string{"dst/" + CopyTempPrefix("outro") + "ddd", "dst/pasta/pronto.txt", "dst/" + tagged + "dir"} {
+		if _, err := os.Lstat(filepath.Join(root, keep)); err != nil {
+			t.Fatalf("%s should survive: %v", keep, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(outside, tagged+"eee")); err != nil {
+		t.Fatal("followed a symlink out of the root")
+	}
+	// Destino que nem chegou a existir: nada a fazer, sem erro.
+	if n, err := r.RemoveTemps(context.Background(), "nao/existe.txt", "job9"); err != nil || n != 0 {
+		t.Fatalf("missing target: %d %v", n, err)
+	}
+	checkCanary(t, outside)
+}

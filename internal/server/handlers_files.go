@@ -835,7 +835,9 @@ func (s *Server) handleCopy(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	j, err := s.startJob(u, "copy", jobLabel(sources, dest), parentDirs(nil, dest), func(ctx context.Context, j *jobs.Job) error {
+	j, err := s.startJob(u, "copy", jobLabel(sources, dest), parentDirs(nil, dest), func(ctx context.Context, j *jobs.Job) (err error) {
+		defer s.unguardJob(j)
+		defer func() { warnPartialCopy(j, err) }()
 		root, err := s.scopeRoot(u)
 		if err != nil {
 			return err
@@ -857,6 +859,7 @@ func (s *Server) handleCopy(w http.ResponseWriter, r *http.Request) error {
 		s.usageAdd(u.ID, bytes)
 		j.SetTotals(files, bytes)
 		prog := progressFor(j)
+		prog.Tag = j.ID()
 		for _, src := range sources {
 			dst, ok, err := root.ResolveDest(src, dest, policy)
 			if err != nil {
@@ -866,6 +869,7 @@ func (s *Server) handleCopy(w http.ResponseWriter, r *http.Request) error {
 				j.Warn(src + ": skipped (exists)")
 				continue
 			}
+			s.guardJob(j, vfs.Join(u.Scope, dst), cleanupTemps)
 			if err := root.CopyTree(ctx, src, dst, policy, prog); err != nil {
 				return err
 			}
@@ -886,6 +890,7 @@ func (s *Server) handleMove(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	j, err := s.startJob(u, "move", jobLabel(sources, dest), parentDirs(sources, dest), func(ctx context.Context, j *jobs.Job) error {
+		defer s.unguardJob(j)
 		root, err := s.scopeRoot(u)
 		if err != nil {
 			return err
@@ -893,6 +898,9 @@ func (s *Server) handleMove(w http.ResponseWriter, r *http.Request) error {
 		defer root.Close()
 		j.SetTotals(len(sources), 0)
 		prog := progressFor(j)
+		prog.Tag = j.ID()
+		// O progresso de itens do mover conta fontes, não os arquivos de uma cópia entre dispositivos.
+		prog.Add = func(_ int, bytes int64) { j.Add(0, bytes) }
 		for _, src := range sources {
 			if err := ctx.Err(); err != nil {
 				return err
@@ -906,6 +914,9 @@ func (s *Server) handleMove(w http.ResponseWriter, r *http.Request) error {
 				j.Warn(src + ": skipped (exists)")
 				continue
 			}
+			// Só temporários, nunca a árvore: numa queda depois de um rename o destino é o único
+			// lugar onde o item existe.
+			s.guardJob(j, vfs.Join(u.Scope, dst), cleanupTemps)
 			if err := s.moveOne(ctx, root, src, dst, policy, prog); err != nil {
 				return err
 			}

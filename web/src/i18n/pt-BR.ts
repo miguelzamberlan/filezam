@@ -359,6 +359,17 @@ export const ptBR = {
   account: 'Conta',
   accountHint: 'Senha e verificação em duas etapas da sua conta.',
   keyboardHint: 'Atalhos: Ctrl+C/X/V copiar/recortar/colar · F2 renomear · Del excluir · Enter abrir · Backspace subir · Ctrl+A tudo',
+  // Textos estáveis que o servidor grava no histórico de operações (erro e avisos), em inglês.
+  // Ordem importa: o primeiro que casar vale. O que não casar aparece como veio.
+  jobTexts: [
+    [/^interrupted by server restart; partial copy of (\d+) files/, (m) => `Interrompida pelo reinício do servidor. Cópia parcial de ${m[1]} arquivos: os que terminaram ficaram no destino; o que estava pela metade foi apagado.`],
+    [/^interrupted by server restart; the unfinished copy was removed/, () => 'Interrompida pelo reinício do servidor. A cópia pela metade foi apagada; nada ficou no destino.'],
+    [/^interrupted by server restart; items already moved were kept/, () => 'Interrompida pelo reinício do servidor. O que já tinha sido movido ficou no destino; a cópia pela metade foi apagada.'],
+    [/^interrupted by server restart; the partial extraction was removed/, () => 'Interrompida pelo reinício do servidor. A extração pela metade foi apagada.'],
+    [/^interrupted by server restart; the unfinished \.zip was removed/, () => 'Interrompida pelo reinício do servidor. O .zip pela metade foi apagado.'],
+    [/^interrupted by server restart/, () => 'Interrompida pelo reinício do servidor.'],
+    [/^partial copy: (\d+) of (\d+) files copied/, (m) => `Cópia parcial: ${m[1]} de ${m[2]} arquivos copiados. Os completos ficaram no destino; o que estava pela metade foi apagado.`],
+  ] as [RegExp, (m: RegExpMatchArray) => string][],
   errorCodes: {
     exists: 'Já existe um item com este nome',
     not_found: 'Item não encontrado',

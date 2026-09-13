@@ -208,6 +208,7 @@ func (s *Server) StartBackground() {
 		if err := s.db.PruneAudit(ctx, time.Now().Add(-180*24*time.Hour).Unix()); err != nil {
 			s.log.Warn("prune audit", "err", err)
 		}
+		s.recoverInterruptedJobs(ctx)
 		s.sweepTrash(ctx)
 		if err := s.db.PruneJobs(ctx, time.Now().Add(-30*24*time.Hour).Unix()); err != nil {
 			s.log.Warn("prune jobs", "err", err)

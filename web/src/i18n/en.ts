@@ -361,6 +361,15 @@ export const en: Strings = {
   account: 'Account',
   accountHint: 'Password and two-factor authentication for your account.',
   keyboardHint: 'Shortcuts: Ctrl+C/X/V copy/cut/paste · F2 rename · Del delete · Enter open · Backspace up · Ctrl+A all',
+  jobTexts: [
+    [/^interrupted by server restart; partial copy of (\d+) files/, (m) => `Interrupted by a server restart. Partial copy of ${m[1]} files: the finished ones stayed at the destination; the unfinished one was removed.`],
+    [/^interrupted by server restart; the unfinished copy was removed/, () => 'Interrupted by a server restart. The unfinished copy was removed; nothing was left at the destination.'],
+    [/^interrupted by server restart; items already moved were kept/, () => 'Interrupted by a server restart. What had already been moved stayed at the destination; the unfinished copy was removed.'],
+    [/^interrupted by server restart; the partial extraction was removed/, () => 'Interrupted by a server restart. The partial extraction was removed.'],
+    [/^interrupted by server restart; the unfinished \.zip was removed/, () => 'Interrupted by a server restart. The unfinished .zip was removed.'],
+    [/^interrupted by server restart/, () => 'Interrupted by a server restart.'],
+    [/^partial copy: (\d+) of (\d+) files copied/, (m) => `Partial copy: ${m[1]} of ${m[2]} files copied. The finished ones stayed at the destination; the unfinished one was removed.`],
+  ] as [RegExp, (m: RegExpMatchArray) => string][],
   errorCodes: {
     exists: 'An item with this name already exists',
     not_found: 'Item not found',

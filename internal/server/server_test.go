@@ -2796,3 +2796,87 @@ func TestInitialAdminPasswordIsGenerated(t *testing.T) {
 		t.Fatalf("initial admin must be forced to change the password: %v %v", u, err)
 	}
 }
+
+// Um reinício no meio de copiar, extrair ou compactar não deixa sobra com cara de arquivo: a
+// manutenção apaga os temporários da cópia (o que terminou fica), a pasta da extração e o .zip
+// temporário, e troca o texto do histórico pelo que aconteceu. Disco não montado espera.
+func TestInterruptedJobsAreCleanedUp(t *testing.T) {
+	admin, s, root := newEnv(t)
+	admin.login("admin", "admin")
+	admin.expect("POST", "/api/auth/password", map[string]string{"current": "admin", "new": "correct horse battery"}, 200)
+	ctx := context.Background()
+
+	// Um job que termina sozinho não deixa linha de limpeza.
+	waitJob(t, admin, admin.expect("POST", "/api/files/copy", map[string]any{"sources": []string{"teamA/pub"}, "destDir": "teamB"}, 200))
+	if rows, _ := s.db.ListOrphanCleanup(ctx); len(rows) != 0 {
+		t.Fatalf("finished job left cleanup rows: %+v", rows)
+	}
+
+	write := func(rel, body string) {
+		t.Helper()
+		p := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Estado deixado por um processo que caiu: três jobs "running" e o que cada um gravou.
+	now := time.Now().Unix()
+	for _, j := range []store.JobRecord{
+		{ID: "copia1", UserID: 1, Type: "copy", State: "running", Done: 1, Total: 3, StartedAt: now},
+		{ID: "extrai1", UserID: 1, Type: "extract", State: "running", StartedAt: now},
+		{ID: "semdisco", UserID: 1, Type: "copy", State: "running", Total: 1, StartedAt: now},
+	} {
+		if err := s.db.UpsertJob(ctx, &j); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("teamA/destino/pronto.txt", "completo")
+	write("teamA/destino/"+vfs.CopyTempPrefix("copia1")+"abc", "pela metade")
+	write("teamA/destino/sub/"+vfs.CopyTempPrefix("copia1")+"def", "pela metade")
+	write("teamA/destino/"+vfs.CopyTempPrefix("outrojob")+"xyz", "de outro job")
+	write("teamA/fotos-extraidas/a.jpg", "parcial")
+	for _, c := range []struct{ job, path, mode string }{
+		{"copia1", "teamA/destino", cleanupTemps},
+		{"extrai1", "teamA/fotos-extraidas", cleanupTree},
+		{"semdisco", "hd-desmontado/pasta/x.bin", cleanupTemps},
+	} {
+		if err := s.db.AddJobCleanup(ctx, c.job, c.path, c.mode); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n, err := s.db.MarkInterruptedJobs(ctx); err != nil || n != 3 {
+		t.Fatalf("mark interrupted: %d %v", n, err)
+	}
+	s.recoverInterruptedJobs(ctx)
+
+	if b, _ := os.ReadFile(filepath.Join(root, "teamA", "destino", "pronto.txt")); string(b) != "completo" {
+		t.Fatal("finished file of the partial copy was removed")
+	}
+	for _, gone := range []string{"teamA/destino/" + vfs.CopyTempPrefix("copia1") + "abc", "teamA/destino/sub/" + vfs.CopyTempPrefix("copia1") + "def", "teamA/fotos-extraidas"} {
+		if _, err := os.Lstat(filepath.Join(root, filepath.FromSlash(gone))); !os.IsNotExist(err) {
+			t.Fatalf("%s should be gone: %v", gone, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(root, "teamA", "destino", vfs.CopyTempPrefix("outrojob")+"xyz")); err != nil {
+		t.Fatal("another job's temporary was touched")
+	}
+	msgs := map[string]string{}
+	for _, j := range admin.expect("GET", "/api/jobs/history", nil, 200)["jobs"].([]any) {
+		m := j.(map[string]any)
+		msgs[m["id"].(string)], _ = m["error"].(string)
+	}
+	if !strings.Contains(msgs["copia1"], "partial copy of 3 files") || !strings.Contains(msgs["extrai1"], "partial extraction was removed") {
+		t.Fatalf("history messages: %v", msgs)
+	}
+	// O disco que não estava montado fica para a próxima rodada, com a linha e o texto genérico.
+	rows, _ := s.db.ListOrphanCleanup(ctx)
+	if len(rows) != 1 || rows[0].JobID != "semdisco" || msgs["semdisco"] != "interrupted by server restart" {
+		t.Fatalf("unmounted target should wait: %+v %q", rows, msgs["semdisco"])
+	}
+	if !strings.Contains(interruptedMessage("copy", 1), "unfinished copy was removed") {
+		t.Fatal("single-file message")
+	}
+}

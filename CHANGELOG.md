@@ -6,6 +6,7 @@ Todas as mudanças relevantes do Filezam ficam registradas aqui. O formato segue
 
 ### Adicionado
 - **Prazo da lixeira e frequência da varredura do índice em Configurações do sistema**: o administrador escolhe por quanto tempo os itens excluídos ficam na lixeira (até 365 dias, ou desligada) e de quanto em quanto tempo o índice de pesquisa relê o disco para enxergar mudanças feitas por fora (15 minutos a 7 dias), com o aviso do custo e a duração da última varredura. `FILEZAM_TRASH_RETENTION` e `FILEZAM_INDEX_INTERVAL` passam a ser só o valor inicial.
+- **Cópia interrompida não deixa arquivo pela metade**: cada arquivo é gravado num temporário oculto e só aparece com o nome certo quando termina. Cancelada, ou cortada por um reinício do servidor, a cópia de um único arquivo não deixa nada no destino; a de vários mantém os que terminaram e **Operações** avisa que a cópia foi parcial. Extração e compactação interrompidas por um reinício também são apagadas. Substituir um arquivo não destrói mais o original antes de a cópia nova estar inteira.
 
 ### Alterado
 - Ao criar um **link de recebimento**, o diálogo explica que o limite conta tudo o que já entrou pelo link: apagar ou mover os arquivos recebidos não devolve espaço, e um link esgotado é substituído por um novo.

@@ -65,6 +65,9 @@ func (r *Root) UniqueIfExists(dir, name string) (string, error) {
 	return r.UniqueName(dir, name)
 }
 
+// ZipTempName is where WriteZipFile assembles name before publishing it.
+func ZipTempName(name string) string { return ReservedPrefix + "zip-" + name }
+
 // WriteZipFile writes a zip of paths into dir/name. Diferente do WriteZip, que transmite direto
 // para a resposta HTTP, aqui o destino é o próprio disco: grava num arquivo temporário e só
 // publica no fim, para uma compactação interrompida não deixar um .zip pela metade com nome
@@ -73,7 +76,7 @@ func (r *Root) WriteZipFile(ctx context.Context, dir, name string, paths []strin
 	if err := ValidName(name); err != nil {
 		return err
 	}
-	tmp := ReservedPrefix + "zip-" + name
+	tmp := ZipTempName(name)
 	f, err := r.r.OpenFile(Join(dir, tmp), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	if err != nil {
 		return MapError(err)

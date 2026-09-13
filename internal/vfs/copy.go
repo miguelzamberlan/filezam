@@ -25,6 +25,16 @@ type Progress struct {
 	Add     func(files int, bytes int64)
 	Current func(path string)
 	Warn    func(path string, err error)
+	// Tag entra no nome dos temporários desta operação (CopyTempPrefix). É o que permite, depois
+	// de uma queda do processo, achar e apagar só o que esta operação deixou pela metade.
+	Tag string
+}
+
+func (p *Progress) tag() string {
+	if p == nil {
+		return ""
+	}
+	return p.Tag
 }
 
 func (p *Progress) add(files int, bytes int64) {
@@ -283,6 +293,13 @@ func (r *Root) copyDir(ctx context.Context, src, dst string, fi fs.FileInfo, pol
 
 const copyChunk = 32 << 20
 
+// CopyTempPrefix is the name prefix of the temporaries a copy tagged tag writes.
+func CopyTempPrefix(tag string) string { return ReservedPrefix + "copy-" + tag + "-" }
+
+// copyFile grava num temporário oculto ao lado do destino e só publica no fim. Um arquivo pela
+// metade nunca aparece com o nome legítimo — nem se o processo cair no meio, caso em que sobra
+// só o temporário, que RemoveTemps recolhe pelo Tag —, e substituir não destrói o original antes
+// de a cópia nova estar inteira.
 func (r *Root) copyFile(ctx context.Context, src, dst string, fi fs.FileInfo, policy Conflict, prog *Progress) error {
 	prog.current(src)
 	in, err := r.r.Open(src)
@@ -290,19 +307,23 @@ func (r *Root) copyFile(ctx context.Context, src, dst string, fi fs.FileInfo, po
 		return MapError(err)
 	}
 	defer in.Close()
-	flags := os.O_WRONLY | os.O_CREATE | os.O_EXCL
-	if policy == ConflictOverwrite {
-		flags = os.O_WRONLY | os.O_CREATE | os.O_TRUNC
+	suffix, err := randHex(6)
+	if err != nil {
+		return err
 	}
-	out, err := r.r.OpenFile(dst, flags, fi.Mode().Perm()|0o600)
+	tmp := Join(Dir(dst), CopyTempPrefix(prog.tag())+suffix)
+	out, err := r.r.OpenFile(osPath(tmp), os.O_WRONLY|os.O_CREATE|os.O_EXCL, fi.Mode().Perm()|0o600)
 	if err != nil {
 		return MapError(err)
 	}
+	fail := func(err error) error {
+		out.Close()
+		_ = r.r.Remove(osPath(tmp))
+		return err
+	}
 	for {
 		if err := ctx.Err(); err != nil {
-			out.Close()
-			_ = r.r.Remove(dst)
-			return err
+			return fail(err)
 		}
 		n, err := io.CopyN(out, in, copyChunk)
 		prog.add(0, n)
@@ -310,18 +331,73 @@ func (r *Root) copyFile(ctx context.Context, src, dst string, fi fs.FileInfo, po
 			break
 		}
 		if err != nil {
-			out.Close()
-			_ = r.r.Remove(dst)
-			return MapError(err)
+			return fail(MapError(err))
 		}
 	}
 	if err := out.Close(); err != nil {
-		_ = r.r.Remove(dst)
+		_ = r.r.Remove(osPath(tmp))
 		return MapError(err)
 	}
-	_ = r.r.Chtimes(dst, time.Time{}, fi.ModTime())
+	_ = r.r.Chtimes(osPath(tmp), time.Time{}, fi.ModTime())
+	if err := r.publish(tmp, dst, policy == ConflictOverwrite); err != nil {
+		_ = r.r.Remove(osPath(tmp))
+		return err
+	}
 	prog.add(1, 0)
 	return nil
+}
+
+// RemoveTemps deletes the copy temporaries tagged tag that an interrupted operation left at p:
+// os do diretório de p (onde fica o temporário de um arquivo) e, se p é uma pasta, os de toda a
+// árvore abaixo dela. Nunca segue symlink e nunca apaga nada além de nomes com o prefixo, então
+// rodar sobre um destino que terminou inteiro não tira nada do lugar.
+func (r *Root) RemoveTemps(ctx context.Context, p, tag string) (int, error) {
+	prefix := CopyTempPrefix(tag)
+	n, err := r.removeTempsIn(ctx, Dir(p), prefix, Depth(Dir(p)), false)
+	if err != nil || p == "" {
+		return n, err
+	}
+	fi, err := r.r.Lstat(osPath(p))
+	if err != nil || !fi.IsDir() {
+		return n, nil
+	}
+	m, err := r.removeTempsIn(ctx, p, prefix, Depth(p), true)
+	return n + m, err
+}
+
+func (r *Root) removeTempsIn(ctx context.Context, dir, prefix string, depth int, recurse bool) (int, error) {
+	f, err := r.r.Open(osPath(dir))
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return 0, nil
+		}
+		return 0, MapError(err)
+	}
+	des, err := f.ReadDir(-1)
+	f.Close()
+	if err != nil {
+		return 0, MapError(err)
+	}
+	n := 0
+	for _, de := range des {
+		if err := ctx.Err(); err != nil {
+			return n, err
+		}
+		name := de.Name()
+		switch {
+		case strings.HasPrefix(name, prefix) && de.Type().IsRegular():
+			if err := r.r.Remove(osPath(Join(dir, name))); err == nil {
+				n++
+			}
+		case recurse && de.IsDir() && !strings.HasPrefix(name, ReservedPrefix) && depth+1 < WalkMaxDepth:
+			m, err := r.removeTempsIn(ctx, Join(dir, name), prefix, depth+1, true)
+			n += m
+			if err != nil {
+				return n, err
+			}
+		}
+	}
+	return n, nil
 }
 
 // RemoveTree deletes a tree reporting progress per regular file.

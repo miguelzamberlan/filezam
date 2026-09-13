@@ -47,6 +47,11 @@ type Job struct {
 
 	mu   sync.Mutex
 	view View
+
+	// persist grava um retrato fora do ciclo de 1 s. SetTotals o usa: é o número que a limpeza
+	// depois de uma queda precisa para dizer se a cópia era de um arquivo ou de vários, e uma
+	// queda no primeiro segundo o perderia.
+	persist func()
 }
 
 // Add increments progress counters.
@@ -62,6 +67,9 @@ func (j *Job) SetTotals(files int, bytes int64) {
 	j.mu.Lock()
 	j.view.Total, j.view.BytesTotal = files, bytes
 	j.mu.Unlock()
+	if j.persist != nil {
+		j.persist()
+	}
 }
 
 // SetCurrent records the item being processed.
@@ -148,7 +156,8 @@ func (m *Manager) StartLabeled(userID int64, typ, label string, dirs []string, f
 	m.prune()
 	m.mu.Unlock()
 	if m.Persist != nil {
-		m.Persist(userID, j.Snapshot())
+		j.persist = func() { m.Persist(userID, j.Snapshot()) }
+		j.persist()
 	}
 	m.wg.Add(1)
 	go func() {

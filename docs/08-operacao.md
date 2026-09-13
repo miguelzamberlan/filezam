@@ -351,9 +351,13 @@ Copiar, mover, excluir, extrair e compactar rodam dentro do próprio processo. A
 terminarem e então cancela o que sobrou. Na subida seguinte, o que ficou como "em andamento" aparece
 no histórico como interrompido.
 
-Não há retomada: uma cópia de 50 GB cortada na metade deixa no destino o que já havia sido copiado.
-Refazer a operação copia o que falta — os arquivos que já existem caem na política de conflito
-escolhida (renomear, sobrescrever ou pular).
+Não há retomada, mas também não fica arquivo pela metade: o arquivo que estava sendo copiado é
+apagado na subida seguinte (ele nunca aparece com o nome final antes de terminar). Uma cópia de um
+arquivo só não deixa nada no destino; uma de vários deixa os que terminaram, e **Operações** diz
+"cópia parcial". Uma extração interrompida é apagada inteira, e um `.zip` que estava sendo montado
+também. Refazer a operação copia o que falta — os arquivos que já existem caem na política de
+conflito escolhida (renomear, sobrescrever ou pular). Se a pasta de destino estiver num disco que
+ainda não montou, a limpeza espera e tenta de novo de hora em hora.
 
 Na prática: antes de atualizar ou reiniciar, vale olhar **Operações** e esperar o que estiver
 rodando, como já se recomenda para envios em andamento.
@@ -450,7 +454,7 @@ Logs em JSON no stdout (`docker compose logs -f filezam` ou `journalctl -u filez
 | 507 `quota_exceeded` | cota do usuário (Administração → Usuários) estourada | Aumentar a cota ou liberar espaço; a medição atualiza em até 30 s |
 | Usuário perdeu o celular e os códigos de recuperação | 2FA sem como validar | Administração → Usuários → editar → **Redefinir 2FA** (se for o único admin: `reset-admin`, que também limpa o 2FA) |
 | Código do app sempre inválido | relógio do servidor fora de hora (tolerância de ±30 s) | Sincronizar o host com NTP |
-| Operação sumiu depois de reiniciar | jobs não retomam; ficam como "interrompida por reinício" em **Operações** | Refazer a operação |
+| Operação sumiu depois de reiniciar | jobs não retomam; ficam como "interrompida pelo reinício" em **Operações**, com o que foi limpo (cópia parcial, extração apagada) | Refazer a operação |
 | Preview de PDF em branco ou com ícone de bloqueio | build antigo (`X-Frame-Options: DENY` no conteúdo inline) | Reconstruir a imagem |
 | 429 `rate_limited` ao trocar a senha | mais de 5 tentativas/min com a senha atual errada | Aguardar um minuto |
 | `scope_unavailable` | pasta de escopo apagada/renomeada | Admin redefine o escopo do usuário |

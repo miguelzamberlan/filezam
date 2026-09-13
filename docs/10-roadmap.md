@@ -2,7 +2,7 @@
 
 ## Limitações atuais
 
-- **Jobs não retomam**: reiniciar o container interrompe a operação (fica registrada como interrompida em Operações); copiar cancelado ou interrompido deixa a parte já copiada no destino.
+- **Jobs não retomam**: reiniciar o container interrompe a operação (fica registrada como interrompida em Operações), por decisão. Nada fica pela metade com nome legítimo: o arquivo que estava sendo copiado é apagado (na hora, se cancelado; na subida seguinte, se o processo caiu), uma cópia de vários arquivos mantém os que terminaram e avisa "cópia parcial", e extração ou `.zip` interrompidos somem inteiros.
 - **Links não seguem o item**: excluir, mover ou renomear pelo app revoga o link (e os de tudo que estiver dentro); restaurar da lixeira não o traz de volta. É de propósito — o link publicaria um lugar que quem o criou não escolheu —, e a interface pede confirmação antes, listando os links que vão cair. Mudanças feitas por fora (Samba, SSH) dependem do inode: movido por fora, o link para de responder e volta se o item retornar ao caminho com o mesmo inode; em sistemas sem inode estável (alguns FUSE/SMB) vale só o caminho, e em sistemas que reutilizam números de inode (overlayfs) um item apagado e recriado **por fora** no mesmo caminho pode reativar o link.
 - **Cota é aproximada**: medida com cache de 30 s e ajustada por escrita; entre duas medições uma pequena ultrapassagem é possível, e sem índice pronto a varredura limitada pode subestimar árvores enormes.
 - **Admin com escopo vê todos os links** (com token e caminho completo) em Compartilhados e nas propriedades: o escopo do admin não é fronteira de confidencialidade.
@@ -72,8 +72,7 @@ Não verificado manualmente antes do lançamento: o item 15 do checklist de [09]
 
 1. Avisar o dono quando chega arquivo num link de recebimento (hoje ele precisa ir olhar a pasta).
 2. **Extrair `.tar.gz` além de `.zip`.** Decidido ficar de fora da primeira versão do extrator: toda a superfície escorregadia é exclusiva do tar — são precisos **dois** limitadores de bytes em vez de um (uma entrada pulada com tamanho enorme faz o leitor descomprimir tudo só para descartar, e arquivos esparsos geram bytes que nunca passaram pelo gzip), além de hardlinks, `pax_global_header` e totais desconhecidos na barra de progresso. Entra numa versão futura, com os seus próprios limites e testes.
-3. Retomar jobs interrompidos por reinício a partir do histórico.
-4. Chaves de acesso (WebAuthn/passkeys) como alternativa ao TOTP; revogação individual de dispositivos confiáveis.
+3. Chaves de acesso (WebAuthn/passkeys) como alternativa ao TOTP; revogação individual de dispositivos confiáveis.
 
 ## Feito
 

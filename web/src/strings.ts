@@ -31,3 +31,12 @@ export function applyLocale(l: Locale) {
 export function errorMessage(code: string | undefined, fallback?: string): string {
   return (code && S.errorCodes[code]) || fallback || S.errorCodes.internal
 }
+
+// Traduz um texto de erro ou aviso de job gravado pelo servidor (ver S.jobTexts).
+export function jobText(msg: string): string {
+  for (const [re, fn] of S.jobTexts) {
+    const m = msg.match(re)
+    if (m) return fn(m)
+  }
+  return msg
+}

@@ -97,6 +97,7 @@ func (s *Server) handleExtract(w http.ResponseWriter, r *http.Request) error {
 	j, err := s.startJob(u, "extract", jobLabel([]string{p}, parent), parentDirs(nil, parent), func(ctx context.Context, j *jobs.Job) error {
 		// Os semáforos são soltos aqui dentro: o job sobrevive à requisição que o criou.
 		defer release()
+		defer s.unguardJob(j)
 		root, err := s.scopeRoot(u)
 		if err != nil {
 			return err
@@ -106,6 +107,7 @@ func (s *Server) handleExtract(w http.ResponseWriter, r *http.Request) error {
 		if err != nil {
 			return err
 		}
+		s.guardJob(j, vfs.Join(u.Scope, dst), cleanupTree)
 		res, err := root.ExtractZip(ctx, p, dst, lim, progressFor(j))
 		if err != nil {
 			// A pasta é nossa e nasceu vazia: some inteira. Remove, não RemoveTree, porque no
@@ -196,6 +198,7 @@ func (s *Server) handleArchive(w http.ResponseWriter, r *http.Request) error {
 
 	j, err := s.startJob(u, "archive", jobLabel(paths, parent), parentDirs(nil, parent), func(ctx context.Context, j *jobs.Job) error {
 		defer release()
+		defer s.unguardJob(j)
 		root, err := s.scopeRoot(u)
 		if err != nil {
 			return err
@@ -218,6 +221,7 @@ func (s *Server) handleArchive(w http.ResponseWriter, r *http.Request) error {
 		if err != nil {
 			return err
 		}
+		s.guardJob(j, vfs.Join(u.Scope, vfs.Join(parent, vfs.ZipTempName(final))), cleanupTree)
 		if err := root.WriteZipFile(ctx, parent, final, paths, progressFor(j)); err != nil {
 			return err
 		}

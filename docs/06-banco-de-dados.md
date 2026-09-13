@@ -48,6 +48,7 @@ trash(id /*hex 16 bytes*/, user_id → users CASCADE, trash_dir /*base-relativo:
 file_index(path PK /*base-relativo*/, parent, name, name_lc, type, size, mtime, gen)   -- índices: name_lc, parent   (005)
 index_state(id=1, last_full_at, entries, gen)   (005)
 jobs(id, user_id → users CASCADE, type, label, state, done, total, bytes_done, bytes_total, error, warnings, started_at, finished_at)   -- índice: (user_id, started_at)   (008)
+job_cleanup(job_id → jobs CASCADE, path /*base-relativo*/, mode /*'temps'|'tree'*/)   -- PK (job_id, path)   (012)
 schema_migrations(version, applied_at)
 ```
 
@@ -65,6 +66,7 @@ Migrações aplicadas depois de `001_init.sql`:
 | 009 | `009_totp.sql` | `users.totp_secret` (cifrado), `totp_enabled_at`, `totp_counter`, `totp_recovery` (JSON de hashes) |
 | 010 | `010_upload_target_per_user.sql` | Índice único de `uploads` passa de `(dir, name)` para `(user_id, dir, name)`: a sessão parada de um usuário não bloqueia outro |
 | 011 | `011_settings_slug_drop.sql` | Tabela `settings` (configurações globais do admin); `shares.slug` com índice único parcial, `shares.mode` e os tetos do link de envio; tabela `share_uploads` (recibo de cada arquivo recebido, com o nome no disco e o nome pedido); `uploads.share_id`/`uploads.sender`/`uploads.sent_name` |
+| 012 | `012_job_cleanup.sql` | Tabela `job_cleanup(job_id, path, mode)`: o que um job em andamento precisa desfazer se o processo cair (temporários de cópia com a marca do job, ou o caminho inteiro de uma extração/compactação). Apagada ao terminar; a manutenção consome as linhas de jobs que não estão mais rodando |
 
 Todos os timestamps são segundos Unix, exceto `uploads.mtime` (ms, vindo do cliente).
 

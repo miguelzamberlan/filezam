@@ -4,7 +4,7 @@ import { Api } from '../api/client'
 import type { Job } from '../api/types'
 import { formatBytes } from '../lib/format'
 import { useJobs } from '../store/jobs'
-import { S, errorMessage } from '../strings'
+import { S, errorMessage, jobText } from '../strings'
 import { jobLabel } from '../lib/jobs'
 import { useInvalidateDirs } from '../hooks'
 import { IClose, ISpinner, ICheck, IAlert } from './Icons'
@@ -63,11 +63,12 @@ function JobToast({ job }: { job: Job }) {
           </div>
         </>
       )}
-      {job.error && <div className="mt-1 text-xs text-red-600">{errorMessage(undefined, job.error)}</div>}
+      {job.error && <div className="mt-1 text-xs text-red-600">{jobText(errorMessage(undefined, job.error))}</div>}
+      {job.warnings?.filter((w) => w.startsWith('partial copy:')).map((w, i) => <div key={i} className="mt-1 text-xs text-amber-700 dark:text-amber-400">{jobText(w)}</div>)}
       {!!job.warnings?.length && (
         <details className="mt-1 text-xs text-amber-700 dark:text-amber-400">
           <summary>{job.warnings.length} aviso(s)</summary>
-          <ul className="mt-1 max-h-32 overflow-auto">{job.warnings.map((w, i) => <li key={i} className="truncate">{w}</li>)}</ul>
+          <ul className="mt-1 max-h-32 overflow-auto">{job.warnings.map((w, i) => <li key={i} className="truncate" title={jobText(w)}>{jobText(w)}</li>)}</ul>
         </details>
       )}
     </div>
