@@ -338,8 +338,9 @@ export default function Browser() {
   }
 
   // ---- keyboard ----
-  const onKeyDown = (ev: React.KeyboardEvent) => {
-    if (menu || preview !== null || share || info !== null || editing) return
+  const overlayOpen = !!menu || preview !== null || !!share || info !== null || !!editing
+  const onKeyDown = (ev: React.KeyboardEvent | KeyboardEvent) => {
+    if (overlayOpen) return
     const tag = (ev.target as HTMLElement).tagName
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
     const mod = ev.ctrlKey || ev.metaKey
@@ -420,6 +421,25 @@ export default function Browser() {
     }
     ev.preventDefault()
   }
+
+  // Rede de proteção do teclado. O onKeyDown mora na lista e só ouve com o foco dentro dela, mas
+  // fechar o preview pelo X ou clicando fora, confirmar um diálogo, ou um PDF que tomou o foco no
+  // iframe removem o elemento focado e o foco cai no <body>: o item seguia selecionado na tela e
+  // Delete não fazia nada até clicar nele de novo. Tecla que chega ao window com o foco no body,
+  // sem nada aberto por cima, devolve o foco à lista e é tratada ali.
+  const keys = useRef({ onKeyDown, overlayOpen })
+  keys.current = { onKeyDown, overlayOpen }
+  useEffect(() => {
+    const onKey = (ev: KeyboardEvent) => {
+      const active = document.activeElement
+      if (ev.defaultPrevented || (active && active !== document.body)) return
+      if (keys.current.overlayOpen || document.querySelector('[aria-modal]')) return
+      listRef.current?.focus({ preventScroll: true })
+      keys.current.onKeyDown(ev)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   // ---- context menu ----
   const menuItems = (entry: Entry | null): MenuItem[] => {

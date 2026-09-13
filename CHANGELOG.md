@@ -4,6 +4,9 @@ Todas as mudanças relevantes do Filezam ficam registradas aqui. O formato segue
 
 ## [Não lançado]
 
+### Corrigido
+- **Atalhos de teclado depois de fechar o visualizador com o mouse**: abrir um arquivo, fechar pelo X (ou clicando fora) e apertar `Delete` não fazia nada, embora o arquivo continuasse selecionado — era preciso clicar nele de novo. O mesmo acontecia depois de fechar um diálogo, como o de renomear. Agora as teclas voltam a valer para a lista na hora.
+
 ## [1.1.1] - 2026-09-13
 
 ### Alterado

@@ -39,7 +39,7 @@ Os testes de integração criam raiz e banco temporários; nada toca o sistema r
 8. `evil.svg` com `<script>` e `evil.html`: sem alerta, HTML só como texto/download.
 9. Usuário com escopo não vê o pai; admin muda o escopo → sessão cai.
 10. Atrás do proxy real: cookie `Secure`, IP real na auditoria, upload de 200 MB completa.
-11. Preview de PDF abre dentro da interface (Chrome e Firefox). No celular (Android e iPhone) aparece "Abrir em nova aba"/"Baixar" e a nova aba mostra o PDF inteiro.
+11. Preview de PDF abre dentro da interface (Chrome e Firefox). No celular (Android e iPhone) aparece "Abrir em nova aba"/"Baixar" e a nova aba mostra o PDF inteiro. Abrir um PDF, fechar pelo X e apertar `Delete`: pede para mover o arquivo para a lixeira (o mesmo depois de cancelar um F2).
 12. `.md` com tabela, lista de tarefas, imagem relativa (`img/x.png`), `<script>`/`<img onerror>` e `[x](javascript:alert(1))`: abre formatado, imagem aparece, nenhum alerta, o HTML some e o link perigoso vira texto; "Texto" mostra o fonte. Também pelo link público de pasta, com várias imagens: todas aparecem (nenhum 429 na aba Rede).
 13. No celular (ou DevTools em modo touch, 390 px): toque abre, toque longo abre o menu e seleciona, "⋯" mostra as ações, tabelas cabem na largura; tema claro/escuro e cores em Configurações refletem na hora.
 14. Painel de upload: cancelar itens e cancelar tudo não cria barra de rolagem horizontal na lista (status "Cancelado" é mais largo que a porcentagem).
