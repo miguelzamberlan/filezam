@@ -99,7 +99,10 @@ sustenta que isso seja seguro:
 - **Nada é executado.** Extrair grava bytes; não há shell, `exec` nem interpretação do conteúdo. O
   pior caso realista é consumo de disco e CPU, ambos limitados.
 - **Nomes legados**: um zip sem o bit UTF-8 traz os nomes na code page do sistema que compactou; eles
-  são convertidos de CP437 antes de validar, senão todo arquivo com acento seria recusado.
+  são convertidos de CP850 (a code page OEM do Windows em português, usada pelo "Pasta compactada" e
+  pelo 7-Zip) antes de validar, senão todo arquivo com acento seria recusado. Não CP437: a do Windows
+  em inglês não tem ã, õ nem maiúsculas acentuadas, e "São Paulo" saía "S╞o Paulo". Nome que já é
+  UTF-8 válido não é convertido.
 - **Índice medido antes de ser carregado.** O `archive/zip` lê o diretório central inteiro para a
   memória antes de qualquer filtro, e um `.zip` só de cabeçalhos é pequeno em disco e grande na RAM.
   Antes de entregar o arquivo à biblioteca, `openZip` lê o registro final (e o zip64) — alguns

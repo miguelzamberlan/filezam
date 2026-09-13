@@ -19,6 +19,7 @@ Todas as mudanças relevantes do Filezam ficam registradas aqui. O formato segue
 - **Aviso antes de derrubar um link público**: excluir, mover ou renomear um item compartilhado (ou uma pasta com algo compartilhado dentro) agora pede confirmação e lista os links que vão deixar de funcionar. O link continua sendo revogado — ele não acompanha o item, de propósito —, mas ninguém mais é pego de surpresa; é preciso criar um link novo.
 
 ### Corrigido
+- **Nomes com ã, õ e maiúsculas acentuadas em zips do Windows**: um `.zip` feito pelo "Enviar para > Pasta compactada" ou pelo 7-Zip num Windows em português extraía "São Paulo" como "S╞o Paulo" e "Configurações" como "ConfiguraçΣes". Os nomes agora são lidos na code page certa (850).
 - **Atalhos de teclado depois de fechar o visualizador com o mouse**: abrir um arquivo, fechar pelo X (ou clicando fora) e apertar `Delete` não fazia nada, embora o arquivo continuasse selecionado — era preciso clicar nele de novo. O mesmo acontecia depois de fechar um diálogo, como o de renomear. Agora as teclas voltam a valer para a lista na hora.
 
 ## [1.1.1] - 2026-09-13

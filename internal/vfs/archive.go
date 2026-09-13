@@ -228,7 +228,7 @@ func encryptedOnly(zr *zip.Reader) bool {
 func entryPath(name string, depth int) (rel string, isDir bool, ok bool) {
 	isDir = strings.HasSuffix(name, "/")
 	if !utf8.ValidString(name) {
-		name = cp437(name) // zips do Windows trazem os acentos em CP437
+		name = cp850(name) // zips do Windows trazem os acentos na code page OEM (850 em português)
 	}
 	// Normalizado SOZINHO: é aqui que ".." estoura, porque a pilha começa vazia.
 	rel, err := NormalizeWritable(name)

@@ -853,27 +853,42 @@ func TestExtractRefusesEncryptedArchive(t *testing.T) {
 	checkCanary(t, outside)
 }
 
-// Zips do Windows trazem os acentos em CP437. Sem converter, todo arquivo com acento seria
-// recusado como UTF-8 inválido — o que, em português, é quase todo arquivo.
+// Zips do Windows em português trazem os acentos na CP850. Sem converter, todo arquivo com acento
+// seria recusado como UTF-8 inválido; convertendo pela CP437 (a do Windows em inglês), ã, õ e as
+// maiúsculas acentuadas viravam símbolos de desenho de caixa. Os bytes abaixo são o que o Windows
+// grava para cada nome (conferidos com o codec cp850 do Python).
 func TestExtractDecodesLegacyNames(t *testing.T) {
 	r, root, _ := fixture(t)
 	if err := r.Mkdir("saida"); err != nil {
 		t.Fatal(err)
 	}
-	// "Orçamento.pdf" em CP437: ç = 0x87, a = 0x61...
-	legacy := "Or\x87amento.txt"
-	makeZip(t, root, "windows.zip", []zipEntry{{name: legacy, body: "conteudo"}})
+	cases := map[string]string{
+		"Or\x87amento.txt":              "Orçamento.txt",
+		"S\xc6o Paulo.pdf":              "São Paulo.pdf",
+		"Configura\x87\xe4es.docx":      "Configurações.docx",
+		"PROMO\x80\xc7O.xlsx":           "PROMOÇÃO.xlsx",
+		"\xd6ndice.txt":                 "Índice.txt",
+		"Relat\xa2rio \xb5rea \xd2.txt": "Relatório Área Ê.txt",
+		"Já em UTF-8 — ação.txt":        "Já em UTF-8 — ação.txt", // Mac, Linux: não é convertido
+	}
+	var entries []zipEntry
+	for raw := range cases {
+		entries = append(entries, zipEntry{name: raw, body: "conteudo"})
+	}
+	makeZip(t, root, "windows.zip", entries)
 	res, err := r.ExtractZip(context.Background(), "windows.zip", "saida", bigLimits, nil)
-	if err != nil || res.Files != 1 {
+	if err != nil || res.Files != len(entries) {
 		t.Fatalf("extract: %+v %v", res, err)
 	}
-	if _, err := os.Stat(filepath.Join(root, "saida", "Orçamento.txt")); err != nil {
-		des, _ := os.ReadDir(filepath.Join(root, "saida"))
-		names := []string{}
-		for _, d := range des {
-			names = append(names, d.Name())
+	for raw, want := range cases {
+		if _, err := os.Stat(filepath.Join(root, "saida", want)); err != nil {
+			des, _ := os.ReadDir(filepath.Join(root, "saida"))
+			names := []string{}
+			for _, d := range des {
+				names = append(names, d.Name())
+			}
+			t.Fatalf("%q should become %q, got %v", raw, want, names)
 		}
-		t.Fatalf("CP437 name not decoded, got %v", names)
 	}
 }
 
