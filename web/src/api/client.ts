@@ -1,5 +1,5 @@
 import type {
-  AdminUser, AppConfig, ZipPart, ZipPlan, AuditEntry, Conflict, DiskUsage, Entry, EntryInfo, Favorite, IndexStatus, Job, JobRecord, ListPage, Listing, PublicInfo, SearchResult, Settings, Share, TrashItem, UploadSession, User,
+  AdminUser, AppConfig, AppNotification, ZipPart, ZipPlan, AuditEntry, Conflict, DiskUsage, Entry, EntryInfo, Favorite, IndexStatus, Job, JobRecord, ListPage, Listing, PublicInfo, SearchResult, Settings, Share, TrashItem, UploadSession, User,
 } from './types'
 
 export class ApiError extends Error {
@@ -172,6 +172,12 @@ export const Api = {
 
   adminSettings: () => api<{ settings: Settings; dropTtlHardMax: number }>('GET', '/api/admin/settings'),
   adminUpdateSettings: (patch: Partial<Settings>) => api<{ settings: Settings; dropTtlHardMax: number }>('PATCH', '/api/admin/settings', patch),
+
+  // notificações
+  notifications: (limit = 100) => api<{ notifications: AppNotification[]; unread: number }>('GET', '/api/notifications?limit=' + limit),
+  notificationsUnread: () => api<{ unread: number }>('GET', '/api/notifications/unread'),
+  markNotificationsRead: (ids: number[] | 'all') => api<{ unread: number }>('POST', '/api/notifications/read', ids === 'all' ? { all: true } : { ids }),
+  deleteNotification: (id: number) => api<{ ok: true }>('DELETE', '/api/notifications/' + id),
 
   // admin index
   adminIndex: () => api<IndexStatus>('GET', '/api/admin/index'),

@@ -3127,3 +3127,77 @@ func TestZipDownloadInParts(t *testing.T) {
 	check(pub, "/api/public/"+tok+"/zip/plan?path=", "/api/public/"+tok+"/zip?path=")
 	pub.expect("GET", "/api/public/"+tok+"/zip/plan?path=../teamB", nil, 400)
 }
+
+// Arquivos que chegam por um link de recebimento viram uma notificação do dono, somada enquanto
+// não é lida; ler, marcar todas e apagar são só do próprio usuário. Um link revogado pela
+// manutenção também avisa o dono.
+func TestNotifications(t *testing.T) {
+	admin, s, root := dropEnv(t)
+	tok, _ := mkDrop(admin, "teamA/recebidos", 64<<20, 0, 0)
+	pub := newPublic(t, admin.srv)
+
+	for _, n := range []string{"a.txt", "b.txt", "c.txt"} {
+		if resp, out := send(pub, tok, n, []byte("12345")); resp.StatusCode != 201 {
+			t.Fatalf("upload %s: %d %v", n, resp.StatusCode, out)
+		}
+	}
+	if o := admin.expect("GET", "/api/notifications/unread", nil, 200); o["unread"].(float64) != 1 {
+		t.Fatalf("three uploads should group into one unread notification: %v", o)
+	}
+	list := admin.expect("GET", "/api/notifications", nil, 200)
+	n := list["notifications"].([]any)[0].(map[string]any)
+	data := n["data"].(map[string]any)
+	if n["kind"] != "drop.received" || data["files"].(float64) != 3 || data["bytes"].(float64) != 15 || data["path"] != "teamA/recebidos" || data["names"].([]any)[0] != "c.txt" {
+		t.Fatalf("drop notification: %v", n)
+	}
+	id := n["id"].(float64)
+
+	// Outro usuário não vê, não lê e não apaga.
+	admin.expect("POST", "/api/admin/users", map[string]any{"username": "bia", "password": "biapassword1", "scope": "teamB"}, 201)
+	bia := newPublic(t, admin.srv)
+	bia.login("bia", "biapassword1")
+	if o := bia.expect("GET", "/api/notifications", nil, 200); len(o["notifications"].([]any)) != 0 {
+		t.Fatalf("other user sees notifications: %v", o)
+	}
+	bia.expect("POST", "/api/notifications/read", map[string]any{"ids": []float64{id}}, 200)
+	bia.expect("DELETE", fmt.Sprintf("/api/notifications/%d", int64(id)), nil, 404)
+	if o := admin.expect("GET", "/api/notifications/unread", nil, 200); o["unread"].(float64) != 1 {
+		t.Fatalf("other user marked it read: %v", o)
+	}
+
+	// Lida, o próximo envio abre uma notificação nova.
+	if o := admin.expect("POST", "/api/notifications/read", map[string]any{"ids": []float64{id}}, 200); o["unread"].(float64) != 0 {
+		t.Fatalf("mark read: %v", o)
+	}
+	send(pub, tok, "d.txt", []byte("x"))
+	list = admin.expect("GET", "/api/notifications", nil, 200)
+	if len(list["notifications"].([]any)) != 2 || list["unread"].(float64) != 1 {
+		t.Fatalf("after reading, a new upload opens a new notification: %v", list)
+	}
+	admin.expect("POST", "/api/notifications/read", map[string]any{}, 400)
+	if o := admin.expect("POST", "/api/notifications/read", map[string]any{"all": true}, 200); o["unread"].(float64) != 0 {
+		t.Fatalf("mark all: %v", o)
+	}
+	admin.expect("DELETE", fmt.Sprintf("/api/notifications/%d", int64(id)), nil, 200)
+
+	// Link cujo item sumiu por fora e foi revogado pela manutenção avisa o dono.
+	os.MkdirAll(filepath.Join(root, "teamA", "album"), 0o755)
+	admin.expect("POST", "/api/shares", map[string]any{"path": "teamA/album", "expiresIn": 7 * 86400}, 201)
+	os.RemoveAll(filepath.Join(root, "teamA", "album"))
+	ctx := context.Background()
+	s.sweepBrokenShares(ctx)
+	clock := time.Now().Add(shareBrokenGrace + time.Minute)
+	s.db.Now = func() time.Time { return clock }
+	s.sweepBrokenShares(ctx)
+	s.db.Now = time.Now
+	found := false
+	for _, v := range admin.expect("GET", "/api/notifications", nil, 200)["notifications"].([]any) {
+		m := v.(map[string]any)
+		if m["kind"] == "share.revoked" && m["data"].(map[string]any)["path"] == "teamA/album" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("revoked link did not notify its owner")
+	}
+}

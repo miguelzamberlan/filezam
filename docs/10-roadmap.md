@@ -18,7 +18,7 @@
 - **`.tar.gz` não é extraído**: só `.zip`, por decisão. Ver "Próximos passos".
 - **Cota do link de recebimento não é devolvida**: ela mede o total que já entrou pelo link, não o que está ocupado agora. Apagar os arquivos recebidos não libera espaço no link — o que impede o link de virar um ralo infinito, mas significa que um link muito usado precisa ser recriado. É o comportamento pretendido — link de recebimento não é para durar para sempre, e já tem vencimento obrigatório —, e o diálogo de criação diz isso ao lado do limite.
 - **Apelido fica preso ao dono**: um endereço personalizado revogado continua reservado a quem o criou até ele liberar de propósito (ou até a conta ser excluída). É o que impede o sequestro de um endereço já divulgado, ao custo de apelidos "presos" em instalações com muita rotatividade.
-- **Link de recebimento não notifica**: quem recebe precisa abrir a pasta para saber que chegou algo.
+- **Notificações só dentro do Filezam**: o aviso aparece na tela **Notificações** (com contador no menu e aviso na hora se a aba está aberta), sem e-mail nem notificação do sistema operacional.
 - **Lixeira sem cota**: itens excluídos continuam ocupando disco até a retenção vencer, de propósito; entre dispositivos a exclusão vira cópia + remoção. O prazo (30 dias de fábrica) é escolhido pelo admin em **Configurações do sistema**, e a limpeza continua de hora em hora.
 - **Move com "substituir" entre pastas** faz merge quando ambos são pastas (copia + apaga origem); entre dispositivos vira cópia + exclusão sem progresso de bytes.
 - **Nomes com UTF-8 inválido** aparecem em vermelho e não podem ser manipulados.
@@ -68,9 +68,8 @@ Não verificado manualmente antes do lançamento: o item 15 do checklist de [09]
 
 ## Próximos passos sugeridos (ordem de valor)
 
-1. Avisar o dono quando chega arquivo num link de recebimento (hoje ele precisa ir olhar a pasta).
-2. **Extrair `.tar.gz` além de `.zip`.** Decidido ficar de fora da primeira versão do extrator: toda a superfície escorregadia é exclusiva do tar — são precisos **dois** limitadores de bytes em vez de um (uma entrada pulada com tamanho enorme faz o leitor descomprimir tudo só para descartar, e arquivos esparsos geram bytes que nunca passaram pelo gzip), além de hardlinks, `pax_global_header` e totais desconhecidos na barra de progresso. Entra numa versão futura, com os seus próprios limites e testes.
-3. Chaves de acesso (WebAuthn/passkeys) como alternativa ao TOTP; revogação individual de dispositivos confiáveis.
+1. **Extrair `.tar.gz` além de `.zip`.** Decidido ficar de fora da primeira versão do extrator: toda a superfície escorregadia é exclusiva do tar — são precisos **dois** limitadores de bytes em vez de um (uma entrada pulada com tamanho enorme faz o leitor descomprimir tudo só para descartar, e arquivos esparsos geram bytes que nunca passaram pelo gzip), além de hardlinks, `pax_global_header` e totais desconhecidos na barra de progresso. Entra numa versão futura, com os seus próprios limites e testes.
+2. Chaves de acesso (WebAuthn/passkeys) como alternativa ao TOTP; revogação individual de dispositivos confiáveis.
 
 ## Feito
 

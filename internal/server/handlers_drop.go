@@ -287,6 +287,7 @@ func (s *Server) recordDrop(r *http.Request, sh *store.Share, sender, name, sent
 		s.log.Warn("record drop upload", "id", sh.ID, "err", err)
 	}
 	s.db.TouchShare(ctx, sh.ID)
+	s.notifyDrop(ctx, sh, name, size)
 	// O id do link vai no evento porque o segmento de token é mascarado nos logs: sem ele não
 	// dá para saber qual link está sendo martelado.
 	s.audit(r, nil, "share.drop.upload", map[string]any{"shareID": sh.ID, "name": name, "size": size, "sender": sender})

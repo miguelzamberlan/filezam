@@ -217,6 +217,9 @@ func (s *Server) StartBackground() {
 		if err := s.db.PruneJobs(ctx, time.Now().Add(-30*24*time.Hour).Unix()); err != nil {
 			s.log.Warn("prune jobs", "err", err)
 		}
+		if err := s.db.PruneNotifications(ctx, time.Now().Add(-notificationsKeep).Unix()); err != nil {
+			s.log.Warn("prune notifications", "err", err)
+		}
 		// A chave do cache muda a cada alteração do arquivo, então as entradas velhas ficam para
 		// trás por construção: a varredura recolhe as mais antigas quando o teto é passado.
 		if s.thumbs != nil {
@@ -325,6 +328,10 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.Handle("POST /api/files/extract", user(s.handleExtract))
 	mux.Handle("POST /api/files/archive", user(s.handleArchive))
 
+	mux.Handle("GET /api/notifications", user(s.handleNotifications))
+	mux.Handle("GET /api/notifications/unread", user(s.handleNotificationsUnread))
+	mux.Handle("POST /api/notifications/read", user(s.handleNotificationsRead))
+	mux.Handle("DELETE /api/notifications/{id}", user(s.handleNotificationDelete))
 	mux.Handle("GET /api/jobs", user(s.handleJobs))
 	mux.Handle("GET /api/jobs/history", user(s.handleJobHistory))
 	mux.Handle("GET /api/jobs/{id}", user(s.handleJob))

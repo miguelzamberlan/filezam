@@ -83,7 +83,11 @@ Sync-or-job: o servidor aguarda até 300 ms; se o job terminou, `job.state` já 
 
 | Método | Rota | Auth | Descrição |
 |---|---|---|---|
-| GET | `/api/jobs/history?limit=` | U | Jobs persistidos do usuário (últimos 30 dias, mais recentes primeiro, `limit` ≤ 500): `{jobs: [{id, type, label, state, done, total, bytesDone, bytesTotal, error?, warnings, startedAt, finishedAt}]}`. Jobs em andamento aparecem com progresso de até 1 s atrás; os que um reinício interrompeu ficam `failed` com `error: "interrupted by server restart"` |
+| GET | `/api/jobs/history?limit=` | U | Jobs persistidos do usuário (últimos 30 dias, mais recentes primeiro, `limit` ≤ 500): `{jobs: [{id, type, label, state, done, total, bytesDone, bytesTotal, error?, warnings, startedAt, finishedAt}]}`. Jobs em andamento aparecem com progresso de até 1 s atrás; os que um reinício interrompeu ficam `failed` com `error: "interrupted by server restart"`, e depois da limpeza ganham o que aconteceu (`…; partial copy of N files: …`, `…; the unfinished copy was removed`, `…; the partial extraction was removed`, `…; the unfinished .zip was removed`; textos estáveis, traduzidos pela interface) |
+| GET | `/api/notifications?limit=` | U | `{notifications: [{id, kind, data, createdAt, updatedAt, readAt}], unread}` do próprio usuário, mais recentes primeiro (`limit` ≤ 200, padrão 50). `kind`: `drop.received` (`data: {shareId, link, path, files, bytes, names[≤5]}`, somado enquanto não lida) ou `share.revoked` (`data: {shareId, link, path, slug, mode, reason: "missing"}`). `path` sai relativo ao escopo, ou ausente se ficou fora dele |
+| GET | `/api/notifications/unread` | U | `{unread}` |
+| POST | `/api/notifications/read` | U | `{ids: [..]}` ou `{all: true}` → `{unread}`; só as do próprio usuário. 400 `bad_id`/`too_many` |
+| DELETE | `/api/notifications/{id}` | U | `{ok}`; 404 se não é do usuário |
 | GET | `/api/jobs` | U | `{jobs: Job[]}` do usuário (últimos 50) |
 | GET | `/api/jobs/{id}` | U | `{job}`; 404 se de outro usuário |
 | DELETE | `/api/jobs/{id}` | U | Cancela → `{ok}` |

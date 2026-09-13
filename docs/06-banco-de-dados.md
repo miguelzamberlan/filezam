@@ -49,6 +49,8 @@ file_index(path PK /*base-relativo*/, parent, name, name_lc, type, size, mtime, 
 index_state(id=1, last_full_at, entries, gen)   (005)
 jobs(id, user_id → users CASCADE, type, label, state, done, total, bytes_done, bytes_total, error, warnings, started_at, finished_at)   -- índice: (user_id, started_at)   (008)
 job_cleanup(job_id → jobs CASCADE, path /*base-relativo*/, mode /*'temps'|'tree'*/)   -- PK (job_id, path)   (012)
+notifications(id, user_id → users CASCADE, kind, group_key, data /*JSON; caminhos base-relativos*/, created_at, updated_at, read_at)
+              -- índices: (user_id, updated_at); UNIQUE parcial (user_id, group_key) WHERE read_at IS NULL AND group_key <> ''   (015)
 schema_migrations(version, applied_at)
 ```
 
@@ -69,6 +71,7 @@ Migrações aplicadas depois de `001_init.sql`:
 | 012 | `012_job_cleanup.sql` | Tabela `job_cleanup(job_id, path, mode)`: o que um job em andamento precisa desfazer se o processo cair (temporários de cópia com a marca do job, ou o caminho inteiro de uma extração/compactação). Apagada ao terminar; a manutenção consome as linhas de jobs que não estão mais rodando |
 | 013 | `013_trash_pending.sql` | `trash.pending` (1 enquanto o item não chegou inteiro à lixeira; a manutenção retoma as pendentes de um processo que caiu) com índice parcial |
 | 014 | `014_share_broken.sql` | `shares.broken_since`: quando a manutenção deixou de achar o item do link; limpo se ele voltar, e o link é revogado depois de 24 h |
+| 015 | `015_notifications.sql` | Tabela `notifications`: avisos por usuário (`kind` + `data` JSON, texto montado na interface); `group_key` junta eventos em série numa notificação só enquanto ela não é lida. Apagadas 30 dias depois da última atualização |
 
 Todos os timestamps são segundos Unix, exceto `uploads.mtime` (ms, vindo do cliente).
 

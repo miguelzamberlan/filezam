@@ -15,9 +15,10 @@ Funcionais:
 - Primeiro início cria um admin padrão com troca de senha obrigatória.
 - Navegar, criar pasta, renomear, copiar, recortar/colar (mover), excluir, baixar arquivo ou ZIP, favoritos, visualizar (imagem, vídeo, áudio, PDF, texto).
 - Compartilhar uma **pasta ou um arquivo** por link público somente leitura com prazo de validade, senha opcional e revogação. O endereço pode ser um apelido escolhido pelo usuário (`/s/orcamento-2026`), e nesse caso a senha é obrigatória.
-- Receber arquivos de quem não tem conta, por um link público de envio apontado para uma pasta vazia e dedicada, com cota e vencimento obrigatórios.
+- Receber arquivos de quem não tem conta, por um link público de envio apontado para uma pasta vazia e dedicada, com cota e vencimento obrigatórios; o dono é avisado na tela **Notificações** quando algo chega.
+- Notificações por usuário (sino no menu), genéricas: hoje avisam de arquivos recebidos por link e de links revogados porque o item sumiu.
 - O administrador liga, desliga e limita esses dois recursos numa tela de configurações globais.
-- Lixeira com retenção configurável e restauração ao local original.
+- Lixeira com retenção configurável pelo administrador e restauração ao local original.
 - Pesquisa por nome em todas as subpastas do escopo, servida por um índice em SQLite atualizado por varreduras periódicas e pelas próprias operações do app.
 - Interface em pt-BR e inglês.
 - Upload de arquivos grandes, pastas inteiras e milhares de arquivos pequenos, sem travar a interface, com retomada.

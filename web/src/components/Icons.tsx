@@ -29,6 +29,7 @@ export const IShare = (p: P) => base(p, <><circle cx="18" cy="5" r="3" /><circle
 export const IStar = (p: P & { filled?: boolean }) => base(p, <path d="m12 3 2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.8 6.2 20.9l1.1-6.5L2.6 9.8l6.5-.9z" fill={p.filled ? 'currentColor' : 'none'} />)
 export const IHome = (p: P) => base(p, <><path d="m3 11 9-8 9 8" /><path d="M5 10v10h5v-6h4v6h5V10" /></>)
 export const IUsers = (p: P) => base(p, <><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20a6.5 6.5 0 0 1 13 0" /><circle cx="17" cy="9" r="2.5" /><path d="M16 15a5 5 0 0 1 5.5 5" /></>)
+export const IBell = (p: P) => base(p, <><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></>)
 export const IList = (p: P) => base(p, <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />)
 export const IChevronRight = (p: P) => base(p, <path d="m9 6 6 6-6 6" />)
 export const IChevronLeft = (p: P) => base(p, <path d="m15 6-6 6 6 6" />)

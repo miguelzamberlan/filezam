@@ -60,7 +60,7 @@ Conversões: `vfs.Join(user.Scope, p)` para gravar; `scopeRel`/`relDir` para ler
 3. Abre o SQLite e aplica migrações pendentes (`store.Open`).
 4. `vfs.Open(root)` mantém o `os.Root` base aberto pelo tempo de vida do processo.
 5. `server.New` cria limitadores, o serviço de uploads, o gerenciador de jobs e o admin inicial se a tabela `users` estiver vazia.
-6. `StartBackground()` executa imediatamente e depois a cada hora: limpeza de sessões de upload paradas há mais de 24 h, sessões de login expiradas, auditoria com mais de 180 dias as sobras de jobs interrompidos por um reinício (`job_cleanup`, ver [01](01-visao-geral.md)) as exclusões para a lixeira que uma queda deixou pela metade (`trash.pending`) e os links cujo item sumiu por fora (`shares.broken_since`, revogados após 24 h; ver [03](03-seguranca.md)).
+6. `StartBackground()` executa imediatamente e depois a cada hora: limpeza de sessões de upload paradas há mais de 24 h, sessões de login expiradas, auditoria com mais de 180 dias, histórico de jobs e notificações com mais de 30 dias; as sobras de jobs interrompidos por um reinício (`job_cleanup`, ver [01](01-visao-geral.md)); as exclusões para a lixeira que uma queda deixou pela metade (`trash.pending`); e os links cujo item sumiu por fora (`shares.broken_since`, revogados após 24 h; ver [03](03-seguranca.md)).
 7. `http.Server` com `ReadHeaderTimeout 10s`, `IdleTimeout 120s`, `MaxHeaderBytes 64 KiB` e **sem** `ReadTimeout`/`WriteTimeout` globais (matariam transferências grandes); prazos por handler via `ResponseController` (aborta após 60 s sem bytes).
 8. `SIGINT`/`SIGTERM`: `Shutdown` do HTTP com 30 s, espera jobs até 30 s, cancela o contexto de fundo, fecha banco e root.
 

@@ -40,6 +40,7 @@ web/src/
 | `/search?path=&q=` | Search (pesquisa recursiva por nome a partir de `path`; resultados levam a `/b/<pasta>?sel=<nome>`, que seleciona o item) | sessão + senha em dia |
 | `/trash` | Trash (itens excluídos: restaurar, excluir de vez, esvaziar) | idem |
 | `/account` | Account (trocar senha; 2FA: ativar com `TotpSetup`, desativar, novos códigos de recuperação) | idem |
+| `/notifications` | Notifications (lista de `/api/notifications` com o texto montado por `kind` + `data` no idioma ativo; "Abrir pasta" navega e marca como lida, a página em si não marca nada; contagem de não lidas em `useUnreadNotifications`, polling de 30 s só com a aba visível, que alimenta o contador no menu, o ponto no `MenuButton` e um toast quando a contagem sobe) | idem |
 | `/jobs` | Jobs ("Operações": em andamento com progresso e cancelamento + histórico de 30 dias vindo de `/api/jobs/history`; polling de 1 s só enquanto há job rodando) | idem |
 | `/shares`, `/admin/users`, `/admin/audit` | idem | idem (admin para `/admin/*`; a API também valida) |
 | `/s/:token/*` | PublicShare (ramifica para PublicDrop quando `mode: drop`) | — |

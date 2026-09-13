@@ -11,6 +11,7 @@ import Jobs from './pages/Jobs'
 import Account from './pages/Account'
 import Setup2FA from './pages/Setup2FA'
 import AdminSettings from './pages/AdminSettings'
+import Notifications from './pages/Notifications'
 import AdminUsers from './pages/AdminUsers'
 import AdminAudit from './pages/AdminAudit'
 import PublicShare from './pages/PublicShare'
@@ -76,6 +77,7 @@ export default function App() {
           <Route path="shares" element={<Shares />} />
           <Route path="trash" element={<Trash />} />
           <Route path="jobs" element={<Jobs />} />
+          <Route path="notifications" element={<Notifications />} />
           <Route path="account" element={<Account />} />
           <Route path="admin/users" element={<AdminUsers />} />
           <Route path="admin/audit" element={<AdminAudit />} />

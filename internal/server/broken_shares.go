@@ -82,6 +82,7 @@ func (s *Server) sweepBrokenShares(ctx context.Context) {
 			continue
 		}
 		s.log.Info("share revoked: item missing", "id", sh.ID, "path", sh.Path, "since", *sh.BrokenSince)
+		s.notifyShareRevoked(ctx, sh)
 		s.auditSystem("share.revoke.broken", map[string]any{"id": sh.ID, "path": sh.Path, "owner": sh.CreatedByName, "brokenSince": *sh.BrokenSince})
 	}
 }

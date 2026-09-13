@@ -1,15 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { Api } from '../api/client'
-import { useAuth, useFavorites, useInvalidateDirs } from '../hooks'
+import { useAuth, useFavorites, useInvalidateDirs, useUnreadNotifications } from '../hooks'
 import { encodePath } from '../lib/paths'
 import { S } from '../strings'
 import { uploadManager } from '../upload/manager'
 import { dialogs, toast } from './dialogs'
 import JobToasts from './JobToasts'
 import UploadPanel, { useUploads } from './UploadPanel'
-import { IFolder, IStar, IShare, IUsers, ILog, ILogout, IKey, IMenu, IClose, IUpload, ISettings, ISearch, ITrash, IList } from './Icons'
+import { IFolder, IStar, IShare, IUsers, ILog, ILogout, IKey, IMenu, IClose, IUpload, ISettings, ISearch, ITrash, IList, IBell } from './Icons'
 import { useUI } from '../store/ui'
 import DiskBar from './DiskBar'
 import SettingsDialog from './SettingsDialog'
@@ -18,7 +18,13 @@ import SettingsDialog from './SettingsDialog'
 // primeira linha, para não gastar uma linha inteira só com o botão.
 export function MenuButton() {
   const setOpen = useUI((s) => s.setSidebarOpen)
-  return <button className="btn-ghost !px-1.5 lg:hidden" onClick={() => setOpen(true)} aria-label={S.menu} title={S.menu}><IMenu size={18} /></button>
+  const unread = useUnreadNotifications().data?.unread ?? 0
+  return (
+    <button className="btn-ghost relative !px-1.5 lg:hidden" onClick={() => setOpen(true)} aria-label={S.menu} title={S.menu}>
+      <IMenu size={18} />
+      {unread > 0 && <span className="absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-accent" aria-hidden />}
+    </button>
+  )
 }
 
 export default function Shell() {
@@ -32,6 +38,17 @@ export default function Shell() {
   const setMenuOpen = useUI((s) => s.setSidebarOpen)
   const [settings, setSettings] = useState(false)
   const setUploadPanelOpen = useUI((s) => s.setUploadPanelOpen)
+  const unread = useUnreadNotifications().data?.unread
+  // Aviso quando chega notificação com o Filezam aberto; a primeira contagem não avisa.
+  const lastUnread = useRef<number | undefined>(undefined)
+  useEffect(() => {
+    if (unread === undefined) return
+    if (lastUnread.current !== undefined && unread > lastUnread.current) {
+      toast(S.notificationNewToast(unread - lastUnread.current), 'info')
+      qc.invalidateQueries({ queryKey: ['notifications', 'list'] })
+    }
+    lastUnread.current = unread
+  }, [unread, qc])
 
   useEffect(() => {
     uploadManager.onConflict = (item) => dialogs.conflict(item.relPath)
@@ -86,6 +103,10 @@ export default function Shell() {
         <NavLink to="/shares" className={linkCls} onClick={() => setMenuOpen(false)}><IShare size={16} /> {S.shares}</NavLink>
         <NavLink to="/trash" className={linkCls} onClick={() => setMenuOpen(false)}><ITrash size={16} /> {S.trash}</NavLink>
         <NavLink to="/jobs" className={linkCls} onClick={() => setMenuOpen(false)}><IList size={16} /> {S.jobsTitle}</NavLink>
+        <NavLink to="/notifications" className={linkCls} onClick={() => setMenuOpen(false)}>
+          <IBell size={16} /> {S.notifications}
+          {!!unread && <span className="ml-auto rounded-full bg-accent px-1.5 text-xs text-white">{unread}</span>}
+        </NavLink>
         <button className={linkCls({ isActive: false }) + ' text-left'} onClick={showUploads} title={S.uploadsShow}>
           <IUpload size={16} /> {S.uploads}
           {activeUploads > 0 ? (

@@ -91,3 +91,8 @@ export function useInvalidateDirs() {
 export function useFavorites() {
   return useQuery({ queryKey: ['favorites'], queryFn: () => Api.favorites(), staleTime: 60_000 })
 }
+
+// Contagem de notificações não lidas, consultada a cada 30 s enquanto a aba está visível.
+export function useUnreadNotifications() {
+  return useQuery({ queryKey: ['notifications', 'unread'], queryFn: () => Api.notificationsUnread(), refetchInterval: 30_000, refetchIntervalInBackground: false })
+}

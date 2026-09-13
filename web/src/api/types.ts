@@ -281,3 +281,23 @@ export interface ZipPlan {
   files: number
   bytes: number
 }
+
+/** Notificação do usuário. O texto é montado na interface a partir de kind + data. */
+export interface AppNotification {
+  id: number
+  kind: 'drop.received' | 'share.revoked' | string
+  data: {
+    shareId?: number
+    link?: string
+    /** Pasta relativa ao escopo; ausente se ficou fora dele. */
+    path?: string
+    files?: number
+    bytes?: number
+    names?: string[]
+    slug?: string
+    mode?: string
+  }
+  createdAt: number
+  updatedAt: number
+  readAt: number | null
+}
