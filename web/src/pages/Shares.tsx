@@ -72,6 +72,9 @@ export default function Shares() {
                     {s.revoked ? <span className="text-neutral-500" title={S.shareSlugReserved}>{S.shareSlugReserved}</span>
                       : s.expired ? <span className="text-red-600">{S.shareExpired}</span>
                       : <span title={formatDate(s.expiresAt, true)}>{formatRelative(s.expiresAt)}</span>}
+                    {!s.revoked && !s.expired && s.revokeAt && (
+                      <div className="text-xs text-amber-700 dark:text-amber-400" title={S.shareBrokenHint}>{s.revokeAt > Date.now() / 1000 ? S.shareBroken(formatRelative(s.revokeAt)) : S.shareBrokenSoon}</div>
+                    )}
                   </td>
                   <td className="hidden px-3 py-2 sm:table-cell">
                     {s.mode === 'drop'

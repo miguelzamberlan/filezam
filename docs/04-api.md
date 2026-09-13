@@ -20,7 +20,7 @@ Job      { id, type: "copy"|"move"|"delete", state: "running"|"done"|"failed"|"c
 Upload   { id, dir, name, size, mtime, chunkSize, chunks, received: [int], overwrite, createdAt, updatedAt }
 Favorite { id, path, name, createdAt }
 Share    { id, token, slug, mode: "read"|"drop", kind: "dir"|"file", hasPassword, revoked, path, name, createdBy, mine, createdAt, expiresAt, expired, accessCount, lastAccessAt,
-           quotaBytes, usedBytes, fileCount, maxFileBytes, maxFiles /*só mode "drop"*/ }
+           quotaBytes, usedBytes, fileCount, maxFileBytes, maxFiles /*só mode "drop"*/, brokenSince?, revokeAt? }
 Settings { slugsEnabled, dropEnabled, dropMaxQuota, dropMaxTtl, dropFileMax, dropMaxFiles, dropMaxLinks, dropStaleAge,
            extractEnabled, extractMaxBytes, extractMaxEntries, extractMaxArchive,
            thumbsEnabled, thumbsMaxPixels, thumbsMaxFile, thumbsCacheMax,
@@ -121,7 +121,7 @@ Itens mais antigos que a retenção (`trashRetention` das configurações; sem v
 
 | Método | Rota | Auth | Descrição |
 |---|---|---|---|
-| GET | `/api/shares` | U | `{shares, now}`; admin vê todos, usuário só os seus. `share.token` permite recopiar o link (`""` em links criados antes da migração 002). Links revogados só aparecem quando têm apelido, com `revoked: true`, para o dono ver o endereço que segue reservado a ele |
+| GET | `/api/shares` | U | `{shares, now}`; `brokenSince`/`revokeAt` aparecem quando a manutenção não acha o item (o link é revogado em `revokeAt` se ele não voltar); admin vê todos, usuário só os seus. `share.token` permite recopiar o link (`""` em links criados antes da migração 002). Links revogados só aparecem quando têm apelido, com `revoked: true`, para o dono ver o endereço que segue reservado a ele |
 | POST | `/api/shares` | U | `{path, expiresIn /*s*/, name?, password?, slug?, mode?, quotaBytes?, maxFileBytes?, maxFiles?}` → 201 `{share, token, url}`. `path` pode ser pasta (`kind: dir`) ou arquivo (`kind: file`); `password` opcional com 8–256 caracteres (400 `weak_password`), guardada como Argon2id. `url` usa `FILEZAM_PUBLIC_URL` ou o host da requisição; a interface web monta o link a partir de `slug \|\| token` + origem do navegador. 400 `bad_expiry`, 409 `not_dir` |
 | POST | `/api/shares/affected` | U | `{paths: [escopo-relativos]}` → `{count, links: [{path, mode, slug?}]}`: links vivos (não revogados nem vencidos), de qualquer dono, do item ou de algo abaixo dele, que excluir, mover ou renomear esses caminhos revogaria. `links` traz no máximo 20; `count` é exato. Sem token nem autor. 400 `no_paths`/`too_many`/`invalid_path`/`root_op` |
 | DELETE | `/api/shares/{id}?purge=` | U | Dono ou admin → `{ok}`. Link com apelido é **revogado**, não apagado: o endereço continua reservado a quem o criou. `?purge=1` apaga a linha e libera o apelido |

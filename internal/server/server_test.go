@@ -2974,3 +2974,87 @@ func TestPendingTrashIsRecovered(t *testing.T) {
 		t.Fatalf("sweep should skip pending rows: %d", len(items))
 	}
 }
+
+// Link cujo item sumiu por fora é marcado, volta ao normal se o item reaparecer e só é revogado
+// depois da carência; um sumiço em massa (disco não montado) não revoga nada.
+func TestBrokenSharesAreRevokedAfterGrace(t *testing.T) {
+	admin, s, root := newEnv(t)
+	admin.login("admin", "admin")
+	admin.expect("POST", "/api/auth/password", map[string]string{"current": "admin", "new": "correct horse battery"}, 200)
+	ctx := context.Background()
+	for _, d := range []string{"a", "b", "c", "d", "e", "f"} {
+		os.MkdirAll(filepath.Join(root, "teamA", d), 0o755)
+	}
+	share := func(p string) int64 {
+		return int64(admin.expect("POST", "/api/shares", map[string]any{"path": p, "expiresIn": 7 * 86400}, 201)["share"].(map[string]any)["id"].(float64))
+	}
+	ids := map[string]int64{}
+	for _, p := range []string{"teamA/a", "teamA/b", "teamA/c", "teamA/d", "teamA/e", "teamA/f", "teamA/pub/doc.txt"} {
+		ids[p] = share(p)
+	}
+	get := func(id int64) *store.Share {
+		sh, err := s.db.GetShare(ctx, id)
+		if err != nil {
+			return nil
+		}
+		return sh
+	}
+	clock := time.Now()
+	s.db.Now = func() time.Time { return clock }
+
+	// Some "a" (apagada por fora) e "b" vira arquivo com o mesmo nome; "c" some e depois volta.
+	os.RemoveAll(filepath.Join(root, "teamA", "a"))
+	os.RemoveAll(filepath.Join(root, "teamA", "b"))
+	os.WriteFile(filepath.Join(root, "teamA", "b"), []byte("agora é arquivo"), 0o644)
+	os.Rename(filepath.Join(root, "teamA", "c"), filepath.Join(root, "teamA", "c-fora"))
+	s.sweepBrokenShares(ctx)
+	for _, p := range []string{"teamA/a", "teamA/b", "teamA/c"} {
+		if sh := get(ids[p]); sh == nil || sh.BrokenSince == nil {
+			t.Fatalf("%s should be marked broken: %+v", p, sh)
+		}
+	}
+	if sh := get(ids["teamA/d"]); sh.BrokenSince != nil {
+		t.Fatal("healthy link marked broken")
+	}
+	// A tela de links mostra quando cai.
+	for _, v := range admin.expect("GET", "/api/shares", nil, 200)["shares"].([]any) {
+		m := v.(map[string]any)
+		if m["path"] == "teamA/a" && m["revokeAt"] == nil {
+			t.Fatalf("revokeAt missing: %v", m)
+		}
+	}
+	os.Rename(filepath.Join(root, "teamA", "c-fora"), filepath.Join(root, "teamA", "c"))
+	clock = clock.Add(shareBrokenGrace + time.Minute)
+	s.db.Now = func() time.Time { return clock }
+	s.sweepBrokenShares(ctx)
+	if get(ids["teamA/a"]) != nil || get(ids["teamA/b"]) != nil {
+		t.Fatal("broken links not revoked after the grace period")
+	}
+	if sh := get(ids["teamA/c"]); sh == nil || sh.BrokenSince != nil {
+		t.Fatalf("link whose item came back should be healthy again: %+v", sh)
+	}
+	found := false
+	entries, _ := s.db.ListAudit(ctx, 0, 100)
+	for _, e := range entries {
+		if e.Action == "share.revoke.broken" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("revocation not audited")
+	}
+
+	// Sumiço em massa: 4 de 5 links quebram de uma vez. Marca, mas não revoga nunca nessa situação.
+	for _, d := range []string{"c", "d", "e", "f"} {
+		os.RemoveAll(filepath.Join(root, "teamA", d))
+	}
+	s.sweepBrokenShares(ctx)
+	clock = clock.Add(shareBrokenGrace * 3)
+	s.db.Now = func() time.Time { return clock }
+	s.sweepBrokenShares(ctx)
+	for _, d := range []string{"c", "d", "e", "f"} {
+		if sh := get(ids["teamA/"+d]); sh == nil || sh.BrokenSince == nil {
+			t.Fatalf("mass breakage must not revoke %s: %+v", d, sh)
+		}
+	}
+}

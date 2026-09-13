@@ -27,7 +27,7 @@ favorites(id, user_id → users CASCADE, path /*base-relativo*/, name, created_a
 shares(id, token_hash UNIQUE, token /*em claro, 002; '' nos links anteriores*/, kind /*'dir'|'file', 003*/, password_hash /*argon2id ou '', 003*/, dev, ino /*identidade do item, 006*/,
        slug /*apelido, 011; '' = só por token*/, mode /*'read'|'drop', 011*/, quota_bytes, max_file_bytes, max_files /*tetos do link de envio, 011*/,
        path /*base-relativo*/, name, created_by → users CASCADE,
-       created_at, expires_at, revoked_at, access_count, last_access_at)   -- índices: expires_at; slug UNIQUE parcial (WHERE slug <> '')
+       created_at, expires_at, revoked_at, access_count, last_access_at, broken_since /*manutenção não achou o item, 014*/)   -- índices: expires_at; slug UNIQUE parcial (WHERE slug <> '')
 share_uploads(id, share_id → shares CASCADE, sender /*id assinado do visitante*/,
               name /*nome final no disco: o que o dono vê*/, sent_name /*o que o remetente pediu: o único que volta para ele*/,
               size, created_at)  -- índice: (share_id, sender)
@@ -68,6 +68,7 @@ Migrações aplicadas depois de `001_init.sql`:
 | 011 | `011_settings_slug_drop.sql` | Tabela `settings` (configurações globais do admin); `shares.slug` com índice único parcial, `shares.mode` e os tetos do link de envio; tabela `share_uploads` (recibo de cada arquivo recebido, com o nome no disco e o nome pedido); `uploads.share_id`/`uploads.sender`/`uploads.sent_name` |
 | 012 | `012_job_cleanup.sql` | Tabela `job_cleanup(job_id, path, mode)`: o que um job em andamento precisa desfazer se o processo cair (temporários de cópia com a marca do job, ou o caminho inteiro de uma extração/compactação). Apagada ao terminar; a manutenção consome as linhas de jobs que não estão mais rodando |
 | 013 | `013_trash_pending.sql` | `trash.pending` (1 enquanto o item não chegou inteiro à lixeira; a manutenção retoma as pendentes de um processo que caiu) com índice parcial |
+| 014 | `014_share_broken.sql` | `shares.broken_since`: quando a manutenção deixou de achar o item do link; limpo se ele voltar, e o link é revogado depois de 24 h |
 
 Todos os timestamps são segundos Unix, exceto `uploads.mtime` (ms, vindo do cliente).
 

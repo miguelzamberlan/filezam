@@ -35,6 +35,10 @@ type shareView struct {
 	FileCount    int64  `json:"fileCount"`
 	MaxFileBytes int64  `json:"maxFileBytes"`
 	MaxFiles     int64  `json:"maxFiles"`
+	// BrokenSince: a manutenção não acha o item desde então; RevokeAt é quando o link cai se ele não
+	// voltar. Ambos ausentes num link saudável.
+	BrokenSince *int64 `json:"brokenSince,omitempty"`
+	RevokeAt    *int64 `json:"revokeAt,omitempty"`
 }
 
 func (s *Server) viewShare(sh *store.Share, u *store.User) shareView {
@@ -45,6 +49,10 @@ func (s *Server) viewShare(sh *store.Share, u *store.User) shareView {
 	v := shareView{ID: sh.ID, Token: sh.Token, Slug: sh.Slug, Mode: sh.Mode, Path: p, Name: sh.Name, CreatedBy: sh.CreatedByName, Mine: sh.CreatedBy == u.ID, CreatedAt: sh.CreatedAt,
 		ExpiresAt: sh.ExpiresAt, Expired: sh.ExpiresAt <= time.Now().Unix() || sh.RevokedAt != nil, AccessCount: sh.AccessCount, LastAccessAt: sh.LastAccessAt, Kind: sh.Kind,
 		HasPassword: sh.PasswordHash != "", Revoked: sh.RevokedAt != nil, QuotaBytes: sh.QuotaBytes, MaxFileBytes: sh.MaxFileBytes, MaxFiles: sh.MaxFiles}
+	if sh.BrokenSince != nil && sh.RevokedAt == nil {
+		at := *sh.BrokenSince + int64(shareBrokenGrace.Seconds())
+		v.BrokenSince, v.RevokeAt = sh.BrokenSince, &at
+	}
 	if sh.Mode == "drop" {
 		if usage, err := s.db.ShareUsage(context.Background(), sh.ID); err == nil {
 			v.UsedBytes, v.FileCount = usage.Bytes, usage.Count

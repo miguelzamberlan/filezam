@@ -212,6 +212,7 @@ func (s *Server) StartBackground() {
 		}
 		s.recoverInterruptedJobs(ctx)
 		s.recoverPendingTrash(ctx)
+		s.sweepBrokenShares(ctx)
 		s.sweepTrash(ctx)
 		if err := s.db.PruneJobs(ctx, time.Now().Add(-30*24*time.Hour).Unix()); err != nil {
 			s.log.Warn("prune jobs", "err", err)

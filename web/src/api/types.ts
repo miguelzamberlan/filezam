@@ -157,6 +157,9 @@ export interface Share {
   expired: boolean
   accessCount: number
   lastAccessAt: number | null
+  /** A manutenção não acha o item desde então; o link cai em revokeAt se ele não voltar. */
+  brokenSince?: number
+  revokeAt?: number
 }
 
 export interface UploadSession {

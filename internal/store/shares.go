@@ -30,16 +30,20 @@ type Share struct {
 	RevokedAt     *int64
 	AccessCount   int64
 	LastAccessAt  *int64
+	BrokenSince   *int64 // primeira vez que a manutenção não achou o item (migração 014)
 }
 
 // shareCols e scanShare mudam sempre juntos: um descompasso só aparece em runtime.
-const shareCols = `s.id, s.token_hash, COALESCE(s.token,''), COALESCE(s.slug,''), COALESCE(s.mode,'read'), COALESCE(s.kind,'dir'), COALESCE(s.password_hash,''), COALESCE(s.dev,0), COALESCE(s.ino,0), COALESCE(s.quota_bytes,0), COALESCE(s.max_file_bytes,0), COALESCE(s.max_files,0), s.path, s.name, s.created_by, COALESCE(u.username,''), s.created_at, s.expires_at, s.revoked_at, s.access_count, s.last_access_at`
+const shareCols = `s.id, s.token_hash, COALESCE(s.token,''), COALESCE(s.slug,''), COALESCE(s.mode,'read'), COALESCE(s.kind,'dir'), COALESCE(s.password_hash,''), COALESCE(s.dev,0), COALESCE(s.ino,0), COALESCE(s.quota_bytes,0), COALESCE(s.max_file_bytes,0), COALESCE(s.max_files,0), s.path, s.name, s.created_by, COALESCE(u.username,''), s.created_at, s.expires_at, s.revoked_at, s.access_count, s.last_access_at, s.broken_since`
 
 func scanShare(row interface{ Scan(...any) error }) (*Share, error) {
 	var s Share
-	var rev, last sql.NullInt64
-	if err := row.Scan(&s.ID, &s.TokenHash, &s.Token, &s.Slug, &s.Mode, &s.Kind, &s.PasswordHash, &s.Dev, &s.Ino, &s.QuotaBytes, &s.MaxFileBytes, &s.MaxFiles, &s.Path, &s.Name, &s.CreatedBy, &s.CreatedByName, &s.CreatedAt, &s.ExpiresAt, &rev, &s.AccessCount, &last); err != nil {
+	var rev, last, broken sql.NullInt64
+	if err := row.Scan(&s.ID, &s.TokenHash, &s.Token, &s.Slug, &s.Mode, &s.Kind, &s.PasswordHash, &s.Dev, &s.Ino, &s.QuotaBytes, &s.MaxFileBytes, &s.MaxFiles, &s.Path, &s.Name, &s.CreatedBy, &s.CreatedByName, &s.CreatedAt, &s.ExpiresAt, &rev, &s.AccessCount, &last, &broken); err != nil {
 		return nil, mapErr(err)
+	}
+	if broken.Valid {
+		s.BrokenSince = &broken.Int64
 	}
 	if rev.Valid {
 		s.RevokedAt = &rev.Int64
@@ -205,6 +209,30 @@ func (db *DB) ListSharesByPath(ctx context.Context, path string, userID int64) (
 		out = append(out, sh)
 	}
 	return out, rows.Err()
+}
+
+// ListLiveShares returns every share that is neither revoked nor expired.
+func (db *DB) ListLiveShares(ctx context.Context) ([]*Share, error) {
+	rows, err := db.r.QueryContext(ctx, `SELECT `+shareCols+` FROM shares s LEFT JOIN users u ON u.id=s.created_by WHERE s.revoked_at IS NULL AND s.expires_at>? ORDER BY s.id`, db.now())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []*Share{}
+	for rows.Next() {
+		sh, err := scanShare(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, sh)
+	}
+	return out, rows.Err()
+}
+
+// SetShareBroken records (since != nil) or clears when the link's item was first found missing.
+func (db *DB) SetShareBroken(ctx context.Context, id int64, since *int64) error {
+	_, err := db.w.ExecContext(ctx, `UPDATE shares SET broken_since=? WHERE id=?`, nullInt(since), id)
+	return err
 }
 
 // RevokeShare marks a share revoked.
