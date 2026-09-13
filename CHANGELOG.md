@@ -4,13 +4,15 @@ Todas as mudanças relevantes do Filezam ficam registradas aqui. O formato segue
 
 ## [Não lançado]
 
-### Alterado
-- **Licença**: o Filezam passa da MIT para a **GNU AGPL v3** (`AGPL-3.0-only`), em licença dual com uma opção comercial. Quem modificar o Filezam e oferecê-lo pela rede precisa abrir o código das modificações a quem usa. As versões 1.0.0 a 1.2.0 continuam MIT. Os termos de atribuição, a licença comercial e as condições para contribuir estão no novo `NOTICE.md` e no `CONTRIBUTING.md`.
-- **Pesquisa sem acentos nem maiúsculas**: "acao" acha "Relatório de Ação.pdf", "BALANÇO" acha "balanco.xlsx", e nomes gravados pelo macOS casam com os do Windows. Vale para a pesquisa, para o filtro da pasta e para a digitação que salta para um item. O índice existente é convertido sozinho na atualização, sem esperar a próxima varredura.
+## [1.3.0] - 2026-09-13
 
 ### Adicionado
 - **Interface em espanhol**: novo idioma em Minha conta › Preferências, escolhido automaticamente para navegadores em espanhol, e um `README.es.md`.
 - **Créditos no rodapé**: o menu lateral, a tela de entrada e as páginas de links públicos mostram a versão, o autor original, a licença e o link para o código-fonte.
+
+### Alterado
+- **Licença**: o Filezam passa da MIT para a **GNU AGPL v3** (`AGPL-3.0-only`), em licença dual com uma opção comercial. Quem modificar o Filezam e oferecê-lo pela rede precisa abrir o código das modificações a quem usa. As versões 1.0.0 a 1.2.0 continuam MIT. Os termos de atribuição, a licença comercial e as condições para contribuir estão no novo `NOTICE.md` e no `CONTRIBUTING.md`.
+- **Pesquisa sem acentos nem maiúsculas**: "acao" acha "Relatório de Ação.pdf", "BALANÇO" acha "balanco.xlsx", e nomes gravados pelo macOS casam com os do Windows. Vale para a pesquisa, para o filtro da pasta e para a digitação que salta para um item. O índice existente é convertido sozinho na atualização, sem esperar a próxima varredura.
 
 ## [1.2.0] - 2026-09-13
 
@@ -114,7 +116,8 @@ Primeira versão pública.
 - `docker-compose.yml` de referência com serviço `init` para permissões, sub-rede fixa e contêiner somente leitura sem capabilities.
 - Documentação completa em `docs/`: arquitetura, segurança, API, uploads, banco, frontend, operação (Docker, Easypanel, systemd, proxies), testes e roadmap.
 
-[Não lançado]: https://github.com/miguelzamberlan/filezam/compare/v1.2.0...HEAD
+[Não lançado]: https://github.com/miguelzamberlan/filezam/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/miguelzamberlan/filezam/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/miguelzamberlan/filezam/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/miguelzamberlan/filezam/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/miguelzamberlan/filezam/compare/v1.0.0...v1.1.0
