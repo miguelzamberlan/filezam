@@ -1,11 +1,14 @@
 import { useUI, ZOOM_STEPS, type Prefs } from '../store/ui'
 import { COLOR_PRESETS, DEFAULT_COLORS, type ColorKey } from '../lib/theme'
 import { S, LOCALE_NAMES, type LangPref } from '../strings'
-import { Modal } from './dialogs'
 import { IFolder, ICheck } from './Icons'
 
-// Os subcomponentes ficam FORA do diálogo de propósito: definidos dentro, ganhariam uma
-// identidade nova a cada render e o React remontaria o <input type="color"> a cada arraste
+// Preferências de quem usa (guardadas no navegador): geral, aparência e cores. Vivem na página
+// Minha conta, junto com senha e verificação em duas etapas — antes eram um diálogo à parte, na
+// engrenagem do rodapé, e tudo o que é "da pessoa" ficava espalhado em dois lugares.
+//
+// Os subcomponentes ficam FORA do componente principal de propósito: definidos dentro, ganhariam
+// uma identidade nova a cada render e o React remontaria o <input type="color"> a cada arraste
 // no seletor, fechando-o no meio da escolha.
 
 function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
@@ -64,17 +67,14 @@ function ColorRow({ k, label, hint, value, onChange }: { k: ColorKey; label: str
   )
 }
 
-export default function SettingsDialog({ onClose }: { onClose: () => void }) {
+export default function Preferences() {
   const { prefs, setPrefs, view, setView } = useUI()
   const set = (p: Partial<Prefs>) => setPrefs(p)
   const isPreset = (colors: Record<ColorKey, string>) => colors.accent === prefs.accent && colors.selection === prefs.selection && colors.focus === prefs.focus
   return (
-    <Modal onClose={onClose} size="lg">
-      <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold">{S.settings}</h2>
-        <button className="btn-primary !py-1" onClick={onClose}>{S.close}</button>
-      </div>
-      <div className="mt-4 space-y-5">
+    <div className="card max-w-2xl p-4">
+      <p className="mb-4 text-xs text-neutral-500">{S.prefsSavedHint}</p>
+      <div className="space-y-5">
         <Section title={S.settingsGeneral}>
           <Toggle checked={prefs.showHidden} label={S.prefShowHidden} onChange={(v) => set({ showHidden: v })} />
           <Toggle checked={prefs.showHints} label={S.prefShowHints} onChange={(v) => set({ showHints: v })} />
@@ -129,6 +129,6 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
           </Field>
         </Section>
       </div>
-    </Modal>
+    </div>
   )
 }

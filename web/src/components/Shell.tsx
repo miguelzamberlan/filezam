@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { Api } from '../api/client'
@@ -9,10 +9,9 @@ import { uploadManager } from '../upload/manager'
 import { dialogs, toast } from './dialogs'
 import JobToasts from './JobToasts'
 import UploadPanel, { useUploads } from './UploadPanel'
-import { IFolder, IStar, IShare, IUsers, ILog, ILogout, IKey, IMenu, IClose, IUpload, ISettings, ISearch, ITrash, IList, IBell } from './Icons'
+import { IFolder, IStar, IShare, IUsers, ILog, ILogout, IMenu, IClose, IUpload, ISettings, ISearch, ITrash, IList, IBell } from './Icons'
 import { useUI } from '../store/ui'
 import DiskBar from './DiskBar'
-import SettingsDialog from './SettingsDialog'
 
 // MenuButton abre o menu lateral em telas estreitas; cada página o coloca na sua própria
 // primeira linha, para não gastar uma linha inteira só com o botão.
@@ -36,7 +35,6 @@ export default function Shell() {
   const uploads = useUploads()
   const menuOpen = useUI((s) => s.sidebarOpen)
   const setMenuOpen = useUI((s) => s.setSidebarOpen)
-  const [settings, setSettings] = useState(false)
   const setUploadPanelOpen = useUI((s) => s.setUploadPanelOpen)
   const unread = useUnreadNotifications().data?.unread
   // Aviso quando chega notificação com o Filezam aberto; a primeira contagem não avisa.
@@ -126,12 +124,22 @@ export default function Shell() {
       )}
       <div className="mt-auto border-t border-neutral-200 pt-2 dark:border-neutral-800">
         <DiskBar />
-        <div className="truncate px-2.5 text-sm font-medium">{user?.username}</div>
-        <div className="px-2.5 text-xs text-neutral-500">{user?.role === 'admin' ? S.roleAdmin : S.roleUser}{user?.restricted ? ' · ' + S.scope.toLowerCase() : ''}</div>
-        <div className="mt-2 flex gap-1">
-          <NavLink to="/account" className="btn-ghost flex-1 text-xs" title={S.accountHint}><IKey size={14} /> {S.account}</NavLink>
-          <button className="btn-ghost text-xs" onClick={() => setSettings(true)} title={S.settings}><ISettings size={14} /></button>
-          <button className="btn-ghost text-xs" onClick={logout} title={S.logout}><ILogout size={14} /> {S.logout}</button>
+        {/* Um lugar só para o que é da pessoa: senha, 2FA, idioma, tema, cores. */}
+        <div className="flex items-center gap-1">
+          <NavLink
+            to="/account"
+            onClick={() => setMenuOpen(false)}
+            title={S.accountHint}
+            className={({ isActive }) => 'flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-2 py-1.5 ' + (isActive ? 'nav-active' : 'hover:bg-neutral-200 dark:hover:bg-neutral-800')}
+          >
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold uppercase text-white" aria-hidden>{user?.username.slice(0, 1)}</span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium">{user?.username}</span>
+              <span className="block truncate text-xs text-neutral-500">{S.account}</span>
+            </span>
+            <ISettings size={14} className="shrink-0 text-neutral-400" />
+          </NavLink>
+          <button className="btn-ghost !p-2" onClick={logout} title={S.logout} aria-label={S.logout}><ILogout size={16} /></button>
         </div>
       </div>
     </nav>
@@ -151,7 +159,6 @@ export default function Shell() {
       </div>
       <UploadPanel />
       <JobToasts />
-      {settings && <SettingsDialog onClose={() => setSettings(false)} />}
     </div>
   )
 }

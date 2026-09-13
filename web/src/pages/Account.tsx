@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { useSearchParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { Api, ApiError } from '../api/client'
 import { useAuth } from '../hooks'
@@ -6,11 +7,16 @@ import { S, errorMessage } from '../strings'
 import { toast, Modal } from '../components/dialogs'
 import { MenuButton } from '../components/Shell'
 import TotpSetup, { RecoveryCodes } from '../components/TotpSetup'
+import Preferences from '../components/Preferences'
 import { IKey, ICheck } from '../components/Icons'
 
-// Conta: troca de senha e verificação em duas etapas (ativar, desativar, novos códigos).
+// Minha conta: tudo o que é da pessoa num lugar só. Duas abas, com a escolhida na URL (?aba=):
+// preferências (idioma, tema, cores, geral), que se mexe mais, e senha e segurança (troca de
+// senha, verificação em duas etapas). Quem ainda precisa ativar o 2FA cai direto na segunda.
 export default function Account() {
   const { user } = useAuth()
+  const [params, setParams] = useSearchParams()
+  const tab = params.get('aba') === 'seguranca' || (!params.get('aba') && user?.totpRequired && !user.totpEnabled) ? 'seguranca' : 'preferencias'
   const qc = useQueryClient()
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
@@ -69,7 +75,24 @@ export default function Account() {
   return (
     <div className="flex h-full flex-col overflow-auto p-4">
       <div className="mb-1 flex items-center gap-2"><MenuButton /><h1 className="text-lg font-semibold">{S.account}</h1></div>
-      <p className="mb-4 text-sm text-neutral-500">{S.accountHint}</p>
+      <p className="mb-3 text-sm text-neutral-500">
+        <span className="font-medium text-neutral-700 dark:text-neutral-300">{user?.username}</span> · {user?.role === 'admin' ? S.roleAdmin : S.roleUser}{user?.restricted ? ' · ' + S.scope.toLowerCase() : ''} — {S.accountHint}
+      </p>
+      <div className="mb-4 flex gap-1 border-b border-neutral-200 dark:border-neutral-800" role="tablist">
+        {([['preferencias', S.accountTabPrefs], ['seguranca', S.accountTabSecurity]] as const).map(([id, label]) => (
+          <button
+            key={id}
+            role="tab"
+            aria-selected={tab === id}
+            className={'-mb-px border-b-2 px-3 py-2 text-sm ' + (tab === id ? 'border-accent font-medium text-accent' : 'border-transparent text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100')}
+            onClick={() => setParams({ aba: id }, { replace: true })}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {tab === 'preferencias' && <Preferences />}
+      {tab === 'seguranca' && (
       <div className="grid max-w-4xl gap-4 md:grid-cols-2">
         <form className="card p-4" onSubmit={changePassword}>
           <h2 className="flex items-center gap-2 font-semibold"><IKey size={16} /> {S.changePassword}</h2>
@@ -113,6 +136,7 @@ export default function Account() {
           )}
         </div>
       </div>
+      )}
       {ask && (
         <Modal onClose={() => setAsk(null)}>
           <form onSubmit={submitAsk}>

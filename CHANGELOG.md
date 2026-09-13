@@ -16,6 +16,7 @@ Todas as mudanças relevantes do Filezam ficam registradas aqui. O formato segue
 - **Extrair um `.zip` enorme não pesa mais no servidor**: o tamanho do índice do arquivo e o total que ele diz conter são conferidos antes de abri-lo, e um arquivo que passaria dos limites é recusado na hora, com a orientação de baixar e descompactar no computador — inclusive os montados para enganar o leitor com um índice que mente o próprio tamanho.
 
 ### Alterado
+- **Minha conta reúne tudo o que é seu**: senha, verificação em duas etapas, idioma, tema e cores ficam numa página só, com as abas Preferências e Senha e segurança. O rodapé do menu troca os botões Conta e engrenagem por um cartão com o seu nome, ao lado do Sair.
 - Ao criar um **link de recebimento**, o diálogo explica que o limite conta tudo o que já entrou pelo link: apagar ou mover os arquivos recebidos não devolve espaço, e um link esgotado é substituído por um novo.
 - **Ctrl+A numa pasta muito grande** que ainda não carregou inteira avisa que só o que já apareceu foi selecionado, e explica como alcançar o resto: rolar até o fim para excluir, mover ou copiar tudo, ou usar **Baixar** sem seleção para levar a pasta inteira.
 - **Aviso antes de derrubar um link público**: excluir, mover ou renomear um item compartilhado (ou uma pasta com algo compartilhado dentro) agora pede confirmação e lista os links que vão deixar de funcionar. O link continua sendo revogado — ele não acompanha o item, de propósito —, mas ninguém mais é pego de surpresa; é preciso criar um link novo.

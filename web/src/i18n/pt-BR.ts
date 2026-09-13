@@ -383,8 +383,11 @@ export const ptBR = {
   totpBack: 'Voltar',
   totpResetAdmin: 'Redefinir 2FA',
   totpResetConfirm: (u: string) => `Remover a verificação em duas etapas de "${u}"? As sessões dele serão encerradas e o próximo login será só com senha.`,
-  account: 'Conta',
-  accountHint: 'Senha e verificação em duas etapas da sua conta.',
+  account: 'Minha conta',
+  accountHint: 'Suas preferências de uso e a segurança da sua conta.',
+  accountTabPrefs: 'Preferências',
+  accountTabSecurity: 'Senha e segurança',
+  prefsSavedHint: 'As preferências valem para este navegador e são salvas assim que você muda.',
   keyboardHint: 'Atalhos: Ctrl+C/X/V copiar/recortar/colar · F2 renomear · Del excluir · Enter abrir · Backspace subir · Ctrl+A tudo',
   // Textos estáveis que o servidor grava no histórico de operações (erro e avisos), em inglês.
   // Ordem importa: o primeiro que casar vale. O que não casar aparece como veio.

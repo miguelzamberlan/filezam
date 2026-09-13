@@ -385,8 +385,11 @@ export const en: Strings = {
   totpBack: 'Back',
   totpResetAdmin: 'Reset 2FA',
   totpResetConfirm: (u: string) => `Remove two-factor authentication from "${u}"? Their sessions end and the next sign-in is password-only.`,
-  account: 'Account',
-  accountHint: 'Password and two-factor authentication for your account.',
+  account: 'My account',
+  accountHint: 'Your preferences and the security of your account.',
+  accountTabPrefs: 'Preferences',
+  accountTabSecurity: 'Password and security',
+  prefsSavedHint: 'Preferences apply to this browser and are saved as soon as you change them.',
   keyboardHint: 'Shortcuts: Ctrl+C/X/V copy/cut/paste · F2 rename · Del delete · Enter open · Backspace up · Ctrl+A all',
   jobTexts: [
     [/^interrupted by server restart; partial copy of (\d+) files/, (m) => `Interrupted by a server restart. Partial copy of ${m[1]} files: the finished ones stayed at the destination; the unfinished one was removed.`],

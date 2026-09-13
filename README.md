@@ -257,7 +257,7 @@ Arquivos são gravados em `.filezam-upload-*.part` no diretório de destino e re
 - **Lixeira**: o que você exclui fica lá pelo prazo escolhido em **Configurações do sistema** (30 dias de fábrica) e pode ser restaurado. Arquivos alterados por fora do Filezam (Samba, SSH) aparecem na pesquisa após a próxima varredura do índice (intervalo também em **Configurações do sistema**) ou quando o admin clica em **Varrer agora**.
 - **Operações**: cópias, movimentações e exclusões em andamento, com cancelamento, e o histórico dos últimos 30 dias.
 - **Conta**: trocar senha e ativar a verificação em duas etapas escaneando o QR code no app autenticador; guarde os 10 códigos de recuperação. No login, "Confiar neste dispositivo por 30 dias" dispensa o código naquele navegador.
-- **Tema, cores e zoom** (engrenagem no rodapé do menu): claro, escuro ou igual ao sistema; cores de destaque com combinações prontas ou seletor livre; ampliação da listagem sem mexer no zoom do navegador. Tudo fica no navegador, por usuário.
+- **Tema, cores e zoom** (**Minha conta**, no cartão com o seu nome no rodapé do menu, junto com senha e verificação em duas etapas): claro, escuro ou igual ao sistema; cores de destaque com combinações prontas ou seletor livre; ampliação da listagem sem mexer no zoom do navegador. Tudo fica no navegador, por usuário.
 - **Arrastar e soltar**: arraste itens da listagem para uma pasta ou para um nível da trilha de navegação para movê-los.
 - **Celular**: menu vira gaveta, a barra de ações encolhe para o essencial mais **⋯**, um toque abre, toque longo seleciona e abre o menu.
 
