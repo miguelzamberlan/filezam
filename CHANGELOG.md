@@ -4,6 +4,8 @@ Todas as mudanças relevantes do Filezam ficam registradas aqui. O formato segue
 
 ## [Não lançado]
 
+## [1.2.0] - 2026-09-13
+
 ### Adicionado
 - **Notificações**: novo item no menu, com contador, que avisa quando chegam arquivos por um link de recebimento — vários envios pelo mesmo link viram um aviso só ("12 arquivos recebidos pelo link…"), com atalho para abrir a pasta — e quando um link é revogado porque o item sumiu. Com o Filezam aberto, o aviso aparece na hora. A estrutura é genérica e serve para outros tipos de aviso no futuro.
 - **Download de pastas grandes em partes**: baixar uma pasta ou seleção acima de 2 GB abre uma janela com o download dividido em partes de até 2 GB, cada uma um `.zip` completo que abre sozinho — como o Google Drive faz. Uma parte que falhar é baixada de novo sozinha, sem recomeçar tudo. Vale também nos links públicos.
@@ -103,7 +105,8 @@ Primeira versão pública.
 - `docker-compose.yml` de referência com serviço `init` para permissões, sub-rede fixa e contêiner somente leitura sem capabilities.
 - Documentação completa em `docs/`: arquitetura, segurança, API, uploads, banco, frontend, operação (Docker, Easypanel, systemd, proxies), testes e roadmap.
 
-[Não lançado]: https://github.com/miguelzamberlan/filezam/compare/v1.1.1...HEAD
+[Não lançado]: https://github.com/miguelzamberlan/filezam/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/miguelzamberlan/filezam/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/miguelzamberlan/filezam/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/miguelzamberlan/filezam/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/miguelzamberlan/filezam/releases/tag/v1.0.0
