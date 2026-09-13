@@ -1700,6 +1700,30 @@ func TestAdminSettings(t *testing.T) {
 	if s.settings().SlugsEnabled {
 		t.Fatal("settings cache not refreshed")
 	}
+
+	// Lixeira e índice: sem valor gravado vale o ambiente (aqui, lixeira desligada e índice de
+	// hora em hora); gravado, o painel manda e a exclusão passa a usar a lixeira na hora.
+	if out["trashRetention"].(float64) != 0 || out["indexInterval"].(float64) != 3600 {
+		t.Fatalf("env defaults: %v", out)
+	}
+	for body, want := range map[string]int{`{"trashRetention": 31622400}`: 400, `{"trashRetention": -1}`: 400, `{"indexInterval": 60}`: 400, `{"indexInterval": 700000}`: 400} {
+		var m map[string]any
+		_ = json.Unmarshal([]byte(body), &m)
+		if o := admin.expect("PATCH", "/api/admin/settings", m, want); code(o) != "bad_quota" {
+			t.Fatalf("%s: %v", body, o)
+		}
+	}
+	out = admin.expect("PATCH", "/api/admin/settings", map[string]any{"trashRetention": 7 * 86400, "indexInterval": 1800}, 200)["settings"].(map[string]any)
+	if out["trashRetention"].(float64) != 7*86400 || s.trashRetention() != 7*24*time.Hour || s.indexInterval() != 30*time.Minute {
+		t.Fatalf("saved maintenance settings: %v", out)
+	}
+	waitJob(t, admin, admin.expect("POST", "/api/files/delete", map[string]any{"paths": []string{"teamB/secret.txt"}}, 200))
+	if items := admin.expect("GET", "/api/trash", nil, 200); len(items["items"].([]any)) != 1 || items["retention"].(float64) != 7*86400 {
+		t.Fatalf("delete should use the trash now: %v", items)
+	}
+	if st := admin.expect("GET", "/api/admin/index", nil, 200); st["interval"].(float64) != 1800 {
+		t.Fatalf("index status interval: %v", st)
+	}
 	found := false
 	for _, e := range admin.expect("GET", "/api/admin/audit", nil, 200)["entries"].([]any) {
 		if e.(map[string]any)["action"] == "settings.update" {

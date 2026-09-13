@@ -20,20 +20,25 @@ type Indexer struct {
 	db       *store.DB
 	base     *vfs.Root
 	log      *slog.Logger
-	Interval time.Duration
+	interval func() time.Duration // lido a cada uso: o administrador muda no painel sem reiniciar
+
+	lastMs atomic.Int64 // duração da última varredura completa, para o painel mostrar o custo
 
 	scanMu  sync.Mutex // one full scan at a time
 	running atomic.Bool
 	ready   atomic.Bool
 }
 
-func New(db *store.DB, base *vfs.Root, log *slog.Logger, interval time.Duration) *Indexer {
-	ix := &Indexer{db: db, base: base, log: log, Interval: interval}
+func New(db *store.DB, base *vfs.Root, log *slog.Logger, interval func() time.Duration) *Indexer {
+	ix := &Indexer{db: db, base: base, log: log, interval: interval}
 	if st, err := db.GetIndexState(context.Background()); err == nil && st.LastFullAt != nil {
 		ix.ready.Store(true) // um scan anterior sobreviveu ao reinício
 	}
 	return ix
 }
+
+// Interval is the current time between full scans.
+func (ix *Indexer) Interval() time.Duration { return ix.interval() }
 
 // Ready reports whether at least one full scan has completed (now or in a previous run).
 func (ix *Indexer) Ready() bool { return ix.ready.Load() }
@@ -47,10 +52,13 @@ type Status struct {
 	Entries    int64  `json:"entries"`
 	LastFullAt *int64 `json:"lastFullAt"`
 	Interval   int64  `json:"interval"` // seconds
+	// LastMs é quanto durou a última varredura completa deste processo (0 antes da primeira).
+	// É o número que diz ao administrador quanto custa encurtar o intervalo.
+	LastMs int64 `json:"lastMs"`
 }
 
 func (ix *Indexer) Status(ctx context.Context) Status {
-	st := Status{Ready: ix.Ready(), Running: ix.Running(), Interval: int64(ix.Interval.Seconds())}
+	st := Status{Ready: ix.Ready(), Running: ix.Running(), Interval: int64(ix.Interval().Seconds()), LastMs: ix.lastMs.Load()}
 	if s, err := ix.db.GetIndexState(ctx); err == nil {
 		st.LastFullAt = s.LastFullAt
 	}
@@ -106,6 +114,7 @@ func (ix *Indexer) FullScan(ctx context.Context) (bool, error) {
 		return true, err
 	}
 	ix.ready.Store(true)
+	ix.lastMs.Store(max(1, time.Since(start).Milliseconds()))
 	ix.log.Info("index full scan", "entries", n, "ms", time.Since(start).Milliseconds())
 	return true, nil
 }

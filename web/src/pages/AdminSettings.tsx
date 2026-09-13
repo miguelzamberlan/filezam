@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Api, ApiError } from '../api/client'
 import type { Settings } from '../api/types'
-import { formatBytes } from '../lib/format'
+import { formatBytes, formatDuration } from '../lib/format'
 import { S, errorMessage } from '../strings'
 import { toast } from '../components/dialogs'
 import { ISpinner } from '../components/Icons'
@@ -10,6 +10,7 @@ import { MenuButton } from '../components/Shell'
 
 const GB = 1 << 30
 const HOUR = 3600
+const DAY = 86400
 
 function Switch({ on, onClick, label, hint }: { on: boolean; onClick: () => void; label: string; hint: string }) {
   return (
@@ -31,7 +32,7 @@ function Switch({ on, onClick, label, hint }: { on: boolean; onClick: () => void
   )
 }
 
-function Num({ label, value, options, format, onPick }: { label: string; value: number; options: number[]; format: (n: number) => string; onPick: (n: number) => void }) {
+function Num({ label, value, options, format, onPick, hint }: { label: string; value: number; options: number[]; format: (n: number) => string; onPick: (n: number) => void; hint?: string }) {
   return (
     <div>
       <label className="block text-sm">{label}</label>
@@ -40,6 +41,7 @@ function Num({ label, value, options, format, onPick }: { label: string; value: 
           <option key={n} value={n}>{format(n)}</option>
         ))}
       </select>
+      {hint && <p className="mt-1 text-xs text-neutral-500">{hint}</p>}
     </div>
   )
 }
@@ -51,6 +53,7 @@ function Num({ label, value, options, format, onPick }: { label: string; value: 
 export default function AdminSettings() {
   const qc = useQueryClient()
   const q = useQuery({ queryKey: ['settings'], queryFn: () => Api.adminSettings() })
+  const index = useQuery({ queryKey: ['adminIndex'], queryFn: () => Api.adminIndex(), refetchInterval: 30_000 })
   const [form, setForm] = useState<Settings | null>(null)
   useEffect(() => {
     if (q.data) setForm(q.data.settings)
@@ -84,6 +87,29 @@ export default function AdminSettings() {
         <Switch on={form.dropEnabled} onClick={() => toggle('dropEnabled')} label={S.settingsDrop} hint={S.settingsDropHint} />
         <Switch on={form.extractEnabled} onClick={() => toggle('extractEnabled')} label={S.settingsExtract} hint={S.settingsExtractHint} />
         <Switch on={form.thumbsEnabled} onClick={() => toggle('thumbsEnabled')} label={S.settingsThumbs} hint={S.settingsThumbsHint} />
+        <div className="space-y-3 px-4 py-4">
+          <h2 className="text-sm font-semibold">{S.settingsMaintenance}</h2>
+          <Num
+            label={S.settingsTrashRetention}
+            value={form.trashRetention}
+            options={[0, 1, 7, 15, 30, 60, 90, 180, 365].map((d) => d * DAY)}
+            format={(n) => (n === 0 ? S.settingsTrashOff : n % DAY === 0 ? `${n / DAY} ${n === DAY ? S.day : S.days}` : formatDuration(n))}
+            onPick={(n) => { set({ trashRetention: n }); save.mutate({ trashRetention: n }) }}
+            hint={S.settingsTrashHint}
+          />
+          {index.data?.enabled === false ? (
+            <p className="text-xs text-neutral-500">{S.settingsIndexOff}</p>
+          ) : (
+            <Num
+              label={S.settingsIndexInterval}
+              value={form.indexInterval}
+              options={[15 * 60, 30 * 60, HOUR, 2 * HOUR, 6 * HOUR, 12 * HOUR, 24 * HOUR]}
+              format={(n) => (n < HOUR ? `${n / 60} ${S.minutes}` : n % HOUR === 0 ? `${n / HOUR} ${n === HOUR ? S.hour : S.hours}` : formatDuration(n))}
+              onPick={(n) => { set({ indexInterval: n }); save.mutate({ indexInterval: n }) }}
+              hint={S.settingsIndexHint + (index.data?.lastMs ? ' ' + S.settingsIndexLast(index.data.entries ?? 0, index.data.lastMs < 1000 ? `${index.data.lastMs} ms` : formatDuration(index.data.lastMs / 1000)) : '')}
+            />
+          )}
+        </div>
         {form.dropEnabled && (
           <div className="space-y-3 px-4 py-4">
             <h2 className="text-sm font-semibold">{S.settingsDropLimits}</h2>

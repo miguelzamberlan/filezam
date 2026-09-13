@@ -208,8 +208,8 @@ Ressalvas: as pastas extras já precisam ser graváveis por `PUID:PGID` (o servi
 | `FILEZAM_MAX_UPLOAD_CHUNK` | `16MiB` | Tamanho do bloco de upload (1 MiB–1 GiB) |
 | `FILEZAM_UPLOAD_MAX_RESERVED` | `100GiB` | Espaço que os uploads inacabados de um usuário podem reservar no disco; `0` = sem teto |
 | `FILEZAM_SHARE_MAX_TTL` | `720h` | Validade máxima de um link público |
-| `FILEZAM_TRASH_RETENTION` | `720h` | Tempo na lixeira antes de apagar de vez; `0` desativa a lixeira |
-| `FILEZAM_INDEX_INTERVAL` | `6h` | Varredura completa do índice de nomes da pesquisa; `0` desativa o índice |
+| `FILEZAM_TRASH_RETENTION` | `720h` | Tempo na lixeira antes de apagar de vez; `0` desativa a lixeira. Valor inicial: o admin muda em **Configurações do sistema** |
+| `FILEZAM_INDEX_INTERVAL` | `6h` | Varredura completa do índice de nomes da pesquisa; `0` desativa o índice. Valor inicial (mínimo 15 min): o admin muda o intervalo em **Configurações do sistema** |
 | `FILEZAM_METRICS_TOKEN` | vazio | Liga `GET /metrics` (Prometheus) com `Authorization: Bearer` |
 | `FILEZAM_SECRET_KEY` | vazio | Chave (64 hex) que cifra os segredos de 2FA; vazio = `/config/secret.key` gerado no primeiro início |
 | `FILEZAM_REQUIRE_2FA_ADMINS` | `false` | Obriga administradores a ativar a verificação em duas etapas |

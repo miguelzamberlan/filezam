@@ -64,7 +64,7 @@ func (s *Server) handleAdminIndex(w http.ResponseWriter, r *http.Request) error 
 	out := map[string]any{"enabled": s.indexer != nil}
 	if s.indexer != nil {
 		st := s.indexer.Status(r.Context())
-		out["ready"], out["running"], out["entries"], out["lastFullAt"], out["interval"] = st.Ready, st.Running, st.Entries, st.LastFullAt, st.Interval
+		out["ready"], out["running"], out["entries"], out["lastFullAt"], out["interval"], out["lastMs"] = st.Ready, st.Running, st.Entries, st.LastFullAt, st.Interval, st.LastMs
 	}
 	writeJSON(w, r, 200, out)
 	return nil

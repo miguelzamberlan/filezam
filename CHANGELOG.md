@@ -4,6 +4,9 @@ Todas as mudanças relevantes do Filezam ficam registradas aqui. O formato segue
 
 ## [Não lançado]
 
+### Adicionado
+- **Prazo da lixeira e frequência da varredura do índice em Configurações do sistema**: o administrador escolhe por quanto tempo os itens excluídos ficam na lixeira (até 365 dias, ou desligada) e de quanto em quanto tempo o índice de pesquisa relê o disco para enxergar mudanças feitas por fora (15 minutos a 7 dias), com o aviso do custo e a duração da última varredura. `FILEZAM_TRASH_RETENTION` e `FILEZAM_INDEX_INTERVAL` passam a ser só o valor inicial.
+
 ### Alterado
 - Ao criar um **link de recebimento**, o diálogo explica que o limite conta tudo o que já entrou pelo link: apagar ou mover os arquivos recebidos não devolve espaço, e um link esgotado é substituído por um novo.
 - **Ctrl+A numa pasta muito grande** que ainda não carregou inteira avisa que só o que já apareceu foi selecionado, e explica como alcançar o resto: rolar até o fim para excluir, mover ou copiar tudo, ou usar **Baixar** sem seleção para levar a pasta inteira.

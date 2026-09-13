@@ -23,7 +23,8 @@ Share    { id, token, slug, mode: "read"|"drop", kind: "dir"|"file", hasPassword
            quotaBytes, usedBytes, fileCount, maxFileBytes, maxFiles /*só mode "drop"*/ }
 Settings { slugsEnabled, dropEnabled, dropMaxQuota, dropMaxTtl, dropFileMax, dropMaxFiles, dropMaxLinks, dropStaleAge,
            extractEnabled, extractMaxBytes, extractMaxEntries, extractMaxArchive,
-           thumbsEnabled, thumbsMaxPixels, thumbsMaxFile, thumbsCacheMax }
+           thumbsEnabled, thumbsMaxPixels, thumbsMaxFile, thumbsCacheMax,
+           trashRetention /*s, 0..365 d; 0 = lixeira desligada*/, indexInterval /*s, 15 min..7 d*/ }
 AdminUser{ id, username, role, scope, mustChangePassword, disabled, lockedUntil, createdAt, updatedAt }
 Audit    { id, ts, userId, username, ip, action, detail /*JSON string*/ }
 ```
@@ -114,7 +115,7 @@ Sync-or-job: o servidor aguarda até 300 ms; se o job terminou, `job.state` já 
 | POST | `/api/trash/delete` | U | `{ids: []}` → `{deleted}` (permanente) |
 | POST | `/api/trash/empty` | U | → `{deleted}`: apaga todos os itens visíveis |
 
-Itens mais antigos que `FILEZAM_TRASH_RETENTION` são apagados pela varredura horária. Ids inválidos ou fora do escopo são ignorados em silêncio.
+Itens mais antigos que a retenção (`trashRetention` das configurações; sem valor gravado, `FILEZAM_TRASH_RETENTION`) são apagados pela varredura horária. Ids inválidos ou fora do escopo são ignorados em silêncio.
 
 ## Compartilhamentos
 
@@ -205,10 +206,10 @@ antes de 429 `busy`.
 | POST | `/api/admin/users/{id}/totp/reset` | A | Remove o 2FA do usuário e derruba as sessões dele → `{ok}` |
 | DELETE | `/api/admin/users/{id}` | A | → `{ok}`; 409 `self`/`last_admin`; remove partes de upload pendentes |
 | GET | `/api/admin/settings` | A | `{settings, dropTtlHardMax}` |
-| PATCH | `/api/admin/settings` | A | Campos parciais de `Settings` → `{settings, dropTtlHardMax}`. Fora de faixa → 400 `bad_quota`; `dropMaxTtl` nunca passa de 30 dias, mesmo com o banco editado à mão. Auditado como `settings.update` |
+| PATCH | `/api/admin/settings` | A | Campos parciais de `Settings` → `{settings, dropTtlHardMax}`. Fora de faixa → 400 `bad_quota`; `dropMaxTtl` nunca passa de 30 dias, mesmo com o banco editado à mão. `trashRetention` e `indexInterval` sem valor gravado saem com o das variáveis de ambiente; mudar `indexInterval` remarca a próxima varredura na hora (a partir do fim da anterior). Auditado como `settings.update` |
 | GET | `/api/admin/dirs?path=` | A | `{path, dirs: [string]}` só diretórios reais da **raiz base**, para o seletor de escopo |
 | GET | `/metrics` | token | Prometheus text format; exige `FILEZAM_METRICS_TOKEN` (`Authorization: Bearer`) ou sessão admin; 404 quando desativado |
-| GET | `/api/admin/index` | A | `{enabled, ready, running, entries, lastFullAt, interval}` do índice de nomes |
+| GET | `/api/admin/index` | A | `{enabled, ready, running, entries, lastFullAt, interval, lastMs}` do índice de nomes (`lastMs`: duração da última varredura completa deste processo, 0 antes da primeira) |
 | POST | `/api/admin/reindex` | A | Inicia uma varredura completa → `{started}` (`false` se já roda); 409 `unsupported` com índice desativado |
 | GET | `/api/admin/audit?before=&limit=` | A | `{entries}` mais recentes primeiro; `before` = id para paginar; `limit` ≤ 500 |
 

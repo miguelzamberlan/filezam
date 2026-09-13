@@ -14,14 +14,14 @@
 - **Zip público sem teto de tamanho**: no máximo 4 zips públicos ao mesmo tempo no servidor e 2 downloads por IP; um link de pasta grande ainda permite zips enormes, um por vaga (memória constante, custo de CPU/disco).
 - **Retomada de upload só soltando o mesmo arquivo de novo** (até 24 h): o navegador não guarda o `File`, e a retomada automática foi descartada (ver Decisões).
 - **Listagem paginada só na ordem do servidor**: enquanto faltam páginas, o filtro da pasta e `Ctrl+A` só alcançam o que já foi carregado. `Ctrl+A` nessa situação avisa quantos itens ficaram de fora e como chegar a eles: rolar até o fim para excluir, mover ou copiar tudo, ou tirar a seleção e usar **Baixar**, que zipa a pasta inteira no servidor.
-- **Índice de nomes não vê mudanças externas** (Samba, SSH) até a próxima varredura completa ou um "Reconstruir índice".
+- **Índice de nomes não vê mudanças externas** (Samba, SSH) até a próxima varredura completa ou um "Reconstruir índice". O intervalo (6 h de fábrica) é escolhido pelo admin em **Configurações do sistema**, de 15 min a 7 dias, com o custo da última varredura à vista.
 - **Miniaturas só de imagem, e só de alguns formatos**: HEIC, AVIF, RAW, PDF e vídeo exigiriam bibliotecas em C, incompatíveis com o binário estático e a imagem distroless. Decidido não cobrir esses formatos: eles caem no ícone por tipo, que é um resultado aceitável.
 - **`.tar.gz` não é extraído**: só `.zip`, por decisão. Ver "Próximos passos".
 - **Diretório central na memória**: o `archive/zip` carrega o índice do arquivo inteiro antes de qualquer filtro; um `.zip` só de cabeçalhos amplifica o uso de RAM. Contido pelo teto de tamanho do arquivo e pelos semáforos, não eliminado.
 - **Cota do link de recebimento não é devolvida**: ela mede o total que já entrou pelo link, não o que está ocupado agora. Apagar os arquivos recebidos não libera espaço no link — o que impede o link de virar um ralo infinito, mas significa que um link muito usado precisa ser recriado. É o comportamento pretendido — link de recebimento não é para durar para sempre, e já tem vencimento obrigatório —, e o diálogo de criação diz isso ao lado do limite.
 - **Apelido fica preso ao dono**: um endereço personalizado revogado continua reservado a quem o criou até ele liberar de propósito (ou até a conta ser excluída). É o que impede o sequestro de um endereço já divulgado, ao custo de apelidos "presos" em instalações com muita rotatividade.
 - **Link de recebimento não notifica**: quem recebe precisa abrir a pasta para saber que chegou algo.
-- **Lixeira sem cota**: itens excluídos continuam ocupando disco até a retenção vencer; entre dispositivos a exclusão vira cópia + remoção.
+- **Lixeira sem cota**: itens excluídos continuam ocupando disco até a retenção vencer, de propósito; entre dispositivos a exclusão vira cópia + remoção. O prazo (30 dias de fábrica) é escolhido pelo admin em **Configurações do sistema**, e a limpeza continua de hora em hora.
 - **Move com "substituir" entre pastas** faz merge quando ambos são pastas (copia + apaga origem); entre dispositivos vira cópia + exclusão sem progresso de bytes.
 - **Nomes com UTF-8 inválido** aparecem em vermelho e não podem ser manipulados.
 - **Pesquisa só por nome**: o conteúdo dos arquivos não é pesquisado (decisão, ver abaixo).

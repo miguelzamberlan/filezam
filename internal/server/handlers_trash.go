@@ -82,7 +82,7 @@ func (s *Server) handleTrashList(w http.ResponseWriter, r *http.Request) error {
 		rel, _ := scopeRel(u.Scope, it.Path)
 		views = append(views, trashView{ID: it.ID, Name: it.Name, Path: rel, Type: it.Type, Size: it.Size, DeletedAt: it.DeletedAt, By: it.UserName})
 	}
-	writeJSON(w, r, 200, map[string]any{"items": views, "retention": int64(s.cfg.TrashRetention.Seconds())})
+	writeJSON(w, r, 200, map[string]any{"items": views, "retention": int64(s.trashRetention().Seconds())})
 	return nil
 }
 
@@ -212,10 +212,11 @@ func (s *Server) handleTrashEmpty(w http.ResponseWriter, r *http.Request) error 
 
 // sweepTrash permanently removes items older than the retention (runs hourly).
 func (s *Server) sweepTrash(ctx context.Context) {
-	if s.cfg.TrashRetention <= 0 {
+	retention := s.trashRetention()
+	if retention <= 0 {
 		return
 	}
-	items, err := s.db.ListTrashBefore(ctx, s.db.Now().Add(-s.cfg.TrashRetention).Unix())
+	items, err := s.db.ListTrashBefore(ctx, s.db.Now().Add(-retention).Unix())
 	if err != nil {
 		s.log.Warn("trash sweep", "err", err)
 		return

@@ -90,6 +90,8 @@ export interface Settings {
   thumbsMaxPixels: number
   thumbsMaxFile: number
   thumbsCacheMax: number
+  trashRetention: number
+  indexInterval: number
 }
 
 export type JobType = 'copy' | 'move' | 'delete' | 'extract' | 'archive'
@@ -251,6 +253,7 @@ export interface IndexStatus {
   entries?: number
   lastFullAt?: number | null
   interval?: number
+  lastMs?: number
 }
 
 export interface EntryInfo {

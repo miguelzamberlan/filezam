@@ -25,15 +25,16 @@ import (
 
 // Server holds all dependencies.
 type Server struct {
-	cfg     *config.Config
-	db      *store.DB
-	base    *vfs.Root
-	uploads *uploads.Service
-	jobs    *jobs.Manager
-	indexer *index.Indexer // nil quando FILEZAM_INDEX_INTERVAL=0
-	metrics *metrics.Registry
-	log     *slog.Logger
-	version string
+	cfg       *config.Config
+	db        *store.DB
+	base      *vfs.Root
+	uploads   *uploads.Service
+	jobs      *jobs.Manager
+	indexer   *index.Indexer // nil quando FILEZAM_INDEX_INTERVAL=0
+	indexWake chan struct{}  // avisa o laço do índice que o intervalo mudou
+	metrics   *metrics.Registry
+	log       *slog.Logger
+	version   string
 
 	loginIP     *auth.Limiter
 	loginUser   *auth.Limiter
@@ -101,6 +102,7 @@ func New(cfg *config.Config, db *store.DB, base *vfs.Root, log *slog.Logger, ver
 	}
 	s.secretKey = key
 	s.pending = newPendingState()
+	s.indexWake = make(chan struct{}, 1)
 	// O cache de miniaturas vive no DataDir, fora da árvore do usuário: não entra em backup de
 	// conteúdo, não aparece em listagem nem em zip, e segue o precedente do banco e do secret.key.
 	if tc, err := thumbs.New(filepath.Join(cfg.DataDir, "thumbs"), log); err != nil {
@@ -114,7 +116,7 @@ func New(cfg *config.Config, db *store.DB, base *vfs.Root, log *slog.Logger, ver
 		return nil, err
 	}
 	if cfg.IndexInterval > 0 {
-		s.indexer = index.New(db, base, log, cfg.IndexInterval)
+		s.indexer = index.New(db, base, log, s.indexInterval)
 	}
 	// histórico de jobs: snapshots vão para o SQLite; o que ficou "running" de um processo anterior é marcado como interrompido
 	s.jobs.Persist = func(userID int64, v jobs.View) {
@@ -223,15 +225,24 @@ func (s *Server) StartBackground() {
 					s.log.Warn("index scan", "err", err)
 				}
 			}
+			// O intervalo vem das configurações e pode mudar a qualquer momento: a próxima
+			// varredura é marcada a partir do fim da anterior, e mudar o valor no painel
+			// (indexWake) remarca na hora — encurtar para menos do que já passou varre já.
 			scan()
-			t := time.NewTicker(s.indexer.Interval)
+			last := time.Now()
+			t := time.NewTimer(s.indexInterval())
 			defer t.Stop()
 			for {
 				select {
 				case <-s.bg.Done():
 					return
+				case <-s.indexWake:
+					t.Stop()
+					t.Reset(max(0, time.Until(last.Add(s.indexInterval()))))
 				case <-t.C:
 					scan()
+					last = time.Now()
+					t.Reset(s.indexInterval())
 				}
 			}
 		}()
@@ -388,7 +399,7 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) error {
 		"maxParallel":    s.cfg.MaxParallel,
 		"shareMaxTtl":    int64(s.cfg.ShareMaxTTL.Seconds()),
 		"publicUrl":      s.cfg.PublicURL,
-		"trashRetention": int64(s.cfg.TrashRetention.Seconds()),
+		"trashRetention": int64(s.trashRetention().Seconds()),
 		"require2fa":     s.cfg.Require2FA,
 		"slugsEnabled":   s.settings().SlugsEnabled,
 		"dropEnabled":    s.settings().DropEnabled,

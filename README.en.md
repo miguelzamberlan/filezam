@@ -210,8 +210,8 @@ Caveats: the extra folders must already be writable by `PUID:PGID` (the `init` s
 | `FILEZAM_MAX_UPLOAD_CHUNK` | `16MiB` | Upload chunk size (1 MiB–1 GiB) |
 | `FILEZAM_UPLOAD_MAX_RESERVED` | `100GiB` | Disk space one user's unfinished uploads may reserve; `0` = no cap |
 | `FILEZAM_SHARE_MAX_TTL` | `720h` | Maximum lifetime of a public link |
-| `FILEZAM_TRASH_RETENTION` | `720h` | Time in the trash before permanent removal; `0` disables the trash |
-| `FILEZAM_INDEX_INTERVAL` | `6h` | Full rescan of the search name index; `0` disables the index |
+| `FILEZAM_TRASH_RETENTION` | `720h` | Time in the trash before permanent removal; `0` disables the trash. Initial value: the admin changes it under **Configurações do sistema** (system settings) |
+| `FILEZAM_INDEX_INTERVAL` | `6h` | Full rescan of the search name index; `0` disables the index. Initial value (minimum 15 min): the admin changes the interval under **Configurações do sistema** (system settings) |
 | `FILEZAM_METRICS_TOKEN` | empty | Enables `GET /metrics` (Prometheus) with `Authorization: Bearer` |
 | `FILEZAM_SECRET_KEY` | empty | 64-hex key encrypting 2FA secrets; empty = `/config/secret.key` generated on first start |
 | `FILEZAM_REQUIRE_2FA_ADMINS` | `false` | Force administrators to enable two-factor authentication |

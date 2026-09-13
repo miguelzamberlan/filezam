@@ -754,7 +754,7 @@ func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) error {
 		}
 	}
 	root.Close()
-	useTrash := s.cfg.TrashRetention > 0 && !in.Permanent
+	useTrash := s.trashRetention() > 0 && !in.Permanent
 	j, err := s.startJob(u, "delete", jobLabel(paths, ""), parentDirs(paths), func(ctx context.Context, j *jobs.Job) error {
 		root, err := s.scopeRoot(u)
 		if err != nil {

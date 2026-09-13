@@ -44,8 +44,8 @@ services:
       FILEZAM_DATA_DIR: /config
       FILEZAM_LISTEN: ":8080"
       # Everything else comes from .env (see .env.example). Uncomment here to override:
-      # FILEZAM_TRASH_RETENTION: 720h        # trash retention; 0 disables the trash
-      # FILEZAM_INDEX_INTERVAL: 6h           # search name index full rescan; 0 disables the index
+      # FILEZAM_TRASH_RETENTION: 720h        # trash retention; 0 disables the trash (initial value, editable by the admin)
+      # FILEZAM_INDEX_INTERVAL: 6h           # search name index full rescan; 0 disables the index (initial value, editable by the admin)
       # FILEZAM_REQUIRE_2FA_ADMINS: "false"  # force administrators to enable 2FA
       # FILEZAM_METRICS_TOKEN: ""            # enables GET /metrics (Prometheus, Bearer token)
       # FILEZAM_SECRET_KEY: ""               # 64 hex; empty = /config/secret.key (back it up with the DB)

@@ -34,7 +34,7 @@ func newIndexer(t *testing.T) (*Indexer, *store.DB, string) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { base.Close() })
-	return New(db, base, slog.New(slog.NewTextHandler(io.Discard, nil)), time.Hour), db, root
+	return New(db, base, slog.New(slog.NewTextHandler(io.Discard, nil)), func() time.Duration { return time.Hour }), db, root
 }
 
 func search(t *testing.T, ix *Indexer, prefix, q string) []string {

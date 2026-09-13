@@ -50,6 +50,15 @@ const (
 	extractEntriesHardMax = int64(500000)
 	extractArchiveHardMax = int64(16) << 30
 
+	// Retenção da lixeira e intervalo do índice. O padrão de fábrica é o das variáveis de ambiente
+	// (FILEZAM_TRASH_RETENTION, FILEZAM_INDEX_INTERVAL), que continuam valendo até o administrador
+	// escolher outro valor no painel: quem já configurava por ambiente não vê nada mudar.
+	trashRetentionHardMax = int64(365 * 24 * 3600)
+	indexIntervalMin      = int64(15 * 60)
+	indexIntervalMax      = int64(7 * 24 * 3600)
+	// settingUnset marca, na memória, uma chave que o administrador nunca gravou.
+	settingUnset = int64(-1)
+
 	thumbsPixelsHardMax = int64(500_000_000)
 	thumbsFileHardMax   = int64(1) << 30
 	thumbsCacheHardMax  = int64(100) << 30
@@ -75,6 +84,11 @@ type settings struct {
 	ThumbsMaxPixels int64 `json:"thumbsMaxPixels"`
 	ThumbsMaxFile   int64 `json:"thumbsMaxFile"`
 	ThumbsCacheMax  int64 `json:"thumbsCacheMax"`
+
+	// Segundos. TrashRetention 0 = lixeira desligada (excluir apaga de vez). Os dois saem sempre
+	// resolvidos em settings(): settingUnset só existe dentro do cache.
+	TrashRetention int64 `json:"trashRetention"`
+	IndexInterval  int64 `json:"indexInterval"`
 }
 
 func defaultSettings() settings {
@@ -97,6 +111,9 @@ func defaultSettings() settings {
 		ThumbsMaxPixels: defThumbsMaxPixels,
 		ThumbsMaxFile:   defThumbsMaxFile,
 		ThumbsCacheMax:  defThumbsCacheMax,
+
+		TrashRetention: settingUnset,
+		IndexInterval:  settingUnset,
 	}
 }
 
@@ -109,8 +126,26 @@ type settingsCache struct {
 
 func (s *Server) settings() settings {
 	s.set.mu.RLock()
-	defer s.set.mu.RUnlock()
-	return s.set.v
+	v := s.set.v
+	s.set.mu.RUnlock()
+	if v.TrashRetention == settingUnset {
+		v.TrashRetention = int64(s.cfg.TrashRetention.Seconds())
+	}
+	if v.IndexInterval == settingUnset {
+		v.IndexInterval = int64(s.cfg.IndexInterval.Seconds())
+	}
+	return v
+}
+
+// trashRetention is how long deleted items stay in the trash; 0 disables the trash.
+func (s *Server) trashRetention() time.Duration {
+	return time.Duration(s.settings().TrashRetention) * time.Second
+}
+
+// indexInterval is the time between full scans of the name index. Nunca menos que o mínimo:
+// um valor de ambiente minúsculo não pode transformar a varredura num laço sem pausa.
+func (s *Server) indexInterval() time.Duration {
+	return time.Duration(max(s.settings().IndexInterval, indexIntervalMin)) * time.Second
 }
 
 // loadSettings fills the cache from the database, keeping the factory default for any key the
@@ -155,6 +190,10 @@ func (s *Server) loadSettings(ctx context.Context) error {
 			v.ThumbsMaxFile = parseInt(row.Value, v.ThumbsMaxFile)
 		case "thumbs_cache_max":
 			v.ThumbsCacheMax = parseInt(row.Value, v.ThumbsCacheMax)
+		case "trash_retention":
+			v.TrashRetention = parseInt(row.Value, v.TrashRetention)
+		case "index_interval":
+			v.IndexInterval = parseInt(row.Value, v.IndexInterval)
 		}
 	}
 	s.set.mu.Lock()
@@ -186,6 +225,12 @@ func clampSettings(v settings) settings {
 	v.ThumbsMaxPixels = clamp64(v.ThumbsMaxPixels, 1<<16, thumbsPixelsHardMax)
 	v.ThumbsMaxFile = clamp64(v.ThumbsMaxFile, 1<<16, thumbsFileHardMax)
 	v.ThumbsCacheMax = clamp64(v.ThumbsCacheMax, 1<<20, thumbsCacheHardMax)
+	if v.TrashRetention != settingUnset {
+		v.TrashRetention = clamp64(v.TrashRetention, 0, trashRetentionHardMax)
+	}
+	if v.IndexInterval != settingUnset {
+		v.IndexInterval = clamp64(v.IndexInterval, indexIntervalMin, indexIntervalMax)
+	}
 	return v
 }
 
@@ -232,6 +277,9 @@ func (s *Server) handleAdminSettingsUpdate(w http.ResponseWriter, r *http.Reques
 		ThumbsMaxPixels *int64 `json:"thumbsMaxPixels"`
 		ThumbsMaxFile   *int64 `json:"thumbsMaxFile"`
 		ThumbsCacheMax  *int64 `json:"thumbsCacheMax"`
+
+		TrashRetention *int64 `json:"trashRetention"`
+		IndexInterval  *int64 `json:"indexInterval"`
 	}
 	if err := readJSON(r, &in); err != nil {
 		return err
@@ -293,6 +341,12 @@ func (s *Server) handleAdminSettingsUpdate(w http.ResponseWriter, r *http.Reques
 	if err := putInt("thumbs_cache_max", in.ThumbsCacheMax, 1<<20, thumbsCacheHardMax); err != nil {
 		return err
 	}
+	if err := putInt("trash_retention", in.TrashRetention, 0, trashRetentionHardMax); err != nil {
+		return err
+	}
+	if err := putInt("index_interval", in.IndexInterval, indexIntervalMin, indexIntervalMax); err != nil {
+		return err
+	}
 	if len(vals) > 0 {
 		if err := s.db.PutSettings(r.Context(), vals); err != nil {
 			return err
@@ -302,6 +356,12 @@ func (s *Server) handleAdminSettingsUpdate(w http.ResponseWriter, r *http.Reques
 		}
 	}
 	after := s.settings()
+	if after.IndexInterval != before.IndexInterval {
+		select {
+		case s.indexWake <- struct{}{}:
+		default:
+		}
+	}
 	s.audit(r, u, "settings.update", map[string]any{"before": before, "after": after})
 	writeJSON(w, r, 200, map[string]any{"settings": after, "dropTtlHardMax": int64(dropTTLHardMax.Seconds())})
 	return nil

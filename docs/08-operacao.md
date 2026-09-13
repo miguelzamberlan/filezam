@@ -318,8 +318,8 @@ O proxy reverso é o mesmo da seção 2.
 | `FILEZAM_MAX_UPLOAD_CHUNK` | `16MiB` | Tamanho do bloco de upload (1 MiB a 1 GiB). Até 64 MiB atrás da Cloudflare |
 | `FILEZAM_UPLOAD_MAX_RESERVED` | `100GiB` | Espaço que os uploads em blocos inacabados de um usuário podem reservar no disco (a sessão pré-aloca o tamanho do arquivo); `0` = sem teto. Um arquivo maior que isso precisa de um valor maior |
 | `FILEZAM_SHARE_MAX_TTL` | `720h` | Validade máxima de um link público. Um link de recebimento nunca passa de 30 dias, nem com valor maior aqui |
-| `FILEZAM_TRASH_RETENTION` | `720h` | Tempo na lixeira (`<escopo>/.filezam-trash`) antes de apagar de vez; `0` desativa a lixeira |
-| `FILEZAM_INDEX_INTERVAL` | `6h` | Varredura completa do índice de nomes da pesquisa; `0` desativa o índice (a pesquisa percorre o disco) |
+| `FILEZAM_TRASH_RETENTION` | `720h` | Tempo na lixeira (`<escopo>/.filezam-trash`) antes de apagar de vez; `0` desativa a lixeira. É só o **valor inicial**: depois que o admin escolhe um prazo em **Configurações do sistema** (0 a 365 dias), o painel manda e a variável deixa de ter efeito |
+| `FILEZAM_INDEX_INTERVAL` | `6h` | Varredura completa do índice de nomes da pesquisa; `0` desativa o índice (a pesquisa percorre o disco). Com o índice ligado, é o **valor inicial** do intervalo, que o admin muda em **Configurações do sistema** (15 min a 7 dias; a tela mostra quanto durou a última varredura). Desligar continua só pelo ambiente |
 | `FILEZAM_METRICS_TOKEN` | vazio | Liga `GET /metrics` (Prometheus) para quem envia `Authorization: Bearer <token>` |
 | `FILEZAM_SECRET_KEY` | vazio | 64 hex (32 bytes) que cifra os segredos de 2FA e assina o cookie de dispositivo confiável; vazio = `<DATA_DIR>/secret.key` gerado no primeiro início (modo 0600) |
 | `FILEZAM_REQUIRE_2FA_ADMINS` | `false` | Obriga administradores a ativar a verificação em duas etapas |
@@ -438,8 +438,8 @@ Logs em JSON no stdout (`docker compose logs -f filezam` ou `journalctl -u filez
 | Link copiado com endereço errado (host/porta interna) | proxy que não repassa `Host`/`X-Forwarded-Host` de um IP confiável | A interface já usa a origem do navegador; para links gerados pela API defina `FILEZAM_PUBLIC_URL` |
 | Botão "Copiar link" mostra "—" em Compartilhados | link criado antes da migração 002 (token não guardado) | Criar um link novo |
 | Link público sempre 404 | expirado, revogado, item excluído/movido/renomeado pelo app (o link é revogado junto) ou recriado por fora, dono desativado ou escopo do dono estreitado | Criar novo link / reativar o usuário |
-| Arquivo sumiu depois de excluir | foi para a lixeira | Menu **Lixeira** → Restaurar (itens expiram após `FILEZAM_TRASH_RETENTION`) |
-| Pesquisa não acha arquivo copiado por Samba/SSH | o índice só vê mudanças feitas pelo Filezam até a próxima varredura | Aguardar `FILEZAM_INDEX_INTERVAL` ou **Reconstruir índice** na tela Pesquisar (admin) |
+| Arquivo sumiu depois de excluir | foi para a lixeira | Menu **Lixeira** → Restaurar (itens expiram após o prazo de **Configurações do sistema**) |
+| Pesquisa não acha arquivo copiado por Samba/SSH | o índice só vê mudanças feitas pelo Filezam até a próxima varredura | Aguardar a próxima varredura (intervalo em **Configurações do sistema**) ou **Reconstruir índice** na tela Pesquisar (admin) |
 | Pasta `.filezam-trash` no disco | lixeira do Filezam; invisível na interface | Não apagar à mão: use Esvaziar lixeira |
 | Usuário diz que a senha certa não entra | bloqueio de 15 min+ por (usuário, IP) após 10 erros; a resposta é igual à de senha errada | Esperar, ou entrar de outro endereço; ver `login.locked` na auditoria |
 | Miniaturas não aparecem | formato sem decodificador (HEIC, AVIF, RAW, vídeo), imagem acima de `thumbs_max_pixels`, ou recurso desligado | É o comportamento esperado: o arquivo fica com o ícone por tipo. Conferir o interruptor em **Configurações do sistema** e a preferência pessoal em **Preferências** |

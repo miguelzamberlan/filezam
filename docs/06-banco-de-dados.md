@@ -31,7 +31,7 @@ shares(id, token_hash UNIQUE, token /*em claro, 002; '' nos links anteriores*/, 
 share_uploads(id, share_id → shares CASCADE, sender /*id assinado do visitante*/,
               name /*nome final no disco: o que o dono vê*/, sent_name /*o que o remetente pediu: o único que volta para ele*/,
               size, created_at)  -- índice: (share_id, sender)
-settings(key PRIMARY KEY, value, updated_at)  -- só o que o admin mudou; o resto é padrão de fábrica
+settings(key PRIMARY KEY, value, updated_at)  -- só o que o admin mudou; o resto é padrão de fábrica (trash_retention e index_interval: o do ambiente)
 -- O cache de miniaturas NÃO fica no banco: são arquivos em <DATA_DIR>/thumbs, nomeados pelo hash
 -- de (dev, ino, mtime, tamanho, versão), espalhados em 256 subpastas. Podem ser apagados a
 -- qualquer momento; o servidor regenera sob demanda.
