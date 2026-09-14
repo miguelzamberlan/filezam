@@ -45,6 +45,15 @@ export default function PublicDrop({ token, info }: { token: string; info: Publi
     }
   }, [snap.active, doneCount, qc, token])
 
+  // Fechar a aba no meio do envio perde a fila (não há retomada aqui): o navegador pede confirmação.
+  const sending = snap.active > 0 || snap.items.some((i) => i.state === 'queued' || i.state === 'uploading')
+  useEffect(() => {
+    if (!sending) return
+    const onBeforeUnload = (ev: BeforeUnloadEvent) => ev.preventDefault()
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [sending])
+
   const quota = info.quotaBytes ?? 0
   const used = info.usedBytes ?? 0
   const left = Math.max(quota - used, 0)

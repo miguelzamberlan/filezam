@@ -127,6 +127,11 @@ export const en: Strings = {
   cancelAll: 'Cancel all',
   clearDone: 'Clear finished',
   retryFailed: 'Retry failed',
+  onlyProblems: 'Only not uploaded',
+  copyList: 'Copy list',
+  downloadCsv: 'Download CSV',
+  uploadReportFile: 'uploads-not-uploaded',
+  uploadReportColumns: { path: 'path', size: 'size_bytes', state: 'state', reason: 'reason' },
   pendingUploads: (n: number) =>
     n === 1 ? '1 incomplete upload. Drop the same file here to resume.' : `${n} incomplete uploads. Drop the same files here to resume.`,
   discardPending: 'Discard',

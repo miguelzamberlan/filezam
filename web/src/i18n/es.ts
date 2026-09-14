@@ -127,6 +127,11 @@ export const es: Strings = {
   cancelAll: 'Cancelar todo',
   clearDone: 'Borrar completadas',
   retryFailed: 'Reintentar fallidas',
+  onlyProblems: 'Solo los no subidos',
+  copyList: 'Copiar lista',
+  downloadCsv: 'Descargar CSV',
+  uploadReportFile: 'subidas-no-completadas',
+  uploadReportColumns: { path: 'ruta', size: 'tamano_bytes', state: 'estado', reason: 'motivo' },
   pendingUploads: (n: number) =>
     n === 1 ? '1 subida incompleta. Suelta el mismo archivo aquí para reanudarla.' : `${n} subidas incompletas. Suelta los mismos archivos aquí para reanudarlas.`,
   discardPending: 'Descartar',

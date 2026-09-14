@@ -4,6 +4,10 @@ Todas as mudanças relevantes do Filezam ficam registradas aqui. O formato segue
 
 ## [Não lançado]
 
+### Adicionado
+- **Lista do que não foi enviado**: quando um envio de muitos arquivos para no meio, o painel de uploads filtra só os que falharam ou foram cancelados, copia a lista com o caminho e o motivo de cada um e baixa um CSV que abre direto no Excel. Assim dá para saber o que falta sem conferir a pasta arquivo por arquivo.
+- **Aviso ao fechar a aba durante um envio**: fechar ou recarregar a página com arquivos na fila ou sendo enviados, mesmo com o envio pausado, pede confirmação do navegador. Vale também na página do link de recebimento.
+
 ## [1.3.0] - 2026-09-13
 
 ### Adicionado

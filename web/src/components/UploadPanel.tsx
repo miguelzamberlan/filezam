@@ -6,13 +6,15 @@
 // Aviso legal protegido pela seção 7(b) da AGPLv3 e pelo NOTICE.md: remover ou
 // alterar este cabeçalho viola a licença e os direitos autorais do autor.
 
-import { useSyncExternalStore, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { uploadManager, type UploadItem } from '../upload/manager'
 import { useUI } from '../store/ui'
 import { formatBytes, formatDuration, formatSpeed } from '../lib/format'
 import { S, errorMessage } from '../strings'
-import { IClose, IPause, IPlay, IChevronRight, IUpload, ICheck, IAlert } from './Icons'
+import { copyText } from '../lib/clipboard'
+import { downloadText, isProblem, problemCsv, problemText } from '../upload/report'
+import { IClose, IPause, IPlay, IChevronRight, IUpload, ICheck, IAlert, ICopy, IDownload } from './Icons'
 
 export function useUploads() {
   return useSyncExternalStore(uploadManager.subscribe, uploadManager.getSnapshot)
@@ -41,12 +43,26 @@ export default function UploadPanel() {
   const open = useUI((s) => s.uploadPanelOpen)
   const setOpen = useUI((s) => s.setUploadPanelOpen)
   const parentRef = useRef<HTMLDivElement>(null)
-  const items = snap.items
+  const busy = snap.active > 0 || snap.items.some((i) => i.state === 'queued' || i.state === 'uploading')
+  const problems = useMemo(() => snap.items.filter(isProblem), [snap.items])
+  const [onlyProblems, setOnlyProblems] = useState(false)
+  // sem nada para mostrar (depois de "Repetir falhos", por exemplo) o filtro se desfaz sozinho
+  const filtering = onlyProblems && problems.length > 0
+  const items = filtering ? problems : snap.items
   const rowVirtualizer = useVirtualizer({ count: items.length, getScrollElement: () => parentRef.current, estimateSize: () => 30, overscan: 10 })
-  if (items.length === 0) return null
+
+  // Fechar ou recarregar a aba descarta a fila, que só existe na memória: o navegador pede confirmação.
+  useEffect(() => {
+    if (!busy) return
+    const onBeforeUnload = (ev: BeforeUnloadEvent) => ev.preventDefault()
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [busy])
+
+  if (snap.items.length === 0) return null
   const pct = snap.bytesTotal > 0 ? (snap.bytesDone / snap.bytesTotal) * 100 : 0
   const remaining = snap.speed > 0 ? (snap.bytesTotal - snap.bytesDone) / snap.speed : NaN
-  const busy = snap.active > 0 || items.some((i) => i.state === 'queued' || i.state === 'uploading')
+  const reportName = () => `${S.uploadReportFile}-${new Date().toISOString().slice(0, 10)}.csv`
   return (
     <div className="card fixed bottom-3 right-3 z-40 w-[26rem] max-w-[calc(100vw-1.5rem)] overflow-hidden text-sm">
       <div className="flex items-center gap-2 border-b border-neutral-200 px-3 py-2 dark:border-neutral-800">
@@ -77,6 +93,18 @@ export default function UploadPanel() {
           {snap.paused && <span>{S.pause}</span>}
         </div>
       </div>
+      {problems.length > 0 && (
+        <div className="flex items-center gap-1 border-t border-neutral-200 px-3 py-1 text-xs dark:border-neutral-800">
+          <label className="flex min-w-0 cursor-pointer items-center gap-1.5 text-red-600">
+            <input type="checkbox" checked={filtering} onChange={(e) => { setOnlyProblems(e.target.checked); if (e.target.checked) setOpen(true) }} />
+            <span className="truncate">{S.onlyProblems} ({problems.length})</span>
+          </label>
+          <span className="ml-auto flex shrink-0 items-center gap-1">
+            <button className="btn-ghost !p-1" title={S.copyList} onClick={() => void copyText(problemText(problems))}><ICopy size={14} /></button>
+            <button className="btn-ghost !p-1" title={S.downloadCsv} onClick={() => downloadText(problemCsv(problems), reportName(), 'text/csv;charset=utf-8')}><IDownload size={14} /></button>
+          </span>
+        </div>
+      )}
       {open && (
         <div ref={parentRef} className="max-h-56 overflow-y-auto overflow-x-hidden border-t border-neutral-200 dark:border-neutral-800">
           <div style={{ height: rowVirtualizer.getTotalSize(), position: 'relative' }}>

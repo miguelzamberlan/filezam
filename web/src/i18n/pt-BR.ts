@@ -126,6 +126,11 @@ export const ptBR = {
   cancelAll: 'Cancelar tudo',
   clearDone: 'Limpar concluídos',
   retryFailed: 'Repetir falhos',
+  onlyProblems: 'Só os não enviados',
+  copyList: 'Copiar lista',
+  downloadCsv: 'Baixar CSV',
+  uploadReportFile: 'uploads-nao-enviados',
+  uploadReportColumns: { path: 'caminho', size: 'tamanho_bytes', state: 'estado', reason: 'motivo' },
   pendingUploads: (n: number) =>
     n === 1 ? '1 upload incompleto. Solte o mesmo arquivo aqui para retomar.' : `${n} uploads incompletos. Solte os mesmos arquivos aqui para retomar.`,
   discardPending: 'Descartar',

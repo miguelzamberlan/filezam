@@ -116,6 +116,8 @@ Um 409 `exists` põe o item em estado `conflict` e abre o diálogo "Substituir /
 
 Retryáveis: 429, 502, 503, 504 e falhas de rede. Backoff 1, 2, 4, 8, 16 s, até 6 tentativas por item. `no_space` pausa a fila inteira e avisa. Cancelar aborta o XHR e, se chunked, apaga a sessão.
 
+Os itens falhos e cancelados ficam na lista do painel com o motivo. Quando há algum, uma faixa abaixo da barra de progresso filtra só esses itens, copia a lista (`caminho — motivo`, uma linha por item) e baixa um CSV (`upload/report.ts`). Não há histórico no servidor: a fila vive na memória da aba, e por isso fechar ou recarregar a página com envio em andamento pede confirmação do navegador (`beforeunload`), no painel e na página do link de recebimento.
+
 ## Progresso e responsividade
 
 - `XMLHttpRequest` para ter `upload.onprogress`; `fetch` não expõe progresso de envio.
