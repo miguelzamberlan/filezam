@@ -143,13 +143,9 @@ func (r *Root) WriteZipPart(ctx context.Context, w io.Writer, paths []string, pa
 	return zw.Close()
 }
 
-// UniqueIfExists returns name, or the next free "name (n).ext" when it is taken.
+// UniqueIfExists returns name, or the next free "name (n).ext" when it (or an equivalent) is taken.
 func (r *Root) UniqueIfExists(dir, name string) (string, error) {
-	ok, err := r.Exists(Join(dir, name))
-	if err != nil || !ok {
-		return name, err
-	}
-	return r.UniqueName(dir, name)
+	return r.NewNamer().Unique(dir, name)
 }
 
 // ZipTempName is where WriteZipFile assembles name before publishing it.

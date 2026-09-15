@@ -22,6 +22,7 @@ import AdminSettings from './pages/AdminSettings'
 import Notifications from './pages/Notifications'
 import AdminUsers from './pages/AdminUsers'
 import AdminAudit from './pages/AdminAudit'
+import AdminDashboard from './pages/AdminDashboard'
 import PublicShare from './pages/PublicShare'
 import Shell from './components/Shell'
 import { WithCredits } from './components/Credits'
@@ -92,6 +93,7 @@ export default function App() {
           <Route path="jobs" element={<Jobs />} />
           <Route path="notifications" element={<Notifications />} />
           <Route path="account" element={<Account />} />
+          <Route path="admin/dashboard" element={<AdminDashboard />} />
           <Route path="admin/users" element={<AdminUsers />} />
           <Route path="admin/audit" element={<AdminAudit />} />
           <Route path="admin/settings" element={<AdminSettings />} />

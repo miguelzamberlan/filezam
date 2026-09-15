@@ -238,9 +238,9 @@ func (s *Server) publish(ctx context.Context, root *vfs.Root, sh *store.Share, i
 		if err != nil {
 			return "", err
 		}
-		err = root.Finalize("", id, free, false)
+		final, err := root.Finalize("", id, free, false, nil)
 		if err == nil {
-			return free, nil
+			return final, nil
 		}
 		if !errors.Is(err, vfs.ErrExists) {
 			return "", err
@@ -259,12 +259,19 @@ func (s *Server) freeName(ctx context.Context, root *vfs.Root, sh *store.Share, 
 	if err != nil {
 		return "", err
 	}
+	// Reservas e disco comparados pela forma equivalente (NameKey): "Foto.JPG" e "foto.jpg" são o
+	// mesmo nome para quem abre a pasta pelo Windows.
+	reserved := make(map[string]bool, len(open))
+	for n := range open {
+		reserved[vfs.NameKey(n)] = true
+	}
+	names := root.NewNamer()
 	free := func(cand string) (bool, error) {
-		if open[cand] {
+		if reserved[vfs.NameKey(cand)] {
 			return false, nil
 		}
-		exists, err := root.Exists(cand)
-		return !exists, err
+		cur, err := names.Lookup("", cand)
+		return cur == "", err
 	}
 	if ok, err := free(name); err != nil {
 		return "", err
@@ -325,12 +332,14 @@ func (s *Server) handleDropPut(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	unlock() // o que vem agora é a transferência: nunca sob o mutex
+	defer s.activity.begin(sh.CreatedBy, sh.ID)()
 	mtime, _ := strconv.ParseInt(r.URL.Query().Get("mtime"), 10, 64)
 	final, size, err := s.storeDropFile(r.Context(), root, sh, name, mtime, bodyReader(w, r, s.cfg.ChunkSize))
 	if err != nil {
 		return err
 	}
 	s.usageAdd(sh.CreatedBy, size)
+	s.activity.add(sh.CreatedBy, sh.ID, 1, size)
 	s.recordDrop(r, sh, sender, final, name, size)
 	writeJSON(w, r, 201, map[string]any{"name": name, "size": size})
 	return nil
@@ -435,12 +444,14 @@ func (s *Server) handleDropUploadChunk(w http.ResponseWriter, r *http.Request) e
 	if r.ContentLength > s.cfg.ChunkSize {
 		return errorf(http.StatusRequestEntityTooLarge, "too_large", "chunk exceeds chunk size")
 	}
+	defer s.activity.begin(sh.CreatedBy, sh.ID)()
 	info, err := s.uploads.WriteChunk(r.Context(), root, uploads.SessionRef{ID: r.PathValue("id"), Scope: sh.Path, ShareID: sh.ID, Sender: sender},
 		index, r.ContentLength, bodyReader(w, r, s.cfg.ChunkSize))
 	if err != nil {
 		return err
 	}
 	s.metrics.Inc("filezam_upload_bytes_total", "", r.ContentLength)
+	s.activity.add(sh.CreatedBy, sh.ID, 0, r.ContentLength)
 	writeJSON(w, r, 200, info)
 	return nil
 }
@@ -470,6 +481,7 @@ func (s *Server) handleDropUploadComplete(w http.ResponseWriter, r *http.Request
 	if sent == "" {
 		sent = info.Name
 	}
+	s.activity.add(sh.CreatedBy, sh.ID, 1, 0)
 	s.recordDrop(r, sh, sender, info.Name, sent, e.Size)
 	writeJSON(w, r, 200, map[string]any{"name": sent, "size": e.Size})
 	return nil

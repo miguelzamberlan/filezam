@@ -28,6 +28,7 @@ export interface UploadItem {
   overwrite: boolean
   error?: string
   errorCode?: string
+  existing?: string // conflito: nome equivalente que já está no destino (outra caixa)
   // chunked
   session?: { id: string; chunkSize: number; chunks: number; received: Set<number> }
   inflight: number
@@ -320,11 +321,11 @@ export class UploadManager {
     })
     for (const it of group) it.handles.add(handle)
     try {
-      const res = (await handle.promise) as { results: { ok: boolean; code?: string; error?: string }[] }
+      const res = (await handle.promise) as { results: { ok: boolean; code?: string; error?: string; existing?: string }[] }
       group.forEach((it, i) => {
         const r = res.results[i]
         if (r?.ok) this.finish(it)
-        else this.handleFailure(it, new ApiError(r?.code === 'exists' ? 409 : 400, r?.code ?? 'internal', r?.error ?? 'error'))
+        else this.handleFailure(it, new ApiError(r?.code === 'exists' ? 409 : 400, r?.code ?? 'internal', r?.error ?? 'error', r?.existing ? { existing: r.existing } : {}))
       })
     } catch (e) {
       for (const it of group) this.handleFailure(it, e)
@@ -439,7 +440,7 @@ export class UploadManager {
       }
       if (e instanceof ApiError && e.code === 'exists') {
         // target appeared meanwhile: ask, then either overwrite (recreate session) or skip
-        await this.handleConflict(it, true)
+        await this.handleConflict(it, true, e.extra.existing as string | undefined)
         return
       }
       this.handleFailure(it, e)
@@ -457,7 +458,7 @@ export class UploadManager {
   private handleFailure(it: UploadItem, e: unknown) {
     if (it.state === 'cancelled') return
     if (e instanceof ApiError && e.code === 'exists') {
-      void this.handleConflict(it, false)
+      void this.handleConflict(it, false, e.extra.existing as string | undefined)
       return
     }
     if (e instanceof ApiError && e.code === 'aborted') return
@@ -485,8 +486,9 @@ export class UploadManager {
 
   private conflictQueue: Promise<void> = Promise.resolve()
 
-  private handleConflict(it: UploadItem, afterChunks: boolean): Promise<void> {
+  private handleConflict(it: UploadItem, afterChunks: boolean, existing?: string): Promise<void> {
     it.state = 'conflict'
+    it.existing = existing
     this.markDirty()
     // serialize dialogs so "apply to all" takes effect for the rest
     this.conflictQueue = this.conflictQueue.then(async () => {

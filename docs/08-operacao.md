@@ -425,7 +425,7 @@ Pare o serviço e copie `/config` inteira: `filezam.db`, `filezam.db-wal`, `file
 
 ## Métricas
 
-Com `FILEZAM_METRICS_TOKEN` definido, aponte o Prometheus para `/metrics` com `authorization: {credentials: <token>}` (ou `bearer_token`). Métricas: `filezam_http_requests_total{method,code}`, `filezam_http_request_seconds_{sum,count}`, `filezam_logins_total{result}`, `filezam_upload_bytes_total`, `filezam_jobs_finished_total{type,state}`, `filezam_users_total`, `filezam_sessions_active`, `filezam_shares_active`, `filezam_trash_items`, `filezam_trash_bytes`, `filezam_index_entries`, `filezam_index_last_scan_timestamp_seconds`, `filezam_jobs{state}`, `filezam_disk_total_bytes`, `filezam_disk_free_bytes`, `filezam_build_info{version}`. Não exponha `/metrics` sem HTTPS: o token viaja no cabeçalho.
+Com `FILEZAM_METRICS_TOKEN` definido, aponte o Prometheus para `/metrics` com `authorization: {credentials: <token>}` (ou `bearer_token`). Métricas: `filezam_http_requests_total{method,code}`, `filezam_http_request_seconds_{sum,count}`, `filezam_logins_total{result}`, `filezam_upload_bytes_total`, `filezam_jobs_finished_total{type,state}`, `filezam_users_total`, `filezam_sessions_active`, `filezam_users_active`, `filezam_upload_senders_active`, `filezam_upload_sessions_open`, `filezam_shares_active`, `filezam_trash_items`, `filezam_trash_bytes`, `filezam_index_entries`, `filezam_index_last_scan_timestamp_seconds`, `filezam_jobs{state}`, `filezam_disk_total_bytes`, `filezam_disk_free_bytes`, `filezam_build_info{version}`. Não exponha `/metrics` sem HTTPS: o token viaja no cabeçalho.
 
 ## Sistemas de arquivos
 

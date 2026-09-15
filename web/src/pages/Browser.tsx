@@ -12,7 +12,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Api, ApiError } from '../api/client'
 import type { Conflict, Entry } from '../api/types'
 import { useAuth, useFavorites, useInvalidateDirs, useListing } from '../hooks'
-import { basename, decodePath, dirname, encodePath, isExtractable, join } from '../lib/paths'
+import { basename, decodePath, dirname, encodePath, isExtractable, join, nameKey } from '../lib/paths'
 import { sortEntries } from '../lib/naturalSort'
 import { fold } from '../lib/fold'
 import { useUI, ZOOM_STEPS } from '../store/ui'
@@ -246,9 +246,10 @@ export default function Browser() {
     if (!c) return
     let policy: Conflict = 'rename'
     if (destDir === path) {
-      const existing = new Set(entries.map((e) => e.name))
-      if (c.names.some((n) => existing.has(n)) && !(c.op === 'cut' && c.dir === path)) {
-        const ans = await dialogs.conflict(c.names.find((n) => existing.has(n))!)
+      const existing = new Map(entries.map((e) => [nameKey(e.name), e.name]))
+      const clash = c.names.find((n) => existing.has(nameKey(n)))
+      if (clash && !(c.op === 'cut' && c.dir === path)) {
+        const ans = await dialogs.conflict(clash, existing.get(nameKey(clash)))
         if (ans.choice === 'cancel') return
         policy = ans.choice
       }
@@ -279,10 +280,10 @@ export default function Browser() {
     let policy: Conflict = 'rename'
     try {
       const dest = await Api.list(destDir)
-      const taken = new Set(dest.entries.map((e) => e.name))
-      const clash = names.find((n) => taken.has(n))
+      const taken = new Map(dest.entries.map((e) => [nameKey(e.name), e.name]))
+      const clash = names.find((n) => taken.has(nameKey(n)))
       if (clash) {
-        const ans = await dialogs.conflict(clash)
+        const ans = await dialogs.conflict(clash, taken.get(nameKey(clash)))
         if (ans.choice === 'cancel') return
         policy = ans.choice
       }

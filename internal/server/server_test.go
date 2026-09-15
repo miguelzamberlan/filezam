@@ -3230,3 +3230,247 @@ func TestNotifications(t *testing.T) {
 		t.Fatal("revoked link did not notify its owner")
 	}
 }
+
+func TestAdminDashboard(t *testing.T) {
+	admin, s, _ := newEnv(t)
+	admin.login("admin", "admin")
+	admin.expect("POST", "/api/auth/password", map[string]string{"current": "admin", "new": "correct horse battery"}, 200)
+	bobID := admin.expect("POST", "/api/admin/users", map[string]any{"username": "bob", "password": "bobpassword1", "scope": "teamA", "quota": 8 << 20}, 201)["user"].(map[string]any)["id"].(float64)
+	bob := newPublic(t, admin.srv)
+	bob.login("bob", "bobpassword1")
+	if ok, err := s.indexer.FullScan(context.Background()); !ok || err != nil {
+		t.Fatal(ok, err)
+	}
+
+	// lote com dois arquivos, um PUT do gerenciador de uploads (manda mtime) e uma gravação do
+	// editor (sem mtime), que não conta como envio
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	meta, _ := mw.CreateFormField("meta")
+	meta.Write([]byte(`{"files":[{"path":"a.txt","size":2},{"path":"b.txt","size":3}]}`))
+	p0, _ := mw.CreateFormFile("0", "a.txt")
+	p0.Write([]byte("AA"))
+	p1, _ := mw.CreateFormFile("1", "b.txt")
+	p1.Write([]byte("BBB"))
+	mw.Close()
+	if resp, out := bob.do("POST", "/api/files/batch?dir=pub", &buf, map[string]string{"Content-Type": mw.FormDataContentType()}); resp.StatusCode != 200 {
+		t.Fatalf("batch: %d %v", resp.StatusCode, out)
+	}
+	bob.expect("PUT", "/api/files/content?path=pub/c.txt&mtime=1700000000000", []byte("CCCC"), 201)
+	bob.expect("PUT", "/api/files/content?path=pub/nota.md&overwrite=1", []byte("editor"), 201)
+	// sessão em blocos pela metade: 1 de 2 blocos
+	big := bob.expect("POST", "/api/uploads", map[string]any{"dir": "pub", "name": "big.bin", "size": 1<<20 + 10}, 201)
+	bob.expect("PUT", "/api/uploads/"+big["id"].(string)+"?index=0", bytes.Repeat([]byte("x"), 1<<20), 200)
+
+	bob.expect("GET", "/api/admin/dashboard", nil, 403)
+	o := admin.expect("GET", "/api/admin/dashboard", nil, 200)
+	if o["activeUsers"].(float64) != 2 {
+		t.Fatalf("active users: %v", o["activeUsers"])
+	}
+	var bobRow map[string]any
+	for _, u := range o["users"].([]any) {
+		if m := u.(map[string]any); m["username"] == "bob" {
+			bobRow = m
+		}
+	}
+	if bobRow == nil || bobRow["sessions"].(float64) != 1 || bobRow["quota"].(float64) != 8<<20 || bobRow["used"] == nil || bobRow["lastSeenAt"] == nil {
+		t.Fatalf("bob row: %v", bobRow)
+	}
+	act := o["activity"].([]any)
+	if len(act) != 1 {
+		t.Fatalf("activity: %v", act)
+	}
+	a := act[0].(map[string]any)
+	if a["userId"].(float64) != bobID || a["files"].(float64) != 3 || a["bytes"].(float64) != 2+3+4+1<<20 || a["inflight"].(float64) != 0 {
+		t.Fatalf("activity row: %v", a)
+	}
+	ups := o["uploads"].([]any)
+	if len(ups) != 1 {
+		t.Fatalf("uploads: %v", ups)
+	}
+	if u := ups[0].(map[string]any); u["path"] != "teamA/pub/big.bin" || u["received"].(float64) != 1<<20 || u["size"].(float64) != 1<<20+10 {
+		t.Fatalf("upload row: %v", u)
+	}
+	if l := o["logins24h"].(map[string]any); l["ok"].(float64) < 2 {
+		t.Fatalf("logins: %v", l)
+	}
+
+	// métricas trazem os mesmos números ao vivo
+	s.cfg.MetricsToken = "sekret"
+	resp, _ := admin.do("GET", "/metrics", nil, map[string]string{"Authorization": "Bearer sekret"})
+	b, _ := io.ReadAll(resp.Body)
+	for _, want := range []string{"filezam_users_active 2", "filezam_upload_senders_active 1", "filezam_upload_sessions_open 1"} {
+		if !strings.Contains(string(b), want) {
+			t.Fatalf("metrics without %q:\n%s", want, b)
+		}
+	}
+
+	// encerrar sessão: a própria não, a de bob sim (e ele cai na hora)
+	var mine, bobs string
+	for _, x := range o["sessions"].([]any) {
+		m := x.(map[string]any)
+		if m["current"] == true {
+			mine = m["id"].(string)
+		} else if m["userId"].(float64) == bobID {
+			bobs = m["id"].(string)
+		}
+	}
+	if mine == "" || bobs == "" {
+		t.Fatalf("sessions: %v", o["sessions"])
+	}
+	if o := admin.expect("DELETE", "/api/admin/sessions/"+mine, nil, 409); code(o) != "self" {
+		t.Fatalf("own session: %v", o)
+	}
+	bob.expect("DELETE", "/api/admin/sessions/"+mine, nil, 403)
+	admin.expect("DELETE", "/api/admin/sessions/"+bobs, nil, 200)
+	bob.expect("GET", "/api/files?path=", nil, 401)
+	admin.expect("DELETE", "/api/admin/sessions/"+bobs, nil, 404)
+	found := false
+	for _, e := range admin.expect("GET", "/api/admin/audit", nil, 200)["entries"].([]any) {
+		if m := e.(map[string]any); m["action"] == "session.revoke" && strings.Contains(m["detail"].(string), `"username":"bob"`) {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("session.revoke not audited")
+	}
+}
+
+// Envio por link de recebimento aparece no painel em nome do link, com o dono como referência.
+func TestAdminDashboardDropActivity(t *testing.T) {
+	admin, _, _ := dropEnv(t)
+	tok, id := mkDrop(admin, "teamA/recebidos", 1<<20, 0, 0)
+	pub := newPublic(t, admin.srv)
+	if resp, out := send(pub, tok, "foto.jpg", []byte("12345")); resp.StatusCode != 201 {
+		t.Fatalf("drop send: %d %v", resp.StatusCode, out)
+	}
+	o := admin.expect("GET", "/api/admin/dashboard", nil, 200)
+	act := o["activity"].([]any)
+	if len(act) != 1 {
+		t.Fatalf("activity: %v", act)
+	}
+	if a := act[0].(map[string]any); a["shareId"].(float64) != float64(id) || a["userId"].(float64) != 1 || a["files"].(float64) != 1 || a["bytes"].(float64) != 5 {
+		t.Fatalf("drop activity: %v", a)
+	}
+	refs := o["shareRefs"].([]any)
+	if len(refs) != 1 || refs[0].(map[string]any)["mode"] != "drop" || refs[0].(map[string]any)["name"] != "recebidos" {
+		t.Fatalf("share refs: %v", refs)
+	}
+	if st := o["shares"].(map[string]any); st["drop"].(float64) != 1 || st["created7d"].(float64) != 1 {
+		t.Fatalf("share totals: %v", st)
+	}
+	if d := o["drops7d"].(map[string]any); d["files"].(float64) != 1 || d["bytes"].(float64) != 5 {
+		t.Fatalf("drops 7d: %v", d)
+	}
+}
+
+// Nome que só difere na caixa de um que já existe é conflito em todo caminho de escrita, e
+// substituir grava sobre o existente, sem deixar dois itens equivalentes na pasta.
+func TestUploadsRespectEquivalentNames(t *testing.T) {
+	admin, _, root := newEnv(t)
+	admin.login("admin", "admin")
+	admin.expect("POST", "/api/auth/password", map[string]string{"current": "admin", "new": "correct horse battery"}, 200)
+	ls := func(rel string) []string {
+		t.Helper()
+		des, err := os.ReadDir(filepath.Join(root, filepath.FromSlash(rel)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, de := range des {
+			out = append(out, de.Name())
+		}
+		return out
+	}
+	existing := func(o map[string]any) string {
+		t.Helper()
+		if code(o) != "exists" {
+			t.Fatalf("expected exists: %v", o)
+		}
+		ex, _ := o["error"].(map[string]any)["existing"].(string)
+		return ex
+	}
+
+	// envio único
+	o := admin.expect("PUT", "/api/files/content?path=teamA/pub/DOC.TXT&mtime=1700000000000", []byte("novo"), 409)
+	if ex := existing(o); ex != "doc.txt" {
+		t.Fatalf("existing name: %q", ex)
+	}
+	o = admin.expect("PUT", "/api/files/content?path=teamA/pub/DOC.TXT&mtime=1700000000000&overwrite=1", []byte("novo"), 201)
+	if o["path"] != "teamA/pub/doc.txt" {
+		t.Fatalf("overwrite keeps the existing name: %v", o)
+	}
+	if b, _ := os.ReadFile(filepath.Join(root, "teamA", "pub", "doc.txt")); string(b) != "novo" {
+		t.Fatalf("content: %q", b)
+	}
+
+	// lote numa pasta pedida com outra caixa: cai na pasta existente
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	meta, _ := mw.CreateFormField("meta")
+	meta.Write([]byte(`{"files":[{"path":"Doc.txt","size":1},{"path":"Novo.txt","size":1},{"path":"novo.TXT","size":1}]}`))
+	for i, body := range []string{"D", "N", "n"} {
+		p, _ := mw.CreateFormFile(strconv.Itoa(i), "f")
+		p.Write([]byte(body))
+	}
+	mw.Close()
+	resp, out := admin.do("POST", "/api/files/batch?dir=teamA/PUB", &buf, map[string]string{"Content-Type": mw.FormDataContentType()})
+	if resp.StatusCode != 200 {
+		t.Fatalf("batch: %d %v", resp.StatusCode, out)
+	}
+	res := out["results"].([]any)
+	r0, r1, r2 := res[0].(map[string]any), res[1].(map[string]any), res[2].(map[string]any)
+	if r0["code"] != "exists" || r0["existing"] != "doc.txt" || r1["ok"] != true || r2["code"] != "exists" || r2["existing"] != "Novo.txt" {
+		t.Fatalf("batch results: %v", res)
+	}
+	if got := ls("teamA"); len(got) != 1 || got[0] != "pub" {
+		t.Fatalf("batch created a second folder: %v", got)
+	}
+
+	// em blocos: conflito ao criar a sessão, antes de transferir
+	o = admin.expect("POST", "/api/uploads", map[string]any{"dir": "teamA/pub", "name": "DOC.txt", "size": 3}, 409)
+	if ex := existing(o); ex != "doc.txt" {
+		t.Fatalf("chunked existing: %q", ex)
+	}
+	sess := admin.expect("POST", "/api/uploads", map[string]any{"dir": "teamA/Pub", "name": "DOC.txt", "size": 3, "overwrite": true}, 201)
+	admin.expect("PUT", "/api/uploads/"+sess["id"].(string)+"?index=0", []byte("abc"), 200)
+	o = admin.expect("POST", "/api/uploads/"+sess["id"].(string)+"/complete", nil, 200)
+	if o["entry"].(map[string]any)["name"] != "doc.txt" {
+		t.Fatalf("chunked overwrite name: %v", o)
+	}
+	if got := ls("teamA/pub"); len(got) != 2 {
+		t.Fatalf("pub after uploads: %v", got)
+	}
+
+	// pasta e renomear
+	if ex := existing(admin.expect("POST", "/api/files/mkdir", map[string]any{"path": "teamA/PUB"}, 409)); ex != "pub" {
+		t.Fatalf("mkdir existing: %q", ex)
+	}
+	if o := admin.expect("POST", "/api/files/mkdir", map[string]any{"path": "teamA/Pub/nova"}, 201); o["path"] != "teamA/pub/nova" {
+		t.Fatalf("mkdir inside the existing folder: %v", o)
+	}
+	admin.expect("POST", "/api/files/rename", map[string]any{"path": "teamA/pub/Novo.txt", "newName": "NOVO.txt"}, 200)
+	if ex := existing(admin.expect("POST", "/api/files/rename", map[string]any{"path": "teamA/pub/NOVO.txt", "newName": "DOC.TXT"}, 409)); ex != "doc.txt" {
+		t.Fatalf("rename existing: %q", ex)
+	}
+}
+
+// No link de recebimento o visitante nunca sobrescreve: um nome equivalente desvia para "(1)".
+func TestDropEquivalentNamesStepAside(t *testing.T) {
+	admin, _, root := dropEnv(t)
+	tok, _ := mkDrop(admin, "teamA/caixa", 1<<20, 0, 0)
+	pub := newPublic(t, admin.srv)
+	for _, name := range []string{"Foto.JPG", "foto.jpg"} {
+		if resp, out := send(pub, tok, name, []byte(name)); resp.StatusCode != 201 {
+			t.Fatalf("send %s: %d %v", name, resp.StatusCode, out)
+		}
+	}
+	des, _ := os.ReadDir(filepath.Join(root, "teamA", "caixa"))
+	var got []string
+	for _, de := range des {
+		got = append(got, de.Name())
+	}
+	if len(got) != 2 || got[0] != "Foto.JPG" || got[1] != "foto (1).jpg" {
+		t.Fatalf("drop folder: %v", got)
+	}
+}

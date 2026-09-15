@@ -112,6 +112,8 @@ Diferenças em relação ao caminho autenticado:
 
 Um 409 `exists` põe o item em estado `conflict` e abre o diálogo "Substituir / Pular / Manter ambos / Cancelar" com "Aplicar a todos". Os diálogos são serializados numa fila para que "aplicar a todos" valha para os itens seguintes. "Manter ambos" gera `nome (n).ext` considerando os nomes já na fila para o mesmo diretório. A escolha padrão é zerada a cada nova ação de soltar/selecionar.
 
+Um nome que só difere na caixa (ou na forma Unicode) de um que já está no destino também é conflito, e o servidor responde na hora: no PUT, no lote e na criação da sessão em blocos, antes de transferir. O `existing` do erro vai para o diálogo, que diz `"C8347.MP4" já existe no destino como "C8347.mp4"`. "Substituir" grava sobre o arquivo existente, com o nome dele; "Manter ambos" gera `C8347 (1).MP4`. A regra completa está em [03](03-seguranca.md#sandbox-de-caminhos-internalvfs).
+
 ## Erros e novas tentativas
 
 Retryáveis: 429, 502, 503, 504 e falhas de rede. Backoff 1, 2, 4, 8, 16 s, até 6 tentativas por item. `no_space` pausa a fila inteira e avisa. Cancelar aborta o XHR e, se chunked, apaga a sessão.

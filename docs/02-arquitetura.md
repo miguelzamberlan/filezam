@@ -89,6 +89,7 @@ scripts/license-header.sh            # aplica/confere o cabeçalho de licença d
 | Tentativas de login por (usuário, IP) | 5/min, burst 5 | `loginUser` |
 | Troca de senha e ativação do 2FA | mesmos limites e semáforo do login | `handleChangePassword`, `handleTOTPEnable` |
 | Uploads simultâneos por usuário (PUT, lote ou chunk) | 8 | `uploadSem` → 429 |
+| Envios em andamento no painel do admin | uma rodada por usuário ou link, em memória; some 2 min depois do último envio | `uploadActivity` (`activity.go`) — nada vai ao banco, e um reinício zera a lista |
 | Requisições públicas de **leitura** por IP | 120/min | `publicIP` |
 | Requisições públicas de **escrita** por IP | 900/min, burst 240 | `dropIP` — o balde de leitura mataria um envio legítimo de algumas dezenas de arquivos, já que cada arquivo em blocos custa três requisições; o custo real fica limitado por bytes e cota |
 | Envios anônimos simultâneos por IP | 2; mesma espera de 30 s dos downloads | `dropSem` |

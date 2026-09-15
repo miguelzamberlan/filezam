@@ -133,3 +133,10 @@ func (db *DB) ListUploadsByShare(ctx context.Context, shareID int64) ([]*Upload,
 	}
 	return out, rows.Err()
 }
+
+// DropTotalsSince counts the files received by every drop link since ts.
+func (db *DB) DropTotalsSince(ctx context.Context, since int64) (DropUsage, error) {
+	var u DropUsage
+	err := db.r.QueryRowContext(ctx, `SELECT COUNT(*), COALESCE(SUM(size),0) FROM share_uploads WHERE created_at>=?`, since).Scan(&u.Count, &u.Bytes)
+	return u, err
+}

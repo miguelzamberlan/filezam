@@ -344,8 +344,14 @@ func (s *Server) prepareDropFolder(root *vfs.Root, p string) (created bool, err 
 		}
 		return false, nil
 	case errors.Is(serr, vfs.ErrNotFound):
-		if err := root.MkdirAll(vfs.Dir(p)); err != nil {
+		parent, err := root.MkdirAll(vfs.Dir(p))
+		if err != nil {
 			return false, err
+		}
+		// O link guarda o caminho pedido: se a pasta pai existe com outra caixa, gravar dentro
+		// dela deixaria o link apontando para um caminho que não existe.
+		if parent != vfs.Dir(p) {
+			return false, &vfs.NameTakenError{Existing: parent}
 		}
 		if err := root.Mkdir(p); err != nil {
 			return false, err

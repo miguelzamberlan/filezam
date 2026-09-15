@@ -6,7 +6,24 @@ Todas as mudanças relevantes do Filezam ficam registradas aqui. O formato segue
 
 ### Adicionado
 - **Lista do que não foi enviado**: quando um envio de muitos arquivos para no meio, o painel de uploads filtra só os que falharam ou foram cancelados, copia a lista com o caminho e o motivo de cada um e baixa um CSV que abre direto no Excel. Assim dá para saber o que falta sem conferir a pasta arquivo por arquivo.
+- **Painel do administrador**: novo primeiro item de Administração.
+  - Mostra quem está ativo agora e quem está enviando arquivos, com quantidade e volume, inclusive por links de recebimento.
+  - Mostra os arquivos grandes em andamento, com progresso, e as operações de todos os usuários.
+  - Traz o uso e a cota de cada usuário, os links no ar, o disco e a lixeira.
+  - Reúne as sessões abertas, com navegador e IP, e um botão para encerrar a sessão de alguém.
+  - Mostra a atividade das últimas 24 horas e dos últimos 7 dias.
+  - Avisa quando algo pede atenção: disco ou cota quase cheios, login bloqueado, tentativas de login falhas, links quebrados, envios parados.
+  - Atualiza sozinho a cada 15 segundos.
+  - `/metrics` ganha `filezam_users_active`, `filezam_upload_senders_active` e `filezam_upload_sessions_open`.
 - **Aviso ao fechar a aba durante um envio**: fechar ou recarregar a página com arquivos na fila ou sendo enviados, mesmo com o envio pausado, pede confirmação do navegador. Vale também na página do link de recebimento.
+
+### Corrigido
+- **Arquivos com o mesmo nome em maiúsculas e minúsculas diferentes**: enviar `C8347.MP4` para uma pasta com `C8347.mp4` criava um segundo arquivo, sem perguntar. Pelo Windows ou pelo Samba, a pasta passava a mostrar dois itens iguais, e só um deles abria. Agora isso é conflito:
+  - vale no envio, no link de recebimento, ao criar pasta, renomear, copiar, mover e extrair;
+  - o aviso diz com que nome o arquivo já existe;
+  - "Substituir" grava sobre o existente, sem duplicar;
+  - "Manter ambos" cria `C8347 (1).MP4`;
+  - pastas enviadas com outra caixa (`fotos/` para onde há `Fotos/`) caem dentro da existente.
 
 ## [1.3.0] - 2026-09-13
 

@@ -62,7 +62,7 @@ Três prioridades guiam cada decisão, nesta ordem:
 - **Links públicos**: compartilhe uma pasta ou um arquivo por link somente leitura com prazo de validade, senha opcional, contagem de acessos e revogação imediata. O endereço pode ser um nome que você escolhe (`/s/orcamento-2026`), com senha obrigatória.
 - **Links para receber arquivos**: uma caixa de entrada pública para quem não tem conta enviar arquivos para uma pasta sua, com cota e vencimento obrigatórios. Quem envia não vê nem baixa o que já está lá.
 - **Verificação em duas etapas** (TOTP) com códigos de recuperação e "confiar neste dispositivo por 30 dias"; opcionalmente obrigatória para administradores.
-- **Administração**: usuários com cota de disco e redefinição de 2FA, auditoria de logins e alterações, bloqueio progressivo contra força bruta, histórico de operações e métricas Prometheus.
+- **Administração**: painel com quem está ativo e enviando agora, uso e cota de cada um, sessões (com encerrar) e alertas; usuários com cota de disco e redefinição de 2FA, auditoria de logins e alterações, bloqueio progressivo contra força bruta, histórico de operações e métricas Prometheus.
 - **Interface**: português, inglês ou espanhol, tema claro/escuro/sistema, cores personalizáveis, zoom da listagem, ícones por tipo, arrastar e soltar para mover, listagem paginada para pastas enormes, atalhos de teclado e uso confortável no celular.
 - **Operação**: binário estático, imagem `distroless` sem shell, rootfs somente leitura, SQLite embutido (sem CGO), migrações automáticas, healthcheck.
 

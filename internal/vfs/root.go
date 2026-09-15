@@ -10,12 +10,10 @@ package vfs
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 )
 
@@ -183,7 +181,7 @@ func (r *Root) OpenFile(p string) (*os.File, fs.FileInfo, error) {
 	return f, fi, nil
 }
 
-// Mkdir creates a single directory; fails if it exists.
+// Mkdir creates a single directory; fails if it or an equivalent name (see NameKey) exists.
 func (r *Root) Mkdir(p string) error {
 	if p == "" {
 		return ErrRootOp
@@ -191,21 +189,26 @@ func (r *Root) Mkdir(p string) error {
 	if err := ValidName(Base(p)); err != nil {
 		return err
 	}
+	if cur, err := r.Lookup(Dir(p), Base(p)); err != nil {
+		return err
+	} else if cur != "" {
+		return nameTaken(cur)
+	}
 	return MapError(r.r.Mkdir(p, 0o755))
 }
 
-// MkdirAll creates a directory and parents. Every segment must be a valid new
-// name: pastas existentes com nomes estranhos continuam legíveis, mas a UI não cria outras.
-func (r *Root) MkdirAll(p string) error {
-	if p == "" {
-		return nil
-	}
-	for _, seg := range strings.Split(p, "/") {
-		if err := ValidName(seg); err != nil {
-			return err
-		}
-	}
-	return MapError(r.r.MkdirAll(p, 0o755))
+// MkdirAll creates a directory and parents and returns the path on disk: segmentos que já
+// existem com nome equivalente (outra caixa) são reaproveitados, não duplicados. Every new
+// segment must be a valid name: pastas existentes com nomes estranhos continuam legíveis, mas a
+// UI não cria outras.
+func (r *Root) MkdirAll(p string) (string, error) {
+	return r.NewNamer().MkdirAll(p)
+}
+
+// Lookup returns the name on disk that occupies name's place in dir (itself or an equivalent
+// one), or "" when it is free. Para várias consultas na mesma operação, use um Namer.
+func (r *Root) Lookup(dir, name string) (string, error) {
+	return r.NewNamer().Lookup(dir, name)
 }
 
 // Rename renames an entry in place. Fails if the new name exists.
@@ -220,10 +223,12 @@ func (r *Root) Rename(p, newName string) (string, error) {
 	if dst == p {
 		return p, nil
 	}
-	if ok, err := r.Exists(dst); err != nil {
+	// Trocar só a caixa do próprio nome ("foto.JPG" → "foto.jpg") é permitido: o equivalente
+	// encontrado é o item que está sendo renomeado.
+	if cur, err := r.Lookup(Dir(p), newName); err != nil {
 		return "", err
-	} else if ok {
-		return "", fmt.Errorf("%w: %s", ErrExists, newName)
+	} else if cur != "" && cur != Base(p) {
+		return "", nameTaken(cur)
 	}
 	if err := r.r.Rename(p, dst); err != nil {
 		return "", MapError(err)
@@ -252,9 +257,9 @@ func (r *Root) Move(src, dstDir string, overwrite bool) (string, error) {
 	return r.MoveTo(src, Join(dstDir, Base(src)), overwrite)
 }
 
-// MoveTo renames src to dst. Fails on an existing target unless overwrite (which
-// removes it first). Returns ErrCrossDevice when a rename is impossible so the
-// caller can fall back to copy+delete.
+// MoveTo renames src to dst. Fails on an existing target — ou um de nome equivalente — unless
+// overwrite, which removes it first and keeps its name. Returns the final path, and
+// ErrCrossDevice when a rename is impossible so the caller can fall back to copy+delete.
 func (r *Root) MoveTo(src, dst string, overwrite bool) (string, error) {
 	if src == "" || dst == "" {
 		return "", ErrRootOp
@@ -270,12 +275,13 @@ func (r *Root) MoveTo(src, dst string, overwrite bool) (string, error) {
 	} else if !fi.IsDir() {
 		return "", ErrNotDir
 	}
-	if exists, err := r.Exists(dst); err != nil {
+	if cur, err := r.Lookup(Dir(dst), Base(dst)); err != nil {
 		return "", err
-	} else if exists {
+	} else if cur != "" && Join(Dir(dst), cur) != src {
 		if !overwrite {
-			return "", fmt.Errorf("%w: %s", ErrExists, dst)
+			return "", nameTaken(Join(Dir(dst), cur))
 		}
+		dst = Join(Dir(dst), cur)
 		if err := r.Remove(dst); err != nil {
 			return "", err
 		}
@@ -302,20 +308,9 @@ func (r *Root) IsEmpty(p string) (bool, error) {
 	return len(names) == 0, nil
 }
 
-// UniqueName finds "name (n).ext" that does not exist in dir.
+// UniqueName finds "name (n).ext" with nothing equivalent in dir.
 func (r *Root) UniqueName(dir, name string) (string, error) {
-	base, ext := SplitExt(name)
-	for i := 1; i < 10000; i++ {
-		cand := fmt.Sprintf("%s (%d)%s", base, i, ext)
-		ok, err := r.Exists(Join(dir, cand))
-		if err != nil {
-			return "", err
-		}
-		if !ok {
-			return cand, nil
-		}
-	}
-	return "", fmt.Errorf("%w: no free name", ErrExists)
+	return r.NewNamer().nextFree(dir, name)
 }
 
 // DiskUsage describes the filesystem backing the root (zeros if unknown).

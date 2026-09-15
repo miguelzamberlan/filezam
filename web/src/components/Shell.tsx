@@ -17,7 +17,7 @@ import { uploadManager } from '../upload/manager'
 import { dialogs, toast } from './dialogs'
 import JobToasts from './JobToasts'
 import UploadPanel, { useUploads } from './UploadPanel'
-import { IFolder, IStar, IShare, IUsers, ILog, ILogout, IMenu, IClose, IUpload, ISettings, ISearch, ITrash, IList, IBell } from './Icons'
+import { IFolder, IStar, IShare, IUsers, IGauge, ILog, ILogout, IMenu, IClose, IUpload, ISettings, ISearch, ITrash, IList, IBell } from './Icons'
 import { useUI } from '../store/ui'
 import DiskBar from './DiskBar'
 import Credits from './Credits'
@@ -58,7 +58,7 @@ export default function Shell() {
   }, [unread, qc])
 
   useEffect(() => {
-    uploadManager.onConflict = (item) => dialogs.conflict(item.relPath)
+    uploadManager.onConflict = (item) => dialogs.conflict(item.relPath, item.existing)
     uploadManager.onDirChanged = (dir) => invalidate([dir])
     uploadManager.onError = (code) => toast(code === 'no_space' ? S.noSpace : code, 'error')
   }, [invalidate])
@@ -126,6 +126,7 @@ export default function Shell() {
       {user?.role === 'admin' && (
         <>
           <div className="mt-3 px-2.5 text-xs font-medium uppercase tracking-wide text-neutral-500">{S.admin}</div>
+          <NavLink to="/admin/dashboard" className={linkCls} onClick={() => setMenuOpen(false)}><IGauge size={16} /> {S.dashboard}</NavLink>
           <NavLink to="/admin/users" className={linkCls} onClick={() => setMenuOpen(false)}><IUsers size={16} /> {S.users}</NavLink>
           <NavLink to="/admin/audit" className={linkCls} onClick={() => setMenuOpen(false)}><ILog size={16} /> {S.audit}</NavLink>
           <NavLink to="/admin/settings" className={linkCls} onClick={() => setMenuOpen(false)}><ISettings size={16} /> {S.settingsAdmin}</NavLink>

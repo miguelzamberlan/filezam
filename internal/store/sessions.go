@@ -71,3 +71,22 @@ func (db *DB) CountSessions(ctx context.Context) (int64, error) {
 	err := db.r.QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions WHERE expires_at>?`, db.now()).Scan(&n)
 	return n, err
 }
+
+// ListLiveSessions lists the sessions not yet expired, most recently seen first (painel do admin).
+func (db *DB) ListLiveSessions(ctx context.Context) ([]*Session, error) {
+	rows, err := db.r.QueryContext(ctx, `SELECT id, user_id, created_at, expires_at, last_seen_at, COALESCE(ip,''), COALESCE(user_agent,'')
+		FROM sessions WHERE expires_at>? ORDER BY last_seen_at DESC`, db.now())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []*Session{}
+	for rows.Next() {
+		var s Session
+		if err := rows.Scan(&s.ID, &s.UserID, &s.CreatedAt, &s.ExpiresAt, &s.LastSeenAt, &s.IP, &s.UserAgent); err != nil {
+			return nil, err
+		}
+		out = append(out, &s)
+	}
+	return out, rows.Err()
+}

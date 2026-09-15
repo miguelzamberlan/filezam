@@ -64,7 +64,7 @@ Es un proyecto personal, gratuito y de código abierto. Sirve bien para servidor
 - **Enlaces públicos**: comparte una carpeta o un archivo mediante un enlace de solo lectura con fecha de caducidad, contraseña opcional, recuento de accesos y revocación inmediata. La dirección puede ser un nombre que tú eliges (`/s/presupuesto-2026`), con contraseña obligatoria.
 - **Enlaces para recibir archivos**: un buzón público para que quien no tiene cuenta envíe archivos a una carpeta tuya, con cuota y caducidad obligatorias. Quien envía no ve ni descarga lo que ya está allí.
 - **Verificación en dos pasos** (TOTP) con códigos de recuperación y "confiar en este dispositivo durante 30 días"; opcionalmente obligatoria para administradores.
-- **Administración**: usuarios con cuota de disco y restablecimiento de 2FA, auditoría de inicios de sesión y cambios, bloqueo progresivo contra fuerza bruta, historial de operaciones y métricas de Prometheus.
+- **Administración**: panel con quién está activo y subiendo ahora, uso y cuota de cada uno, sesiones (con cierre) y alertas; usuarios con cuota de disco y restablecimiento de 2FA, auditoría de inicios de sesión y cambios, bloqueo progresivo contra fuerza bruta, historial de operaciones y métricas de Prometheus.
 - **Interfaz**: portugués, inglés o español, tema claro/oscuro/sistema, colores personalizables, zoom del listado, iconos por tipo, arrastrar y soltar para mover, listado paginado para carpetas enormes, atajos de teclado y uso cómodo en el teléfono.
 - **Operación**: binario estático, imagen `distroless` sin shell, rootfs de solo lectura, SQLite integrado (sin CGO), migraciones automáticas, healthcheck.
 

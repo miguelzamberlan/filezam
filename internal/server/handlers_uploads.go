@@ -88,6 +88,7 @@ func (s *Server) handleUploadChunk(w http.ResponseWriter, r *http.Request) error
 		return err
 	}
 	defer release()
+	defer s.activity.begin(u.ID, 0)()
 	index, err := strconv.Atoi(r.URL.Query().Get("index"))
 	if err != nil || index < 0 {
 		return errorf(http.StatusBadRequest, "bad_index", "index query parameter required")
@@ -101,6 +102,7 @@ func (s *Server) handleUploadChunk(w http.ResponseWriter, r *http.Request) error
 	info, err := s.uploads.WriteChunk(r.Context(), root, s.sessionRef(r, u), index, r.ContentLength, bodyReader(w, r, s.cfg.ChunkSize))
 	if err == nil && r.ContentLength > 0 {
 		s.metrics.Inc("filezam_upload_bytes_total", "", r.ContentLength)
+		s.activity.add(u.ID, 0, 0, r.ContentLength)
 	}
 	if err != nil {
 		return err
@@ -125,8 +127,9 @@ func (s *Server) handleUploadComplete(w http.ResponseWriter, r *http.Request) er
 		}
 		return err
 	}
+	s.activity.add(u.ID, 0, 1, 0)
 	if info != nil {
-		s.indexTouch(indexAncestors(u.Scope, vfs.Join(u.Scope, info.Dir, info.Name))...)
+		s.indexTouch(indexAncestors(u.Scope, vfs.Join(u.Scope, info.Dir, e.Name))...)
 	}
 	writeJSON(w, r, 200, map[string]any{"entry": e})
 	return nil

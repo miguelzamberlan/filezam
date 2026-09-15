@@ -7,7 +7,7 @@
 // alterar este cabeçalho viola a licença e os direitos autorais do autor.
 
 import type {
-  AdminUser, AppConfig, AppNotification, ZipPart, ZipPlan, AuditEntry, Conflict, DiskUsage, Entry, EntryInfo, Favorite, IndexStatus, Job, JobRecord, ListPage, Listing, PublicInfo, SearchResult, Settings, Share, TrashItem, UploadSession, User,
+  AdminUser, AppConfig, AppNotification, ZipPart, ZipPlan, AuditEntry, Conflict, Dashboard, DiskUsage, Entry, EntryInfo, Favorite, IndexStatus, Job, JobRecord, ListPage, Listing, PublicInfo, SearchResult, Settings, Share, TrashItem, UploadSession, User,
 } from './types'
 
 export class ApiError extends Error {
@@ -215,4 +215,6 @@ export const Api = {
   adminDeleteUser: (id: number) => api<{ ok: true }>('DELETE', '/api/admin/users/' + id),
   adminDirs: (path: string) => api<{ path: string; dirs: string[] }>('GET', '/api/admin/dirs' + q({ path })),
   adminAudit: (before?: number, limit = 100) => api<{ entries: AuditEntry[] }>('GET', '/api/admin/audit' + q({ before, limit })),
+  adminDashboard: () => api<Dashboard>('GET', '/api/admin/dashboard'),
+  adminRevokeSession: (id: string) => api<{ ok: true }>('DELETE', '/api/admin/sessions/' + encodeURIComponent(id)),
 }

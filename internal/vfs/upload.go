@@ -73,10 +73,29 @@ func (r *Root) RemoveReserved(dir, name string) error {
 	return nil
 }
 
-// Finalize atomically moves a part file to its final name.
-// With overwrite=false the operation fails with ErrExists if the target appeared.
-func (r *Root) Finalize(dir, id, name string, overwrite bool) error {
-	return r.publish(Join(dir, PartName(id)), Join(dir, name), overwrite)
+// Finalize atomically moves a part file to its final name and returns the name used. With
+// overwrite=false it fails with ErrExists if the name — or an equivalent one (NameKey) — is
+// taken; with overwrite=true an equivalent existing file is replaced and keeps its own name, so
+// the folder never ends up with two. names may be nil.
+func (r *Root) Finalize(dir, id, name string, overwrite bool, names *Namer) (string, error) {
+	if names == nil {
+		names = r.NewNamer()
+	}
+	cur, err := names.Lookup(dir, name)
+	if err != nil {
+		return "", err
+	}
+	if cur != "" {
+		if !overwrite {
+			return "", nameTaken(cur)
+		}
+		name = cur
+	}
+	if err := r.publish(Join(dir, PartName(id)), Join(dir, name), overwrite); err != nil {
+		return "", err
+	}
+	names.Add(dir, name)
+	return name, nil
 }
 
 // publish gives a finished temporary file its final name. Com overwrite=false falha com

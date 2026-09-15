@@ -173,23 +173,24 @@ func (r *Root) walkDir(ctx context.Context, p string, depth int, fn func(path st
 
 // ResolveDest computes the destination path for copying/moving src into dstDir,
 // applying the conflict policy. ok=false means skip.
+// Um item de nome equivalente (outra caixa) conta como existente; substituir grava sobre ele.
 func (r *Root) ResolveDest(src, dstDir string, policy Conflict) (dst string, ok bool, err error) {
+	names := r.NewNamer()
 	name := Base(src)
-	dst = Join(dstDir, name)
-	exists, err := r.Exists(dst)
+	cur, err := names.Lookup(dstDir, name)
 	if err != nil {
 		return "", false, err
 	}
-	if !exists {
-		return dst, true, nil
+	if cur == "" {
+		return Join(dstDir, name), true, nil
 	}
 	switch policy {
 	case ConflictSkip:
-		return dst, false, nil
+		return Join(dstDir, cur), false, nil
 	case ConflictOverwrite:
-		return dst, true, nil
+		return Join(dstDir, cur), true, nil
 	default:
-		u, err := r.UniqueName(dstDir, name)
+		u, err := names.nextFree(dstDir, name)
 		if err != nil {
 			return "", false, err
 		}
@@ -211,20 +212,20 @@ func (r *Root) CopyTree(ctx context.Context, src, dst string, policy Conflict, p
 	if err != nil {
 		return MapError(err)
 	}
-	return r.copyEntry(ctx, src, dst, fi, policy, prog, map[[2]uint64]bool{})
+	return r.copyEntry(ctx, src, dst, fi, policy, prog, map[[2]uint64]bool{}, r.NewNamer())
 }
 
 // made guarda (dispositivo, inode) das pastas criadas por esta cópia. Se o destino passa por
 // um symlink que aponta para dentro da origem (criado fora do app), a pasta recém-criada
 // aparece na listagem da origem; sem essa marca a cópia desceria nela sem fim.
-func (r *Root) copyEntry(ctx context.Context, src, dst string, fi fs.FileInfo, policy Conflict, prog *Progress, made map[[2]uint64]bool) error {
+func (r *Root) copyEntry(ctx context.Context, src, dst string, fi fs.FileInfo, policy Conflict, prog *Progress, made map[[2]uint64]bool, names *Namer) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	mode := fi.Mode()
 	switch {
 	case mode.IsDir():
-		return r.copyDir(ctx, src, dst, fi, policy, prog, made)
+		return r.copyDir(ctx, src, dst, fi, policy, prog, made, names)
 	case mode.IsRegular():
 		return r.copyFile(ctx, src, dst, fi, policy, prog)
 	default:
@@ -233,7 +234,7 @@ func (r *Root) copyEntry(ctx context.Context, src, dst string, fi fs.FileInfo, p
 	}
 }
 
-func (r *Root) copyDir(ctx context.Context, src, dst string, fi fs.FileInfo, policy Conflict, prog *Progress, made map[[2]uint64]bool) error {
+func (r *Root) copyDir(ctx context.Context, src, dst string, fi fs.FileInfo, policy Conflict, prog *Progress, made map[[2]uint64]bool, names *Namer) error {
 	if err := r.r.Mkdir(dst, fi.Mode().Perm()|0o700); err != nil {
 		if !errors.Is(err, fs.ErrExist) {
 			return MapError(err)
@@ -273,21 +274,24 @@ func (r *Root) copyDir(ctx context.Context, src, dst string, fi fs.FileInfo, pol
 		}
 		csrc := Join(src, de.Name())
 		cdst := Join(dst, de.Name())
-		if exists, err := r.Exists(cdst); err != nil {
+		// Nome equivalente no destino (outra caixa) é o mesmo item: pastas se juntam e arquivos
+		// seguem a política sobre o que já está lá, com o nome de lá.
+		if cur, err := names.Lookup(dst, de.Name()); err != nil {
 			return err
-		} else if exists {
+		} else if cur != "" {
+			cdst = Join(dst, cur)
 			switch policy {
 			case ConflictSkip:
 				if cfi.IsDir() {
 					// merge directories even when skipping files
-					if err := r.copyEntry(ctx, csrc, cdst, cfi, policy, prog, made); err != nil {
+					if err := r.copyEntry(ctx, csrc, cdst, cfi, policy, prog, made, names); err != nil {
 						return err
 					}
 				}
 				continue
 			case ConflictRename:
 				if !cfi.IsDir() {
-					u, err := r.UniqueName(dst, de.Name())
+					u, err := names.nextFree(dst, de.Name())
 					if err != nil {
 						return err
 					}
@@ -295,9 +299,10 @@ func (r *Root) copyDir(ctx context.Context, src, dst string, fi fs.FileInfo, pol
 				}
 			}
 		}
-		if err := r.copyEntry(ctx, csrc, cdst, cfi, policy, prog, made); err != nil {
+		if err := r.copyEntry(ctx, csrc, cdst, cfi, policy, prog, made, names); err != nil {
 			return err
 		}
+		names.Add(dst, Base(cdst))
 	}
 	_ = r.r.Chtimes(dst, time.Time{}, fi.ModTime())
 	return nil

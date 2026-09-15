@@ -13,6 +13,11 @@
 - **Zip público sem teto imposto**: no máximo 4 zips públicos ao mesmo tempo no servidor e 2 downloads por IP. A interface divide downloads acima de 2 GB em partes de até 2 GB (cada uma um zip completo), mas quem chama a API direto ainda pode pedir a pasta inteira num zip só (memória constante, custo de CPU/disco).
 - **Retomada de upload só soltando o mesmo arquivo de novo** (até 24 h): o navegador não guarda o `File`, e a retomada automática foi descartada (ver Decisões).
 - **Sem histórico de uploads**: o painel lista, filtra e exporta o que não foi enviado, mas só enquanto a aba está aberta. Nada fica gravado no navegador nem no servidor, e a Auditoria não registra envios de usuários logados.
+- **Painel do admin é um retrato do agora**:
+  - não guarda série histórica; para gráficos ao longo do tempo, ligue `/metrics` num Prometheus;
+  - "ativo agora" tem resolução de 5 a 10 min, porque o último acesso da sessão só é gravado a cada 5 min;
+  - a lista de envios em andamento fica em memória e zera num reinício;
+  - o uso de cada usuário só aparece com o índice de nomes pronto.
 - **Listagem paginada só na ordem do servidor**: enquanto faltam páginas, o filtro da pasta e `Ctrl+A` só alcançam o que já foi carregado. `Ctrl+A` nessa situação avisa quantos itens ficaram de fora e como chegar a eles: rolar até o fim para excluir, mover ou copiar tudo, ou tirar a seleção e usar **Baixar**, que zipa a pasta inteira no servidor.
 - **Índice de nomes não vê mudanças externas** (Samba, SSH) até a próxima varredura completa ou um "Reconstruir índice". O intervalo (6 h de fábrica) é escolhido pelo admin em **Configurações do sistema**, de 15 min a 7 dias, com o custo da última varredura à vista e o botão **Varrer agora**, que dispara uma na hora e remarca a próxima a partir dela.
 - **Miniaturas só de imagem, e só de alguns formatos**: HEIC, AVIF, RAW, PDF e vídeo exigiriam bibliotecas em C, incompatíveis com o binário estático e a imagem distroless. Decidido não cobrir esses formatos: eles caem no ícone por tipo, que é um resultado aceitável.

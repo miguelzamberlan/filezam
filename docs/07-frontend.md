@@ -43,7 +43,7 @@ web/src/
 | `/account` | Account, "Minha conta": tudo o que é da pessoa, em duas abas com a escolhida em `?aba=` — **Preferências** (`components/Preferences.tsx`: geral, idioma, tema, visualização, zoom, cores) e **Senha e segurança** (trocar senha; 2FA: ativar com `TotpSetup`, desativar, novos códigos). Quem precisa ativar o 2FA abre direto na segunda. Entrada pelo cartão do usuário no rodapé do menu, ao lado do botão Sair | idem |
 | `/notifications` | Notifications (lista de `/api/notifications` com o texto montado por `kind` + `data` no idioma ativo; "Abrir pasta" navega e marca como lida, a página em si não marca nada; contagem de não lidas em `useUnreadNotifications`, polling de 30 s só com a aba visível, que alimenta o contador no menu, o ponto no `MenuButton` e um toast quando a contagem sobe) | idem |
 | `/jobs` | Jobs ("Operações": em andamento com progresso e cancelamento + histórico de 30 dias vindo de `/api/jobs/history`; polling de 1 s só enquanto há job rodando) | idem |
-| `/shares`, `/admin/users`, `/admin/audit` | idem | idem (admin para `/admin/*`; a API também valida) |
+| `/shares`, `/admin/dashboard`, `/admin/users`, `/admin/audit` | idem | idem (admin para `/admin/*`; a API também valida) |
 | `/s/:token/*` | PublicShare (ramifica para PublicDrop quando `mode: drop`) | — |
 
 `Protected` redireciona para `/login` sem sessão, para `/change-password` quando `mustChangePassword` e para `/setup-2fa` quando `totpRequired`. Login em duas etapas: `Api.login` pode devolver `{totpRequired, token}`; a tela troca para o campo de código (app ou recuperação) com "Confiar neste dispositivo por 30 dias" e chama `Api.loginTOTP`. `TotpSetup` gera o QR com a biblioteca `qrcode` como `data:` URL numa `<img>` (nada de SVG injetado).
@@ -170,6 +170,19 @@ Só arquivos soltos entram: uma pasta arrastada é ignorada, porque o link é pl
 geraria colisões de nome. A configuração do cliente (`chunkSize`, `maxParallel`, `maxFileBytes`) vem
 do próprio `GET /api/public/{token}`, já que `/api/config` exige sessão.
 
+## AdminDashboard (`pages/AdminDashboard.tsx`)
+
+Primeiro item de Administração no menu. Lê `GET /api/admin/dashboard` com `refetchInterval` de 15 s. O react-query não busca com a aba em segundo plano, então a página aberta e esquecida não pesa. De cima para baixo:
+
+- **Cartões**: ativos agora, enviando agora, operações, links no ar, disco (barra com as cores do `DiskBar`) e lixeira.
+- **Atenção**: alertas calculados no cliente por `lib/dashboard.ts` (`dashboardAlerts`, com testes). Disco a partir de 80 % (aviso) e 90 % (perigo), cota a partir de 90 %, login bloqueado, links quebrados, falhas de login em 24 h, envio em blocos parado há 1 h e índice desligado ou em construção. Os dois últimos só aparecem quando alguém tem cota. O texto de cada alerta fica em `S.alert*`.
+- **Em andamento**: envios por usuário ou link (ponto verde pulsando com requisição em curso), arquivos grandes em blocos com progresso e operações de todos.
+- **Usuários**: último acesso ("ativo agora" até 10 min), sessões, uso e cota com barra, e links.
+- **Sessões abertas**: navegador resumido por `lib/userAgent.ts` (`describeUserAgent`, com o texto original no `title`), IP e o botão **Encerrar**, com confirmação. A sessão atual mostra "esta sessão" no lugar do botão.
+- **Atividade recente**: logins, falhas e bloqueios em 24 h, links criados e arquivos recebidos por links em 7 dias.
+
+Tabelas largas rolam dentro do próprio cartão, e colunas secundárias somem em telas estreitas.
+
 ## AdminSettings (`pages/AdminSettings.tsx`)
 
 Interruptores de endereço personalizado e link de recebimento, mais os tetos deste último. Cada
@@ -178,7 +191,7 @@ mudança é um `PATCH` imediato que invalida `['settings']` e `['config']` — a
 
 ## Diálogos e toasts (`components/dialogs.tsx`)
 
-API imperativa baseada em Promises: `dialogs.prompt({title, initial, selectExt})`, `dialogs.confirm({danger})`, `dialogs.conflict(name)` → `{choice, all}`, `dialogs.custom(render)`. `DialogHost` renderiza a pilha; `Modal` fecha com Esc e clique fora. `toast(text, kind)`.
+API imperativa baseada em Promises: `dialogs.prompt({title, initial, selectExt})`, `dialogs.confirm({danger})`, `dialogs.conflict(name, existing?)` → `{choice, all}` (com `existing` diferente de `name`, a mensagem diz com que nome o item já está lá),  `dialogs.custom(render)`. `DialogHost` renderiza a pilha; `Modal` fecha com Esc e clique fora. `toast(text, kind)`.
 
 ## Propriedades e disco
 
@@ -201,6 +214,8 @@ Ver [05](05-uploads.md) para o protocolo. Estados de item: `queued → uploading
 `nextWork()` prioriza blocos de arquivos chunked já em andamento, depois o primeiro item da fila (lote agrupado, único ou nova sessão). O painel mostra progresso total, velocidade, ETA, contadores, pausa, cancelar tudo, repetir falhos. Com itens falhos ou cancelados, aparece uma faixa com a caixa "Só os não enviados (N)" (filtra a lista virtualizada e se desfaz sozinha quando não sobra nenhum), copiar a lista (`copyText`) e baixar CSV. As funções puras ficam em `upload/report.ts`: `problemText` e `problemCsv`, este separado por `;` e com BOM para o Excel em português, e `downloadText`, que baixa via `Blob` sem passar pelo servidor. Enquanto houver item na fila ou enviando, inclusive pausado, `UploadPanel` registra `beforeunload`; `PublicDrop` faz o mesmo para o envio anônimo. Na lista, tamanho e status têm largura mínima e não encolhem; quem cede espaço é o nome (truncado), e a lista só rola na vertical — rótulos longos como "Cancelado" não criam rolagem horizontal.
 
 A velocidade é amostrada em janelas de 1s e suavizada por EMA (`0.75 * anterior + 0.25 * instantânea`); `formatSpeed` a imprime sempre com duas casas decimais, deixando só a unidade mudar (B/s, KB/s, MB/s…), e o painel usa `tabular-nums` para o número não mudar de largura a cada atualização.
+
+Nomes comparados no cliente (checagem antes de colar ou arrastar, `uniqueName` do "Manter ambos") usam `nameKey` de `lib/paths.ts`: NFC e minúsculas, espelhando `vfs.NameKey`. Diferenças raras entre as duas funções (o `ß`, por exemplo) só fazem o cliente perguntar ou desviar à toa; quem decide é o servidor.
 
 ## Estilo
 

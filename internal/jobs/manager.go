@@ -282,3 +282,23 @@ func (m *Manager) Wait(d time.Duration) {
 	case <-time.After(d):
 	}
 }
+
+// RunningAll returns every job still in progress, of all users, oldest first (painel do admin).
+func (m *Manager) RunningAll() []OwnedView {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := []OwnedView{}
+	for _, j := range m.jobs {
+		if v := j.Snapshot(); v.State == StateRunning {
+			out = append(out, OwnedView{View: v, UserID: j.userID})
+		}
+	}
+	sort.Slice(out, func(a, b int) bool { return out[a].StartedAt < out[b].StartedAt })
+	return out
+}
+
+// OwnedView is a job snapshot with its owner.
+type OwnedView struct {
+	View
+	UserID int64 `json:"userId"`
+}

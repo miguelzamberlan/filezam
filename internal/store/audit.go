@@ -11,6 +11,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
 
 // AuditEntry is one audit log row.
@@ -60,4 +61,31 @@ func (db *DB) ListAudit(ctx context.Context, before int64, limit int) ([]AuditEn
 func (db *DB) PruneAudit(ctx context.Context, olderThan int64) error {
 	_, err := db.w.ExecContext(ctx, `DELETE FROM audit_log WHERE ts<?`, olderThan)
 	return err
+}
+
+// CountAuditSince counts entries per action since ts, restricted to the given actions.
+func (db *DB) CountAuditSince(ctx context.Context, since int64, actions ...string) (map[string]int64, error) {
+	out := map[string]int64{}
+	if len(actions) == 0 {
+		return out, nil
+	}
+	q := `SELECT action, COUNT(*) FROM audit_log WHERE ts>=? AND action IN (?` + strings.Repeat(",?", len(actions)-1) + `) GROUP BY action`
+	args := []any{since}
+	for _, a := range actions {
+		args = append(args, a)
+	}
+	rows, err := db.r.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var a string
+		var n int64
+		if err := rows.Scan(&a, &n); err != nil {
+			return nil, err
+		}
+		out[a] = n
+	}
+	return out, rows.Err()
 }

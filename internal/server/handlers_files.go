@@ -455,33 +455,40 @@ type writeOpts struct {
 	IfMtime int64
 }
 
-// storeSmallFile writes body to dir/name via a temp part and finalizes it.
-func (s *Server) storeSmallFile(root *vfs.Root, dir, name string, o writeOpts, body io.Reader) (*vfs.Entry, error) {
+// storeSmallFile writes body to dir/name via a temp part and finalizes it, returning the path
+// actually written: pastas e arquivos de nome equivalente (outra caixa) são reaproveitados, e
+// sem overwrite um equivalente é conflito antes de ler o corpo. names may be nil.
+func (s *Server) storeSmallFile(root *vfs.Root, names *vfs.Namer, dir, name string, o writeOpts, body io.Reader) (string, *vfs.Entry, error) {
 	if err := vfs.ValidName(name); err != nil {
-		return nil, err
+		return "", nil, err
 	}
-	if err := root.MkdirAll(dir); err != nil {
-		return nil, err
+	if names == nil {
+		names = root.NewNamer()
 	}
-	if !o.Overwrite {
-		if ok, err := root.Exists(vfs.Join(dir, name)); err != nil {
-			return nil, err
-		} else if ok {
-			return nil, errors.Join(vfs.ErrExists, errors.New(name))
+	dir, err := names.MkdirAll(dir)
+	if err != nil {
+		return "", nil, err
+	}
+	if cur, err := names.Lookup(dir, name); err != nil {
+		return "", nil, err
+	} else if cur != "" {
+		if !o.Overwrite {
+			return "", nil, &vfs.NameTakenError{Existing: cur}
 		}
+		name = cur
 	}
 	id, err := auth.NewID(8)
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 	f, err := root.CreatePart(dir, id, 0)
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
-	fail := func(err error) (*vfs.Entry, error) {
+	fail := func(err error) (string, *vfs.Entry, error) {
 		f.Close()
 		_ = root.RemovePart(dir, id)
-		return nil, vfs.MapError(err)
+		return "", nil, vfs.MapError(err)
 	}
 	if _, err := io.Copy(f, body); err != nil {
 		return fail(err)
@@ -493,7 +500,7 @@ func (s *Server) storeSmallFile(root *vfs.Root, dir, name string, o writeOpts, b
 	}
 	if err := f.Close(); err != nil {
 		_ = root.RemovePart(dir, id)
-		return nil, vfs.MapError(err)
+		return "", nil, vfs.MapError(err)
 	}
 	if o.Mtime > 0 {
 		_ = root.Chtimes(vfs.Join(dir, vfs.PartName(id)), uploads.ClampMtime(o.Mtime))
@@ -505,16 +512,19 @@ func (s *Server) storeSmallFile(root *vfs.Root, dir, name string, o writeOpts, b
 		if err != nil || cur.Mtime != o.IfMtime {
 			_ = root.RemovePart(dir, id)
 			if err != nil {
-				return nil, err
+				return "", nil, err
 			}
-			return nil, errModified
+			return "", nil, errModified
 		}
 	}
-	if err := root.Finalize(dir, id, name, o.Overwrite); err != nil {
+	name, err = root.Finalize(dir, id, name, o.Overwrite, names)
+	if err != nil {
 		_ = root.RemovePart(dir, id)
-		return nil, err
+		return "", nil, err
 	}
-	return root.Stat(vfs.Join(dir, name))
+	p := vfs.Join(dir, name)
+	e, err := root.Stat(p)
+	return p, e, err
 }
 
 func (s *Server) acquireUpload(u *store.User) (func(), error) {
@@ -547,6 +557,11 @@ func (s *Server) handlePutContent(w http.ResponseWriter, r *http.Request) error 
 	if r.ContentLength > s.cfg.ChunkSize {
 		return errorf(http.StatusRequestEntityTooLarge, "too_large", "use chunked upload for files larger than %d bytes", s.cfg.ChunkSize)
 	}
+	// Só o envio de arquivos manda mtime; a gravação do editor não aparece como upload no painel.
+	isUpload := r.URL.Query().Has("mtime")
+	if isUpload {
+		defer s.activity.begin(u.ID, 0)()
+	}
 	incoming := r.ContentLength
 	if incoming < 0 {
 		incoming = s.cfg.ChunkSize
@@ -555,11 +570,14 @@ func (s *Server) handlePutContent(w http.ResponseWriter, r *http.Request) error 
 		return err
 	}
 	ifMtime, _ := strconv.ParseInt(r.URL.Query().Get("ifMtime"), 10, 64)
-	e, err := s.storeSmallFile(root, vfs.Dir(p), vfs.Base(p), writeOpts{Mtime: mtime, Overwrite: queryBool(r, "overwrite"), IfMtime: ifMtime}, bodyReader(w, r, s.cfg.ChunkSize))
+	p, e, err := s.storeSmallFile(root, nil, vfs.Dir(p), vfs.Base(p), writeOpts{Mtime: mtime, Overwrite: queryBool(r, "overwrite"), IfMtime: ifMtime}, bodyReader(w, r, s.cfg.ChunkSize))
 	if err != nil {
 		return err
 	}
 	s.usageAdd(userFrom(r).ID, e.Size)
+	if isUpload {
+		s.activity.add(u.ID, 0, 1, e.Size)
+	}
 	s.indexTouch(indexAncestors(userFrom(r).Scope, vfs.Join(userFrom(r).Scope, p))...)
 	writeJSON(w, r, 201, map[string]any{"entry": e, "path": p})
 	return nil
@@ -574,11 +592,13 @@ type batchMeta struct {
 }
 
 type batchResult struct {
-	Path  string     `json:"path"`
-	OK    bool       `json:"ok"`
-	Code  string     `json:"code,omitempty"`
-	Error string     `json:"error,omitempty"`
-	Entry *vfs.Entry `json:"entry,omitempty"`
+	Path     string     `json:"path"`
+	OK       bool       `json:"ok"`
+	Code     string     `json:"code,omitempty"`
+	Error    string     `json:"error,omitempty"`
+	Existing string     `json:"existing,omitempty"` // conflito com nome equivalente: o que já está no disco
+	Entry    *vfs.Entry `json:"entry,omitempty"`
+	written  string     // caminho gravado de fato (pode diferir de Path na caixa das pastas ou do nome)
 }
 
 // handleBatch accepts a multipart body: part "meta" (JSON manifest) followed by
@@ -594,6 +614,7 @@ func (s *Server) handleBatch(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	defer release()
+	defer s.activity.begin(u.ID, 0)()
 	if err := s.checkQuota(r.Context(), u, max64(r.ContentLength, 0)); err != nil {
 		return err
 	}
@@ -608,6 +629,7 @@ func (s *Server) handleBatch(w http.ResponseWriter, r *http.Request) error {
 		return errorf(http.StatusBadRequest, "bad_multipart", "multipart body required")
 	}
 	var meta batchMeta
+	names := root.NewNamer() // a pasta de destino é lida uma vez por lote, não uma vez por arquivo
 	results := []batchResult{}
 	seen := map[int]bool{}
 	for {
@@ -646,17 +668,20 @@ func (s *Server) handleBatch(w http.ResponseWriter, r *http.Request) error {
 			continue
 		}
 		full := vfs.Join(dir, rel)
-		e, err := s.storeSmallFile(root, vfs.Dir(full), vfs.Base(full), writeOpts{Mtime: spec.Mtime, Overwrite: overwrite}, part)
+		written, e, err := s.storeSmallFile(root, names, vfs.Dir(full), vfs.Base(full), writeOpts{Mtime: spec.Mtime, Overwrite: overwrite}, part)
 		if err != nil {
 			ae := toAPIError(err)
 			results[idx].Code, results[idx].Error = ae.Code, ae.Message
+			if ex, ok := ae.Extra["existing"].(string); ok {
+				results[idx].Existing = ex
+			}
 			if ae.Status >= 500 || ae.Code == "no_space" {
 				s.log.Warn("batch file failed", "path", full, "err", err)
 			}
 			io.Copy(io.Discard, part)
 			continue
 		}
-		results[idx].OK, results[idx].Entry = true, e
+		results[idx].OK, results[idx].Entry, results[idx].written = true, e, written
 	}
 	for i := range results {
 		if !seen[i] && results[i].Code == "" {
@@ -664,16 +689,18 @@ func (s *Server) handleBatch(w http.ResponseWriter, r *http.Request) error {
 		}
 	}
 	var stored []string
-	var added int64
+	var added, files int64
 	for _, res := range results {
 		if res.OK {
+			files++
 			if res.Entry != nil {
 				added += res.Entry.Size
 			}
-			stored = append(stored, indexAncestors(userFrom(r).Scope, vfs.Join(userFrom(r).Scope, dir, res.Path))...)
+			stored = append(stored, indexAncestors(userFrom(r).Scope, vfs.Join(userFrom(r).Scope, res.written))...)
 		}
 	}
 	s.usageAdd(u.ID, added)
+	s.activity.add(u.ID, 0, files, added)
 	if len(stored) > 0 {
 		s.indexTouch(stored...)
 	}
@@ -700,9 +727,11 @@ func (s *Server) handleMkdir(w http.ResponseWriter, r *http.Request) error {
 	if p == "" {
 		return vfs.ErrRootOp
 	}
-	if err := root.MkdirAll(vfs.Dir(p)); err != nil {
+	parent, err := root.MkdirAll(vfs.Dir(p))
+	if err != nil {
 		return err
 	}
+	p = vfs.Join(parent, vfs.Base(p))
 	if err := root.Mkdir(p); err != nil {
 		return err
 	}

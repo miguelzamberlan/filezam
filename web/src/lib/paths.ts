@@ -71,14 +71,24 @@ export function isWithin(parent: string, child: string): boolean {
   return parent === '' || child === parent || child.startsWith(parent + '/')
 }
 
-/** Make "name (n).ext" not present in `taken`. */
+/**
+ * nameKey é a forma de comparar dois nomes da mesma pasta para decidir conflito, espelhando
+ * vfs.NameKey no servidor: sem diferenciar maiúsculas e com a mesma normalização Unicode (NFC),
+ * porque Windows e Samba tratam "C8347.MP4" e "C8347.mp4" como o mesmo arquivo. Acentos contam.
+ */
+export function nameKey(name: string): string {
+  return name.normalize('NFC').toLowerCase()
+}
+
+/** Make "name (n).ext" with nothing equivalent (see nameKey) in `taken`. */
 export function uniqueName(name: string, taken: Set<string>): string {
-  if (!taken.has(name)) return name
+  const keys = new Set([...taken].map(nameKey))
+  if (!keys.has(nameKey(name))) return name
   const i = name.lastIndexOf('.')
   const [base, ext] = i > 0 ? [name.slice(0, i), name.slice(i)] : [name, '']
   for (let n = 1; n < 10000; n++) {
     const cand = `${base} (${n})${ext}`
-    if (!taken.has(cand)) return cand
+    if (!keys.has(nameKey(cand))) return cand
   }
   return `${base}-${Date.now()}${ext}`
 }

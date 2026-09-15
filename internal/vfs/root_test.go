@@ -275,10 +275,10 @@ func TestUploadPartFinalize(t *testing.T) {
 	if len(l.Parts) != 1 || len(l.Entries) != 2 {
 		t.Errorf("part visible? parts=%v entries=%d", l.Parts, len(l.Entries))
 	}
-	if err := r.Finalize("a", "id1", "file.txt", false); !errors.Is(err, ErrExists) {
+	if _, err := r.Finalize("a", "id1", "file.txt", false, nil); !errors.Is(err, ErrExists) {
 		t.Errorf("finalize over existing without overwrite: %v", err)
 	}
-	if err := r.Finalize("a", "id1", "new.txt", false); err != nil {
+	if _, err := r.Finalize("a", "id1", "new.txt", false, nil); err != nil {
 		t.Fatal(err)
 	}
 	if b, _ := os.ReadFile(filepath.Join(root, "a", "new.txt")); string(b) != "0123456789" {
@@ -290,10 +290,10 @@ func TestUploadPartFinalize(t *testing.T) {
 	f, _ = r.CreatePart("a", "id2", 3)
 	f.WriteAt([]byte("abc"), 0)
 	f.Close()
-	if err := r.Finalize("a", "id2", "sub", true); !errors.Is(err, ErrIsDir) {
+	if _, err := r.Finalize("a", "id2", "sub", true, nil); !errors.Is(err, ErrIsDir) {
 		t.Errorf("finalize onto dir: %v", err)
 	}
-	if err := r.Finalize("a", "id2", "file.txt", true); err != nil {
+	if _, err := r.Finalize("a", "id2", "file.txt", true, nil); err != nil {
 		t.Fatal(err)
 	}
 	if b, _ := os.ReadFile(filepath.Join(root, "a", "file.txt")); string(b) != "abc" {

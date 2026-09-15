@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { create } from 'zustand'
 import { S } from '../strings'
+import { basename } from '../lib/paths'
 import type { ConflictAnswer } from '../upload/manager'
 import { IAlert } from './Icons'
 
@@ -31,7 +32,7 @@ interface ConfirmOpts {
 type Dialog =
   | { kind: 'prompt'; title: string; label?: string; initial?: string; selectExt?: boolean; validate?: (v: string) => string | null; resolve: (v: string | null) => void }
   | { kind: 'confirm'; resolve: (ok: boolean) => void } & ConfirmOpts
-  | { kind: 'conflict'; name: string; resolve: (a: ConflictAnswer) => void }
+  | { kind: 'conflict'; name: string; existing?: string; resolve: (a: ConflictAnswer) => void }
   | { kind: 'custom'; render: (close: () => void) => ReactNode; resolve: () => void }
 
 interface DialogState {
@@ -54,8 +55,9 @@ export const dialogs = {
   confirm(opts: ConfirmOpts) {
     return new Promise<boolean>((resolve) => useDialogs.getState().push({ kind: 'confirm', ...opts, resolve }))
   },
-  conflict(name: string) {
-    return new Promise<ConflictAnswer>((resolve) => useDialogs.getState().push({ kind: 'conflict', name, resolve }))
+  /** existing: o nome que já está no destino, quando difere de name só na caixa ou na forma Unicode. */
+  conflict(name: string, existing?: string) {
+    return new Promise<ConflictAnswer>((resolve) => useDialogs.getState().push({ kind: 'conflict', name, existing, resolve }))
   },
   custom(render: (close: () => void) => ReactNode) {
     return new Promise<void>((resolve) => useDialogs.getState().push({ kind: 'custom', render, resolve }))
@@ -164,7 +166,7 @@ function ConflictDialog({ d, close }: { d: Extract<Dialog, { kind: 'conflict' }>
   return (
     <Modal onClose={() => answer('cancel')}>
       <h2 className="text-base font-semibold">{S.conflictTitle}</h2>
-      <p className="mt-1 break-all text-sm text-neutral-600 dark:text-neutral-400">{S.conflictMessage(d.name)}</p>
+      <p className="mt-1 break-all text-sm text-neutral-600 dark:text-neutral-400">{d.existing && d.existing !== basename(d.name) ? S.conflictMessageAs(d.name, d.existing) : S.conflictMessage(d.name)}</p>
       <label className="mt-3 flex items-center gap-2 text-sm">
         <input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} /> {S.applyToAll}
       </label>

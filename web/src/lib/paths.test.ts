@@ -7,7 +7,7 @@
 // alterar este cabeçalho viola a licença e os direitos autorais do autor.
 
 import { describe, expect, it } from 'vitest'
-import { basename, decodePath, dirChain, dirname, encodePath, join, resolveRelative, uniqueName } from './paths'
+import { basename, decodePath, dirChain, dirname, encodePath, join, nameKey, resolveRelative, uniqueName } from './paths'
 
 describe('paths', () => {
   it('resolveRelative', () => {
@@ -36,6 +36,14 @@ describe('paths', () => {
     expect(uniqueName('a.txt', new Set())).toBe('a.txt')
     expect(uniqueName('a.txt', new Set(['a.txt']))).toBe('a (1).txt')
     expect(uniqueName('a.txt', new Set(['a.txt', 'a (1).txt']))).toBe('a (2).txt')
+    // nomes equivalentes (outra caixa) também ocupam o lugar
+    expect(uniqueName('C8347.MP4', new Set(['c8347.mp4', 'C8347 (1).mp4']))).toBe('C8347 (2).MP4')
+  })
+
+  it('nameKey', () => {
+    expect(nameKey('C8347.MP4')).toBe(nameKey('c8347.mp4'))
+    expect(nameKey('Ac\u0327a\u0303o.txt')).toBe(nameKey('a\u00e7\u00e3o.TXT'))
+    expect(nameKey('relatório.pdf')).not.toBe(nameKey('relatorio.pdf'))
     expect(uniqueName('noext', new Set(['noext']))).toBe('noext (1)')
   })
 })

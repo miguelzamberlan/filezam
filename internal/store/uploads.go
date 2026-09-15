@@ -146,3 +146,22 @@ func (db *DB) ActiveUploadIDs(ctx context.Context) (map[string]bool, error) {
 	}
 	return out, rows.Err()
 }
+
+// ListOpenUploads lists every open chunked session, including the ones of drop links (painel do
+// admin, que só lê: diferente de ListUploads, não há interface que aborte o que aparece aqui).
+func (db *DB) ListOpenUploads(ctx context.Context) ([]*Upload, error) {
+	rows, err := db.r.QueryContext(ctx, `SELECT `+uploadCols+` FROM uploads ORDER BY updated_at DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []*Upload{}
+	for rows.Next() {
+		u, err := scanUpload(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, u)
+	}
+	return out, rows.Err()
+}

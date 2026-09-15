@@ -147,6 +147,18 @@ func received(u *store.Upload) []int {
 	return out
 }
 
+// ReceivedBytes is how much of the session already reached the disk (chunks marked as received).
+func ReceivedBytes(u *store.Upload) int64 {
+	n := nchunks(u.Size, u.ChunkSize)
+	var total int64
+	for i := 0; i < n; i++ {
+		if bitSet(u.Received, i) {
+			total += chunkLen(u.Size, u.ChunkSize, i)
+		}
+	}
+	return total
+}
+
 func missing(u *store.Upload) []int {
 	n := nchunks(u.Size, u.ChunkSize)
 	var out []int
@@ -186,14 +198,21 @@ func (s *Service) Create(ctx context.Context, root *vfs.Root, o CreateOpts) (*In
 	if o.Size < 0 || o.Size > MaxUploadSize {
 		return nil, fmt.Errorf("%w: size out of range", vfs.ErrInvalidPath)
 	}
-	if err := root.MkdirAll(o.Dir); err != nil {
+	names := root.NewNamer()
+	dir, err := names.MkdirAll(o.Dir)
+	if err != nil {
 		return nil, err
 	}
-	target := vfs.Join(o.Dir, o.Name)
-	if exists, err := root.Exists(target); err != nil {
+	o.Dir = dir
+	// Nome equivalente já no disco (outra caixa): sem overwrite é conflito na hora, antes de
+	// transferir um byte; com overwrite a sessão grava sobre o existente, com o nome dele.
+	if cur, err := names.Lookup(o.Dir, o.Name); err != nil {
 		return nil, err
-	} else if exists && !o.Overwrite {
-		return nil, fmt.Errorf("%w: %s", vfs.ErrExists, o.Name)
+	} else if cur != "" {
+		if !o.Overwrite {
+			return nil, &vfs.NameTakenError{Existing: cur}
+		}
+		o.Name = cur
 	}
 	if free := root.DiskFree(); free > 0 && uint64(o.Size) > free {
 		return nil, vfs.ErrNoSpace
@@ -366,7 +385,8 @@ func (s *Service) Complete(ctx context.Context, root *vfs.Root, ref SessionRef) 
 	if u.Mtime != nil {
 		_ = root.Chtimes(vfs.Join(dir, vfs.PartName(id)), clampMtime(*u.Mtime))
 	}
-	if err := root.Finalize(dir, id, u.Name, u.Overwrite); err != nil {
+	name, err := root.Finalize(dir, id, u.Name, u.Overwrite, nil)
+	if err != nil {
 		return nil, nil, err
 	}
 	// A partir daqui o arquivo já existe com o nome final: desistir agora deixaria a sessão viva
@@ -374,7 +394,7 @@ func (s *Service) Complete(ctx context.Context, root *vfs.Root, ref SessionRef) 
 	// acontece mesmo que quem enviou tenha fechado a aba no exato instante da finalização.
 	_ = s.db.DeleteUpload(context.WithoutCancel(ctx), id)
 	s.unlock(id)
-	e, err := root.Stat(vfs.Join(dir, u.Name))
+	e, err := root.Stat(vfs.Join(dir, name))
 	if err != nil {
 		return nil, nil, err
 	}

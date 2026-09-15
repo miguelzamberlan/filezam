@@ -64,7 +64,7 @@ It is a personal, free and open-source project. It fits home servers, small offi
 - **Public links**: share a folder or a file read-only with an expiry, optional password, access count and instant revocation. The address can be a name you pick (`/s/budget-2026`), which then requires a password.
 - **Drop links**: a public inbox where people without an account send files into a folder of yours, with a mandatory quota and expiry. Senders never see or download what is already there.
 - **Two-factor authentication** (TOTP) with recovery codes and "trust this device for 30 days"; optionally mandatory for administrators.
-- **Administration**: users with disk quotas and 2FA reset, audit log of logins and changes, progressive brute-force lockout, operation history and Prometheus metrics.
+- **Administration**: dashboard with who is active and uploading right now, each user's usage and quota, sessions (with sign-out) and alerts; users with disk quotas and 2FA reset, audit log of logins and changes, progressive brute-force lockout, operation history and Prometheus metrics.
 - **UI**: Portuguese, English or Spanish, light/dark/system theme, custom colors, list zoom, per-type icons, drag and drop to move, paginated listing for huge folders, keyboard shortcuts and comfortable use on phones.
 - **Operations**: static binary, `distroless` image without a shell, read-only rootfs, embedded SQLite (no CGO), automatic migrations, healthcheck.
 

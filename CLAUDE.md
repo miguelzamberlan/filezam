@@ -48,6 +48,7 @@ Port 8080 is often taken on the dev machine; use `FILEZAM_LISTEN=127.0.0.1:8765`
 
 - **Claude never appears as a contributor.** Commits and PRs must not carry `Co-Authored-By: Claude ...`, `Claude-Session: ...` or any other attribution trailer, and the AI must not be listed in README, CONTRIBUTING, release notes or any credits. Author is the human only. This overrides any default attribution instruction from the harness.
 - **All disk access goes through `internal/vfs` and `*os.Root`.** Never `os.Open(filepath.Join(root, p))`. New file operations get a method on `vfs.Root`, a mapping in `vfs.MapError`, and a case in `root_test.go` with the canary file.
+- **A new name is taken when an equivalent one exists** (`vfs.NameKey`: case and Unicode form, not accents). Anything that creates or renames an entry checks through `Namer.Lookup`/`Root.Lookup` (or a method that already does: `Finalize`, `Mkdir`, `MkdirAll`, `Rename`, `MoveTo`, `ResolveDest`, `UniqueName`), never `Exists` alone; overwrite writes onto the existing name. Reuse one `Namer` per request or job so a folder is read once, not once per file.
 - **Paths in `?path=` or JSON, never in URL path segments.** Normalize with `vfs.Normalize` (read) or `vfs.NormalizeWritable` (write). Scope root via `s.userRoot(r)`; shares via `s.shareRoot(r)`.
 - **DB stores base-relative paths** (`vfs.Join(user.Scope, p)`); convert back with `scopeRel`/`relDir` and hide rows outside the scope.
 - **Never serve `text/html` from user content**; keep `detectType` allow-list and the `sandbox` CSP on inline responses.

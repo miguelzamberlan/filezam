@@ -309,3 +309,79 @@ export interface AppNotification {
   updatedAt: number
   readAt: number | null
 }
+
+// Painel do administrador (GET /api/admin/dashboard)
+export interface DashUser {
+  id: number
+  username: string
+  role: 'admin' | 'user'
+  scope: string
+  disabled: boolean
+  locked: boolean
+  totp: boolean
+  quota: number
+  used: number | null // null enquanto o índice de pesquisa não está pronto
+  sessions: number
+  lastSeenAt: number | null
+  shares: number
+  dropShares: number
+}
+
+export interface DashSession {
+  id: string
+  userId: number
+  ip: string
+  userAgent: string
+  createdAt: number
+  lastSeenAt: number
+  current: boolean
+}
+
+export interface DashActivity {
+  userId: number
+  shareId?: number
+  files: number
+  bytes: number
+  since: number
+  lastAt: number
+  inflight: number
+}
+
+export interface DashUpload {
+  userId: number
+  shareId?: number
+  path: string
+  size: number
+  received: number
+  createdAt: number
+  updatedAt: number
+}
+
+export interface DashJob {
+  id: string
+  userId: number
+  type: JobType
+  label: string
+  done: number
+  total: number
+  bytesDone: number
+  bytesTotal: number
+  startedAt: number
+}
+
+export interface Dashboard {
+  now: number
+  activeUsers: number
+  users: DashUser[]
+  sessions: DashSession[]
+  activity: DashActivity[]
+  uploads: DashUpload[]
+  jobs: DashJob[]
+  shareRefs: { id: number; name: string; mode: 'read' | 'drop'; ownerId: number }[]
+  shares: { read: number; drop: number; broken: number; expiring: number; created7d: number }
+  logins24h: { ok: number; failed: number; locked: number }
+  drops7d: { files: number; bytes: number }
+  disk: { total: number; free: number }
+  trash?: { items: number; bytes: number }
+  index: { enabled: boolean; ready?: boolean; running?: boolean; lastFullAt?: number | null }
+}

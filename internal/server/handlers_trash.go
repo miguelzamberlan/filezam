@@ -211,18 +211,17 @@ func (s *Server) handleTrashRestore(w http.ResponseWriter, r *http.Request) erro
 	for _, it := range items {
 		dst := it.Path
 		dir := vfs.Dir(dst)
-		if err := s.base.MkdirAll(dir); err != nil {
+		dir, err := s.base.MkdirAll(dir)
+		if err != nil {
 			failed = append(failed, res{ID: it.ID, Code: toAPIError(err).Code})
 			continue
 		}
-		if ok, _ := s.base.Exists(dst); ok {
-			name, err := s.base.UniqueName(dir, it.Name)
-			if err != nil {
-				failed = append(failed, res{ID: it.ID, Code: toAPIError(err).Code})
-				continue
-			}
-			dst = vfs.Join(dir, name)
+		name, err := s.base.UniqueIfExists(dir, it.Name)
+		if err != nil {
+			failed = append(failed, res{ID: it.ID, Code: toAPIError(err).Code})
+			continue
 		}
+		dst = vfs.Join(dir, name)
 		if err := s.base.RestoreFromTrash(r.Context(), it.TrashDir, it.ID, it.Name, dst); err != nil {
 			if errors.Is(err, vfs.ErrNotFound) {
 				_ = s.db.DeleteTrash(r.Context(), it.ID) // linha sem item (queda ao excluir): some da lista

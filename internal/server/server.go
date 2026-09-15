@@ -68,8 +68,9 @@ type Server struct {
 	secretKey   []byte               // cifra dos segredos TOTP e HMAC do cookie de dispositivo confiável
 	pending     pendingState         // logins à espera do código TOTP e cadastros em andamento
 	quota       quotaCache
-	set         settingsCache // configurações globais editadas pelo admin (migração 011)
-	adminMu     sync.Mutex    // serializa alterações de usuários: a checagem de "último admin" não é atômica no banco
+	activity    uploadActivity // envios em andamento, para o painel do admin
+	set         settingsCache  // configurações globais editadas pelo admin (migração 011)
+	adminMu     sync.Mutex     // serializa alterações de usuários: a checagem de "último admin" não é atômica no banco
 
 	bg     context.Context
 	cancel context.CancelFunc
@@ -396,6 +397,8 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.Handle("PATCH /api/admin/settings", admin(s.handleAdminSettingsUpdate))
 	mux.Handle("GET /api/admin/dirs", admin(s.handleAdminDirs))
 	mux.Handle("GET /api/admin/audit", admin(s.handleAdminAudit))
+	mux.Handle("GET /api/admin/dashboard", admin(s.handleAdminDashboard))
+	mux.Handle("DELETE /api/admin/sessions/{id}", admin(s.handleAdminSessionRevoke))
 	mux.Handle("GET /api/admin/index", admin(s.handleAdminIndex))
 	mux.Handle("POST /api/admin/reindex", admin(s.handleAdminReindex))
 

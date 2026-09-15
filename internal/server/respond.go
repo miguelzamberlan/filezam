@@ -73,7 +73,13 @@ func toAPIError(err error) *apiError {
 	case errors.Is(err, vfs.ErrNotFound), errors.Is(err, store.ErrNotFound):
 		return errorf(http.StatusNotFound, "not_found", "not found")
 	case errors.Is(err, vfs.ErrExists):
-		return errorf(http.StatusConflict, "exists", "%s", err.Error())
+		ae := errorf(http.StatusConflict, "exists", "%s", err.Error())
+		// Nome equivalente com outra grafia: a interface mostra qual é o que já está lá.
+		var taken *vfs.NameTakenError
+		if errors.As(err, &taken) {
+			ae.Extra = map[string]any{"existing": vfs.Base(taken.Existing)}
+		}
+		return ae
 	case errors.Is(err, vfs.ErrIsDir):
 		return errorf(http.StatusConflict, "is_dir", "target is a directory")
 	case errors.Is(err, vfs.ErrBadArchive):

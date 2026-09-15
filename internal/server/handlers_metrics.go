@@ -12,6 +12,7 @@ import (
 	"crypto/subtle"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/miguelzamberlan/filezam/internal/metrics"
 )
@@ -45,6 +46,19 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) error {
 	}
 	if n, err := s.db.CountSessions(ctx); err == nil {
 		add("filezam_sessions_active", "Live sessions", "", float64(n))
+	}
+	if list, err := s.db.ListLiveSessions(ctx); err == nil {
+		seen := map[int64]bool{}
+		for _, se := range list {
+			if time.Now().Unix()-se.LastSeenAt <= int64(sessionActiveWindow.Seconds()) {
+				seen[se.UserID] = true
+			}
+		}
+		add("filezam_users_active", "Users seen in the last 10 minutes", "", float64(len(seen)))
+	}
+	add("filezam_upload_senders_active", "Users and drop links uploading now (activity in the last 2 minutes)", "", float64(len(s.activity.snapshot())))
+	if ups, err := s.db.ListOpenUploads(ctx); err == nil {
+		add("filezam_upload_sessions_open", "Open chunked upload sessions", "", float64(len(ups)))
 	}
 	if shares, err := s.db.ListShares(ctx, 0); err == nil {
 		active := 0

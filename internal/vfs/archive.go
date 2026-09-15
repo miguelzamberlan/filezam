@@ -98,6 +98,8 @@ func (r *Root) ExtractZip(ctx context.Context, src, dstDir string, lim ExtractLi
 	}
 	defer dst.Close()
 	depth := Depth(dstDir)
+	// "Docs/a.txt" e "docs/b.txt" no mesmo zip vão para a mesma pasta; "A.txt" e "a.txt", só o primeiro.
+	names := dst.NewNamer()
 
 	for _, e := range zr.File {
 		if err := ctx.Err(); err != nil {
@@ -117,7 +119,7 @@ func (r *Root) ExtractZip(ctx context.Context, src, dstDir string, lim ExtractLi
 			continue
 		}
 		if isDir || e.FileInfo().IsDir() {
-			if err := dst.MkdirAll(rel); err != nil {
+			if _, err := names.MkdirAll(rel); err != nil {
 				res.Skipped++
 				prog.warn(e.Name, err)
 				continue
@@ -131,7 +133,7 @@ func (r *Root) ExtractZip(ctx context.Context, src, dstDir string, lim ExtractLi
 			continue
 		}
 		prog.current(rel)
-		n, err := dst.writeEntry(rel, e, lim.MaxBytes-res.Bytes)
+		n, err := dst.writeEntry(names, rel, e, lim.MaxBytes-res.Bytes)
 		res.Bytes += n
 		prog.add(0, n)
 		switch {
@@ -255,12 +257,18 @@ func entryPath(name string, depth int) (rel string, isDir bool, ok bool) {
 }
 
 // writeEntry copies one archive entry, refusing to go past budget bytes.
-func (r *Root) writeEntry(rel string, e *zip.File, budget int64) (int64, error) {
-	if dir := Dir(rel); dir != "" {
-		if err := r.MkdirAll(dir); err != nil {
-			return 0, err
-		}
+func (r *Root) writeEntry(names *Namer, rel string, e *zip.File, budget int64) (int64, error) {
+	dir, err := names.MkdirAll(Dir(rel))
+	if err != nil {
+		return 0, err
 	}
+	if cur, err := names.Lookup(dir, Base(rel)); err != nil {
+		return 0, err
+	} else if cur != "" {
+		return 0, nameTaken(Join(dir, cur))
+	}
+	rel = Join(dir, Base(rel))
+	names.Add(dir, Base(rel))
 	// O_EXCL não segue symlink e falha se o nome já existe: é o que garante que uma entrada
 	// duplicada não sobrescreva a anterior, e que nada fora da pasta seja alcançado.
 	out, err := r.r.OpenFile(osPath(rel), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
