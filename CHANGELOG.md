@@ -4,6 +4,8 @@ Todas as mudanças relevantes do Filezam ficam registradas aqui. O formato segue
 
 ## [Não lançado]
 
+## [1.4.0] - 2026-09-14
+
 ### Adicionado
 - **Lista do que não foi enviado**: quando um envio de muitos arquivos para no meio, o painel de uploads filtra só os que falharam ou foram cancelados, copia a lista com o caminho e o motivo de cada um e baixa um CSV que abre direto no Excel. Assim dá para saber o que falta sem conferir a pasta arquivo por arquivo.
 - **Painel do administrador**: novo primeiro item de Administração.
@@ -137,7 +139,8 @@ Primeira versão pública.
 - `docker-compose.yml` de referência com serviço `init` para permissões, sub-rede fixa e contêiner somente leitura sem capabilities.
 - Documentação completa em `docs/`: arquitetura, segurança, API, uploads, banco, frontend, operação (Docker, Easypanel, systemd, proxies), testes e roadmap.
 
-[Não lançado]: https://github.com/miguelzamberlan/filezam/compare/v1.3.0...HEAD
+[Não lançado]: https://github.com/miguelzamberlan/filezam/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/miguelzamberlan/filezam/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/miguelzamberlan/filezam/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/miguelzamberlan/filezam/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/miguelzamberlan/filezam/compare/v1.1.0...v1.1.1

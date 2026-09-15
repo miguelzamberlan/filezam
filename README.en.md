@@ -324,7 +324,7 @@ What is known to be missing (resuming interrupted operations, passkeys) and what
 
 ## Versions
 
-The current version is **1.3.0**; the history is in [`CHANGELOG.md`](CHANGELOG.md) *(Portuguese)*. The project uses semantic versioning: published versions never change, and fixes and features ship as new versions. In production, pin a version (`ghcr.io/miguelzamberlan/filezam:1.3.0`, or `:1.3` to receive only fixes) instead of following `main`. Details in [`CONTRIBUTING.md`](CONTRIBUTING.md#versões-e-lançamentos) *(Portuguese)*.
+The current version is **1.4.0**; the history is in [`CHANGELOG.md`](CHANGELOG.md) *(Portuguese)*. The project uses semantic versioning: published versions never change, and fixes and features ship as new versions. In production, pin a version (`ghcr.io/miguelzamberlan/filezam:1.4.0`, or `:1.4` to receive only fixes) instead of following `main`. Details in [`CONTRIBUTING.md`](CONTRIBUTING.md#versões-e-lançamentos) *(Portuguese)*.
 
 ## Author and license
 
