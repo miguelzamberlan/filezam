@@ -87,12 +87,35 @@ type Service struct {
 
 	mu       sync.Mutex
 	locks    map[string]*sync.Mutex
-	createMu sync.Mutex // conferir o teto e inserir a sessão sem corrida entre duas criações
+	writing  map[string]int // blocos em voo por sessão: quem está recebendo bytes agora não é descartado
+	createMu sync.Mutex     // conferir o teto e inserir a sessão sem corrida entre duas criações
 }
 
 // New creates a service. maxReserved caps the bytes one user's open sessions may reserve (0: no cap).
 func New(db *store.DB, chunkSize int64, fsync bool, maxReserved int64, log *slog.Logger) *Service {
-	return &Service{db: db, chunkSize: chunkSize, fsync: fsync, maxReserved: maxReserved, log: log, locks: map[string]*sync.Mutex{}}
+	return &Service{db: db, chunkSize: chunkSize, fsync: fsync, maxReserved: maxReserved, log: log,
+		locks: map[string]*sync.Mutex{}, writing: map[string]int{}}
+}
+
+// beginWrite marks a chunk as in flight for a session and returns the function that clears it.
+func (s *Service) beginWrite(id string) func() {
+	s.mu.Lock()
+	s.writing[id]++
+	s.mu.Unlock()
+	return func() {
+		s.mu.Lock()
+		if s.writing[id]--; s.writing[id] <= 0 {
+			delete(s.writing, id)
+		}
+		s.mu.Unlock()
+	}
+}
+
+// writingNow reports whether a chunk is being written to the session at this instant.
+func (s *Service) writingNow(id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.writing[id] > 0
 }
 
 // ChunkSize returns the configured chunk size.
@@ -223,7 +246,7 @@ func (s *Service) Create(ctx context.Context, root *vfs.Root, o CreateOpts) (*In
 	}
 	u := &store.Upload{ID: id, UserID: o.UserID, ShareID: o.ShareID, Sender: o.Sender, SentName: o.SentName, Dir: vfs.Join(o.Scope, o.Dir), Name: o.Name, Size: o.Size, Mtime: o.Mtime,
 		ChunkSize: s.chunkSize, Received: make([]byte, (nchunks(o.Size, s.chunkSize)+7)/8), Overwrite: o.Overwrite}
-	if err := s.insert(ctx, u); err != nil {
+	if err := s.insert(ctx, u, func(old string) { _ = root.RemovePart(o.Dir, old) }); err != nil {
 		return nil, err
 	}
 	f, err := root.CreatePart(o.Dir, id, o.Size)
@@ -238,9 +261,12 @@ func (s *Service) Create(ctx context.Context, root *vfs.Root, o CreateOpts) (*In
 // insert records the session if the user's reservations stay under the cap. A sessão
 // pré-aloca o tamanho declarado no disco antes de receber um byte: sem teto, um usuário sem
 // cota ocuparia o disco inteiro por até 24 h.
-func (s *Service) insert(ctx context.Context, u *store.Upload) error {
+func (s *Service) insert(ctx context.Context, u *store.Upload, dropPart func(id string)) error {
 	s.createMu.Lock()
 	defer s.createMu.Unlock()
+	if err := s.supersede(ctx, u, dropPart); err != nil {
+		return err
+	}
 	if s.maxReserved > 0 {
 		reserved, err := s.db.ReservedBytes(ctx, u.UserID)
 		if err != nil {
@@ -257,6 +283,50 @@ func (s *Service) insert(ctx context.Context, u *store.Upload) error {
 		return err
 	}
 	return nil
+}
+
+// supersede clears an open session that occupies the same target when the client is sending
+// another file. Sem isso, um envio interrompido (aba fechada, rede caída) trancava aquele nome
+// por até 24 h: reenviar o mesmo vídeo em outra qualidade — outro tamanho, e por isso impossível
+// de retomar — falhava com ErrInProgress e não havia saída por item, só descartar todas as
+// pendências. Só é descartada a sessão do mesmo dono (e, no modo drop, do mesmo remetente) que
+// (a) declara um arquivo diferente, porque tamanho e mtime iguais são uma retomada, que o
+// cliente adota, e (b) não está recebendo bloco nenhum neste instante: quem está enviando agora
+// tem sempre um PUT em voo, e não perde o que já subiu para outra aba do mesmo usuário.
+func (s *Service) supersede(ctx context.Context, u *store.Upload, dropPart func(id string)) error {
+	cur, err := s.db.GetUploadTarget(ctx, u.UserID, u.Dir, u.Name)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return nil
+		}
+		return err
+	}
+	if cur.ShareID != u.ShareID || cur.Sender != u.Sender || !otherFile(cur, u) || s.writingNow(cur.ID) {
+		return nil // o insert recusa com ErrInProgress, como antes
+	}
+	if dropPart != nil {
+		dropPart(cur.ID)
+	}
+	s.unlock(cur.ID)
+	if err := s.db.DeleteUpload(ctx, cur.ID); err != nil {
+		return err
+	}
+	s.log.Info("superseded interrupted upload", "id", cur.ID, "dir", cur.Dir, "name", cur.Name, "size", cur.Size, "newSize", u.Size)
+	return nil
+}
+
+// otherFile reports whether b certainly describes bytes different from a's, pelo mesmo par com
+// que o cliente casa uma sessão pendente: tamanho e mtime (tolerância de 1 s, como em
+// manager.ts). Sem mtime dos dois lados não dá para afirmar nada, e a dúvida preserva a sessão.
+func otherFile(a, b *store.Upload) bool {
+	if a.Size != b.Size {
+		return true
+	}
+	if a.Mtime == nil || b.Mtime == nil {
+		return false
+	}
+	d := *a.Mtime - *b.Mtime
+	return d <= -1000 || d >= 1000
 }
 
 // load fetches a session and checks that the caller may touch it. Toda falha vira ErrNotFound:
@@ -309,6 +379,9 @@ func (s *Service) List(ctx context.Context, userID int64, scope string) ([]*Info
 // WriteChunk stores chunk `index` from body, which must be exactly the expected length.
 func (s *Service) WriteChunk(ctx context.Context, root *vfs.Root, ref SessionRef, index int, length int64, body io.Reader) (*Info, error) {
 	id, scope := ref.ID, ref.Scope
+	// Marcado antes de carregar a sessão: enquanto este bloco estiver em voo, uma criação
+	// concorrente para o mesmo destino não descarta a sessão debaixo dele (supersede).
+	defer s.beginWrite(id)()
 	u, err := s.load(ctx, ref)
 	if err != nil {
 		return nil, err

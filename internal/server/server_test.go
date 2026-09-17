@@ -1673,6 +1673,63 @@ func TestUploadSessionsPerUserAndReserve(t *testing.T) {
 	}
 }
 
+// Enviar OUTRO arquivo com o mesmo nome de um envio interrompido substitui a sessão parada:
+// o vídeo reexportado em outra qualidade tem outro tamanho, não dá para retomar a sessão antiga
+// e ela trancava o nome por 24 h. Mesmo tamanho e mesmo mtime continuam sendo retomada.
+func TestUploadSessionSupersededByAnotherFile(t *testing.T) {
+	admin, _, root := newEnv(t)
+	admin.login("admin", "admin")
+	admin.expect("POST", "/api/auth/password", map[string]string{"current": "admin", "new": "correct horse battery"}, 200)
+	create := func(size int, mtime int64, status int) map[string]any {
+		body := map[string]any{"dir": "", "name": "video.mp4", "size": size}
+		if mtime > 0 {
+			body["mtime"] = mtime
+		}
+		return admin.expect("POST", "/api/uploads", body, status)
+	}
+	part := func(id string) string { return filepath.Join(root, vfs.PartName(id)) }
+
+	// envio interrompido: 3 MiB, metade no disco
+	old := create(3<<20, 1700000000000, 201)
+	oldID := old["id"].(string)
+	admin.expect("PUT", "/api/uploads/"+oldID+"?index=0", bytes.Repeat([]byte("a"), 1<<20), 200)
+
+	// mesmo arquivo (tamanho e mtime iguais, ±1 s): continua sendo retomada, não recriação
+	if o := create(3<<20, 1700000000500, 409); code(o) != "upload_in_progress" {
+		t.Fatalf("mesmo arquivo deveria ser retomado: %v", o)
+	}
+	// sem mtime não dá para afirmar que é outro arquivo
+	if o := create(3<<20, 0, 409); code(o) != "upload_in_progress" {
+		t.Fatalf("sem mtime: %v", o)
+	}
+
+	// outro arquivo com o mesmo nome: a sessão parada sai, com a parte dela
+	fresh := create(5<<20, 1800000000000, 201)
+	newID := fresh["id"].(string)
+	if newID == oldID {
+		t.Fatal("nova sessão deveria ter outro id")
+	}
+	if _, err := os.Stat(part(oldID)); !os.IsNotExist(err) {
+		t.Fatalf("parte da sessão antiga ficou no disco: %v", err)
+	}
+	admin.expect("GET", "/api/uploads/"+oldID, nil, 404)
+	if ups := admin.expect("GET", "/api/uploads", nil, 200)["uploads"].([]any); len(ups) != 1 {
+		t.Fatalf("sessões abertas: %v", ups)
+	}
+	// e o envio novo conclui inteiro
+	data := bytes.Repeat([]byte("b"), 5<<20)
+	for i := 0; i < 5; i++ {
+		admin.expect("PUT", "/api/uploads/"+newID+"?index="+strconv.Itoa(i), data[i<<20:(i+1)<<20], 200)
+	}
+	admin.expect("POST", "/api/uploads/"+newID+"/complete", nil, 200)
+	got, err := os.ReadFile(filepath.Join(root, "video.mp4"))
+	if err != nil || !bytes.Equal(got, data) {
+		t.Fatalf("conteúdo final: %v, %d bytes", err, len(got))
+	}
+	// A sessão que está recebendo um bloco neste instante não é descartada: a garantia está em
+	// TestSupersedeSpares..., no pacote uploads, onde o bloco em voo é determinístico.
+}
+
 // dropEnv liga os dois recursos novos (nascem desligados) e devolve o admin já logado.
 func dropEnv(t *testing.T) (*client, *Server, string) {
 	t.Helper()

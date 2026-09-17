@@ -60,6 +60,12 @@ func (db *DB) GetUpload(ctx context.Context, id string) (*Upload, error) {
 	return scanUpload(db.r.QueryRowContext(ctx, `SELECT `+uploadCols+` FROM uploads WHERE id=?`, id))
 }
 
+// GetUploadTarget fetches the session that occupies a target, the triple of the unique index
+// (migração 010). ErrNotFound quando o destino está livre.
+func (db *DB) GetUploadTarget(ctx context.Context, userID int64, dir, name string) (*Upload, error) {
+	return scanUpload(db.r.QueryRowContext(ctx, `SELECT `+uploadCols+` FROM uploads WHERE user_id=? AND dir=? AND name=?`, userID, dir, name))
+}
+
 // ReservedBytes sums the declared sizes of the user's open sessions (pre-allocated on disk).
 // Inclui de propósito as sessões dos links de envio dele: elas ocupam o mesmo disco, e este é
 // o teto de último recurso.

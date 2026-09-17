@@ -4,6 +4,9 @@ Todas as mudanças relevantes do Filezam ficam registradas aqui. O formato segue
 
 ## [Não lançado]
 
+### Corrigido
+- **Reenviar um arquivo em outra versão depois de um envio interrompido**: subir de novo o mesmo vídeo em qualidade maior (outro tamanho, mesmo nome) falhava com "Já existe um envio em andamento para este arquivo" quando o envio anterior daquele nome tinha parado no meio — aba fechada, rede caída. O nome ficava trancado por até 24 horas e a única saída era descartar todos os envios incompletos. Agora o envio parado cede o lugar para o arquivo novo, com os pedaços dele apagados do disco. Um envio que está acontecendo naquele instante, em outra aba, continua protegido, e retomar o **mesmo** arquivo segue funcionando como antes.
+
 ## [1.4.0] - 2026-09-14
 
 ### Adicionado

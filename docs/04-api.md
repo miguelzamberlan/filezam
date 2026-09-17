@@ -96,7 +96,7 @@ Sync-or-job: o servidor aguarda até 300 ms; se o job terminou, `job.state` já 
 
 | Método | Rota | Auth | Descrição |
 |---|---|---|---|
-| POST | `/api/uploads` | U | `{dir, name, size, mtime, overwrite}` → 201 `Upload` (`dir`/`name` já resolvidos para o que existe no disco); 409 `exists` (destino, ou nome equivalente, existe e `overwrite=false`), 409 `upload_in_progress` (o mesmo usuário já tem sessão para o destino; sessões de outros usuários não conflitam), 413 `upload_reserve_exceeded` (as sessões abertas do usuário já reservam `FILEZAM_UPLOAD_MAX_RESERVED`), 507 `no_space` |
+| POST | `/api/uploads` | U | `{dir, name, size, mtime, overwrite}` → 201 `Upload` (`dir`/`name` já resolvidos para o que existe no disco); 409 `exists` (destino, ou nome equivalente, existe e `overwrite=false`), 409 `upload_in_progress` (o mesmo usuário já tem sessão para o destino, com o mesmo arquivo ou recebendo blocos agora; uma sessão parada de **outro** arquivo é substituída pela nova, e sessões de outros usuários não conflitam — ver [05](05-uploads.md#criar-sessão)), 413 `upload_reserve_exceeded` (as sessões abertas do usuário já reservam `FILEZAM_UPLOAD_MAX_RESERVED`), 507 `no_space` |
 | GET | `/api/uploads` | U | `{uploads: Upload[]}` pendentes do usuário dentro do escopo |
 | GET | `/api/uploads/{id}` | U | `Upload` |
 | PUT | `/api/uploads/{id}?index=N` | U | Corpo bruto do bloco N com `Content-Length` exato → `Upload`; 400 `bad_index`/`bad_length`, 411 `length_required`, 413 `too_large` |
