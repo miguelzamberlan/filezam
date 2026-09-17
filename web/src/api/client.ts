@@ -6,6 +6,7 @@
 // Aviso legal protegido pela seção 7(b) da AGPLv3 e pelo NOTICE.md: remover ou
 // alterar este cabeçalho viola a licença e os direitos autorais do autor.
 
+import { useUpdate } from '../lib/updates'
 import type {
   AdminUser, AppConfig, AppNotification, ZipPart, ZipPlan, AuditEntry, Conflict, Dashboard, DiskUsage, Entry, EntryInfo, Favorite, IndexStatus, Job, JobRecord, ListPage, Listing, PublicInfo, SearchResult, Settings, Share, TrashItem, UploadSession, User,
 } from './types'
@@ -58,6 +59,9 @@ export async function api<T>(method: string, url: string, body?: unknown, init: 
   } catch (e) {
     throw new ApiError(0, 'network', String(e))
   }
+  // Antes do tratamento de erro: uma resposta 401 ou 500 também diz qual servidor respondeu, e é
+  // justamente depois de uma atualização que a aba antiga tende a esbarrar em alguma delas.
+  useUpdate.getState().note(res.headers.get('X-Filezam-Version'))
   if (!res.ok) {
     const err = await parseError(res)
     if (err.status === 401 && onUnauthorized && !url.startsWith('/api/auth/login')) onUnauthorized()

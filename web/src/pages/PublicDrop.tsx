@@ -10,6 +10,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEv
 import { useQueryClient } from '@tanstack/react-query'
 import type { PublicInfo } from '../api/types'
 import { formatBytes, formatRelative } from '../lib/format'
+import { useReloadHold } from '../lib/updates'
 import { S, errorMessage } from '../strings'
 import { DropUploader } from '../upload/dropUploader'
 import { ICheck, IAlert, IUpload, ISpinner, IClose, IRefresh, iconFor } from '../components/Icons'
@@ -53,6 +54,7 @@ export default function PublicDrop({ token, info }: { token: string; info: Publi
     window.addEventListener('beforeunload', onBeforeUnload)
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
   }, [sending])
+  useReloadHold(sending)
 
   const quota = info.quotaBytes ?? 0
   const used = info.usedBytes ?? 0

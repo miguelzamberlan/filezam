@@ -13,6 +13,7 @@ import { useUI } from '../store/ui'
 import { formatBytes, formatDuration, formatSpeed } from '../lib/format'
 import { S, errorMessage } from '../strings'
 import { copyText } from '../lib/clipboard'
+import { useReloadHold } from '../lib/updates'
 import { downloadText, isProblem, problemCsv, problemText } from '../upload/report'
 import { IClose, IPause, IPlay, IChevronRight, IUpload, ICheck, IAlert, ICopy, IDownload } from './Icons'
 
@@ -58,6 +59,9 @@ export default function UploadPanel() {
     window.addEventListener('beforeunload', onBeforeUnload)
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
   }, [busy])
+  // A lista também morre com a aba, e a dos que falharam é justamente o que o usuário ainda tem
+  // de resolver: o recarregamento automático espera ele repetir ou limpar.
+  useReloadHold(busy || problems.length > 0)
 
   if (snap.items.length === 0) return null
   const pct = snap.bytesTotal > 0 ? (snap.bytesDone / snap.bytesTotal) * 100 : 0

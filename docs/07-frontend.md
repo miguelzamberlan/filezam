@@ -15,7 +15,8 @@ web/src/
   api/types.ts        Tipos espelhando docs/04
   lib/                paths (join/dirname/encode/uniqueName), naturalSort, format,
                       clipboard (copyText com fallback), share (shareLink), fold (comparação sem
-                      acentos), about (nome, versão, autor, licença e URL do código-fonte)
+                      acentos), about (nome, versão, autor, licença e URL do código-fonte),
+                      updates (versão do servidor vista no header + travas do reload automático)
   store/ui.ts         zustand: seleção, âncora, foco, clipboard, ordenação, visão, filtro
   store/jobs.ts       zustand: jobs acompanhados pelos toasts
   upload/manager.ts   UploadManager (sem React) — fila, modos, slots, retries, conflitos, retomada
@@ -80,6 +81,26 @@ Atalhos: `↑ ↓ Home End PgUp PgDn` (com Shift estende), `→ ←` na grade, `
 `Credits` mostra "Powered by Filezam vX.Y.Z · Desenvolvido originalmente por Miguel Zamberlan", a licença (AGPL-3.0, link para o texto da GNU) e **Código-fonte** (link para `APP.sourceUrl`). São os Avisos Legais Apropriados da AGPLv3 e a atribuição exigida pelo `NOTICE.md`: não se removem, e uma versão modificada troca só `sourceUrl` pelo endereço do próprio código (seção 13). Aparece em três lugares: no pé do menu lateral, abaixo do cartão da conta (`stacked`, uma informação por linha para caber nos 240 px), e numa faixa fixa embaixo das telas sem menu — login, troca de senha, 2FA e links públicos (leitura e recebimento) —, pelo `WithCredits` em `App.tsx`. Texto de 11 px em cinza, sem cor de destaque.
 
 A versão da interface tem uma fonte só, `web/package.json`: o `vite.config.ts` lê o número e o injeta como `__APP_VERSION__` (`define`, declarado em `globals.d.ts`), que `lib/about.ts` expõe como `APP.version`. O binário recebe a tag por `-X main.version` e a release recusa a tag se o `package.json` disser outro número, então os dois nunca divergem numa versão publicada. O mesmo `vite.config.ts` põe no topo do JS de entrada o comentário `/*! Filezam vX.Y.Z | (C) 2026 Miguel Zamberlan | AGPL-3.0-only | <repositório> */`, no `generateBundle` — o `output.banner` do Rollup passa antes do minificador, que o descartava.
+
+## Atualização do servidor com a aba aberta
+
+`index.html` sai com `Cache-Control: no-store` e os assets têm hash no nome (`immutable`), então **recarregar já troca o bundle inteiro** — não há cache a furar, e o que fica no `localStorage` são as preferências, válidas em qualquer versão. Falta só a aba saber que precisa recarregar.
+
+Toda resposta traz `X-Filezam-Version` (ver [04](04-api.md#versão-e-atualização)). O `api()` em `api/client.ts` passa o valor para `useUpdate.note()` (`lib/updates.ts`), antes do tratamento de erro — depois de uma atualização é justamente numa resposta de erro que a aba velha tende a esbarrar. Diferente da versão do próprio bundle, `components/UpdateBanner.tsx` mostra a faixa "O Filezam foi atualizado para a versão X.Y.Z · Recarregar", empilhada com os toasts no mesmo contêiner (`ToastHost`) para nunca se cobrirem. Nenhuma requisição existe só para isso: a consulta de não lidas (30 s com a aba visível) faz até uma aba parada descobrir sozinha. `dev` de um dos lados desliga a comparação — no `make dev` o binário se diz `dev` e o bundle traz o número do `package.json`.
+
+**Recarregar sozinho só quando nada se perde.** A faixa reconfere a cada 15 s e em cada `visibilitychange`, e só chama `location.reload()` com a aba **escondida** e sem nenhuma trava: quem está olhando decide a hora, quem saiu volta já na versão nova. As travas são `useReloadHold(active)` (`lib/updates.ts`, um contador simples), usadas em:
+
+| Onde | Enquanto |
+|---|---|
+| `UploadPanel` | há envio na fila ou em andamento, ou sobraram itens que falharam na lista |
+| `PublicDrop` | há envio na fila ou em andamento |
+| `Editor` | estiver aberto, mesmo sem alterações |
+| `DialogHost` | houver diálogo na pilha |
+| `Browser` | houver recortar/copiar esperando colar |
+
+É de propósito mais abrangente que o `beforeunload`, que só cobre perda de dados: fechar um editor limpo não perde nada, mas ninguém quer voltar à aba e encontrá-lo fechado. Uma tela nova com trabalho em andamento só precisa chamar `useReloadHold`.
+
+Uma tentativa por versão anunciada, registrada em `sessionStorage` (`filezam.autoReloadedTo`, que sobrevive à recarga e vale só naquela aba): se recarregar não resolver — um binário publicado com número diferente do bundle que ele embute, um proxy servindo assets de outra versão —, sem isso a aba escondida recarregaria de 15 em 15 segundos para sempre. A faixa fica na tela para a recarga manual, e uma atualização posterior, com outro número, volta a valer. Sem `sessionStorage` disponível não há recarga automática.
 
 ## Celular e toque
 

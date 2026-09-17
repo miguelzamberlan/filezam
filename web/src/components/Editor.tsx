@@ -10,6 +10,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Api, ApiError } from '../api/client'
 import type { Entry } from '../api/types'
 import { extOf, formatBytes } from '../lib/format'
+import { useReloadHold } from '../lib/updates'
 import { S, errorMessage } from '../strings'
 import { dialogs, toast } from './dialogs'
 import { ICheck, IClose, IEye, ISpinner } from './Icons'
@@ -80,6 +81,9 @@ export default function Editor({ path, entry, maxText, assetUrl, onClose, onSave
     window.addEventListener('beforeunload', onBeforeUnload)
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
   }, [dirty])
+  // Enquanto o editor estiver aberto, mesmo sem alterações: recarregar sozinho o fecharia, e
+  // voltar para a aba e encontrar o arquivo fechado é perder o lugar onde se estava.
+  useReloadHold(true)
 
   const save = async () => {
     if (text === null || saving) return

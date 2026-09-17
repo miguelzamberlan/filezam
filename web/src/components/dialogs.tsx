@@ -10,8 +10,10 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { create } from 'zustand'
 import { S } from '../strings'
 import { basename } from '../lib/paths'
+import { useReloadHold } from '../lib/updates'
 import type { ConflictAnswer } from '../upload/manager'
 import { IAlert } from './Icons'
+import UpdateBanner from './UpdateBanner'
 
 /** Aviso destacado dentro de uma confirmação, com uma lista curta do que é afetado. */
 export interface ConfirmWarning {
@@ -182,6 +184,9 @@ function ConflictDialog({ d, close }: { d: Extract<Dialog, { kind: 'conflict' }>
 
 export function DialogHost() {
   const { stack, pop } = useDialogs()
+  // Um diálogo aberto é uma pergunta esperando resposta: recarregar sozinho por baixo dele
+  // descartaria a escolha e, num conflito de envio, o arquivo que ela decide.
+  useReloadHold(stack.length > 0)
   const d = stack[stack.length - 1]
   if (!d) return null
   switch (d.kind) {
@@ -224,6 +229,9 @@ export function ToastHost() {
   const { toasts, remove } = useToasts()
   return (
     <div className="pointer-events-none fixed left-1/2 top-3 z-[110] flex -translate-x-1/2 flex-col gap-2">
+      {/* A faixa de atualização divide esta pilha com os toasts em vez de ter um canto só dela:
+          empilhadas na mesma coluna, nunca se cobrem. */}
+      <UpdateBanner />
       {toasts.map((t) => (
         <div
           key={t.id}

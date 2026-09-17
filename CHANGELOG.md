@@ -4,6 +4,9 @@ Todas as mudanças relevantes do Filezam ficam registradas aqui. O formato segue
 
 ## [Não lançado]
 
+### Adicionado
+- **Aviso de atualização do servidor**: uma aba deixada aberta continua rodando a versão antiga da interface depois de o servidor ser atualizado. Agora ela percebe sozinha e mostra "O Filezam foi atualizado para a versão X.Y.Z", com um botão para recarregar. Quem decide a hora é o usuário — recarregar no meio de um envio ou de um texto não salvo perderia trabalho. Se a aba estiver em segundo plano e não houver nada em andamento (envio na fila, editor aberto, diálogo na tela, arquivos recortados esperando colar), ela se recarrega sozinha e o usuário volta já na versão nova.
+
 ### Corrigido
 - **Reenviar um arquivo em outra versão depois de um envio interrompido**: subir de novo o mesmo vídeo em qualidade maior (outro tamanho, mesmo nome) falhava com "Já existe um envio em andamento para este arquivo" quando o envio anterior daquele nome tinha parado no meio — aba fechada, rede caída. O nome ficava trancado por até 24 horas e a única saída era descartar todos os envios incompletos. Agora o envio parado cede o lugar para o arquivo novo, com os pedaços dele apagados do disco. Um envio que está acontecendo naquele instante, em outra aba, continua protegido, e retomar o **mesmo** arquivo segue funcionando como antes.
 

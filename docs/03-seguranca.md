@@ -164,7 +164,7 @@ produto manda o navegador guardar. As duas coisas têm tratamento próprio:
 
 ## Cabeçalhos HTTP
 
-Em todas as respostas: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: same-origin`, `Permissions-Policy` restritiva, `Cross-Origin-Opener-Policy: same-origin`, e `Strict-Transport-Security` quando a conexão é HTTPS (direta ou por proxy confiável).
+Em todas as respostas: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: same-origin`, `Permissions-Policy` restritiva, `Cross-Origin-Opener-Policy: same-origin`, `X-Filezam-Version` (ver [04](04-api.md#versão-e-atualização)) e `Strict-Transport-Security` quando a conexão é HTTPS (direta ou por proxy confiável).
 
 Na SPA: `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob:; font-src 'self' data:; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`. O build do Vite não emite scripts inline. `frame-src 'self'` existe para o iframe do preview de PDF.
 

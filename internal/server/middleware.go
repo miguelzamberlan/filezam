@@ -121,6 +121,12 @@ func (s *Server) securityHeaders(next http.Handler) http.Handler {
 		h.Set("Referrer-Policy", "same-origin")
 		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
 		h.Set("Cross-Origin-Opener-Policy", "same-origin")
+		// A aba que ficou aberta desde antes de uma atualização continua rodando o bundle antigo.
+		// Como o número é o mesmo dos dois lados numa versão publicada (package.json vira
+		// __APP_VERSION__ no bundle e -X main.version no binário), o cliente compara este header
+		// com o que embutiu e oferece recarregar. Vai em toda resposta de propósito: assim nenhuma
+		// requisição extra existe só para descobrir isso.
+		h.Set("X-Filezam-Version", s.version)
 		if s.isHTTPS(r) {
 			h.Set("Strict-Transport-Security", "max-age=31536000")
 		}

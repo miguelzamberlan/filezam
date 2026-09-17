@@ -119,6 +119,9 @@ export const ptBR = {
   skip: 'Pular',
   keepBoth: 'Manter ambos',
   applyToAll: 'Aplicar a todos',
+  // Faixa de atualização (components/UpdateBanner.tsx)
+  updateAvailable: (v: string) => `O Filezam foi atualizado para a versão ${v}.`,
+  updateReload: 'Recarregar',
   uploadPanelTitle: 'Uploads',
   uploadSpeed: 'velocidade',
   uploadRemaining: 'restante',

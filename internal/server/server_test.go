@@ -569,6 +569,19 @@ func TestSPAAndHeaders(t *testing.T) {
 	_ = u
 }
 
+// A aba antiga descobre a atualização pelo header, sem nenhuma requisição a mais: por isso ele
+// tem de vir em toda resposta, inclusive na do SPA e nas que não exigem sessão.
+func TestVersionHeader(t *testing.T) {
+	c, _, _ := newEnv(t)
+	for _, path := range []string{"/b/some/path", "/api/health", "/api/auth/me"} {
+		resp, _ := c.do("GET", path, nil, nil)
+		io.ReadAll(resp.Body)
+		if got := resp.Header.Get("X-Filezam-Version"); got != "test" {
+			t.Fatalf("%s: X-Filezam-Version = %q", path, got)
+		}
+	}
+}
+
 func TestInfoAndDisk(t *testing.T) {
 	admin, _, root := newEnv(t)
 	admin.login("admin", "admin")

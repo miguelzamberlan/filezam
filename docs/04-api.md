@@ -38,6 +38,10 @@ Timestamps: `mtime` em milissegundos; os demais em segundos Unix.
 | GET | `/api/health` | - | `{ok:true, version}`; 503 `db`/`root` se banco ou raiz indisponíveis |
 | GET | `/api/config` | S | `{chunkSize, batchMaxFiles, batchMaxBytes, batchFileMax, maxParallel, shareMaxTtl, publicUrl, trashRetention, require2fa, previewMaxText, version, slugsEnabled, dropEnabled, dropMaxTtl, dropMaxQuota, dropFileMax, dropMaxFiles}` (`trashRetention` em segundos; `0` = lixeira desativada) (`publicUrl` = `FILEZAM_PUBLIC_URL`, `""` quando não definido; `require2fa` = `FILEZAM_REQUIRE_2FA_ADMINS`) |
 
+### Versão e atualização
+
+Toda resposta, de qualquer rota (inclusive a SPA, as públicas e as de erro), traz `X-Filezam-Version` com a versão do binário — a mesma que `/api/health` e `/api/config` devolvem no corpo. É o que permite a uma aba aberta desde antes de uma atualização descobrir que o bundle que ela está rodando ficou velho, sem nenhuma requisição existir só para isso. O frontend compara com a versão embutida no build e oferece recarregar (ver [07](07-frontend.md#atualização-do-servidor-com-a-aba-aberta)); `dev` dos dois lados desliga a comparação.
+
 ## Autenticação
 
 | Método | Rota | Auth | Corpo → Resposta |

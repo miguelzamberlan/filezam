@@ -15,6 +15,7 @@ import { useAuth, useFavorites, useInvalidateDirs, useListing } from '../hooks'
 import { basename, decodePath, dirname, encodePath, isExtractable, join, nameKey } from '../lib/paths'
 import { sortEntries } from '../lib/naturalSort'
 import { fold } from '../lib/fold'
+import { useReloadHold } from '../lib/updates'
 import { useUI, ZOOM_STEPS } from '../store/ui'
 import { useJobs } from '../store/jobs'
 import { S, errorMessage } from '../strings'
@@ -92,6 +93,9 @@ export default function Browser() {
   const selectedEntries = useMemo(() => entries.filter((e) => ui.selection.has(e.name)), [entries, ui.selection])
   const cutNames = useMemo(() => (ui.clipboard?.op === 'cut' && ui.clipboard.dir === path ? new Set(ui.clipboard.names) : undefined), [ui.clipboard, path])
   const isFav = favs.data?.favorites.find((f) => f.path === path)
+  // Recortar/copiar esperando colar só existe na memória desta aba: recarregar sozinho
+  // desfaria a intenção sem o usuário perceber.
+  useReloadHold(!!ui.clipboard)
 
   useEffect(() => {
     ui.clearSelection()

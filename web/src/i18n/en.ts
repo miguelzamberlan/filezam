@@ -120,6 +120,8 @@ export const en: Strings = {
   skip: 'Skip',
   keepBoth: 'Keep both',
   applyToAll: 'Apply to all',
+  updateAvailable: (v: string) => `Filezam has been updated to version ${v}.`,
+  updateReload: 'Reload',
   uploadPanelTitle: 'Uploads',
   uploadSpeed: 'speed',
   uploadRemaining: 'left',
