@@ -816,8 +816,8 @@ func TestListDirs(t *testing.T) {
 	if len(o["dirs"].([]any)) != 0 {
 		t.Fatalf("pasta vazia devolve lista vazia, não null: %v", o)
 	}
-	bob.expect("GET", "/api/files/dirs?path=nota.txt", nil, 409)      // não é pasta
-	bob.expect("GET", "/api/files/dirs?path=../teamB", nil, 400)      // escapar do escopo
+	bob.expect("GET", "/api/files/dirs?path=nota.txt", nil, 409) // não é pasta
+	bob.expect("GET", "/api/files/dirs?path=../teamB", nil, 400) // escapar do escopo
 	bob.expect("GET", "/api/files/dirs?path=nao-existe", nil, 404)
 }
 
@@ -3579,5 +3579,353 @@ func TestDropEquivalentNamesStepAside(t *testing.T) {
 	}
 	if len(got) != 2 || got[0] != "Foto.JPG" || got[1] != "foto (1).jpg" {
 		t.Fatalf("drop folder: %v", got)
+	}
+}
+
+// ---- análise de mídia ----
+
+func mbox(typ string, parts ...[]byte) []byte {
+	var body []byte
+	for _, p := range parts {
+		body = append(body, p...)
+	}
+	out := mb32(uint32(len(body) + 8))
+	out = append(out, typ...)
+	return append(out, body...)
+}
+
+func mb32(v uint32) []byte { return []byte{byte(v >> 24), byte(v >> 16), byte(v >> 8), byte(v)} }
+func mb16(v uint16) []byte { return []byte{byte(v >> 8), byte(v)} }
+
+// testMP4 monta um MP4 mínimo mas legítimo: uma trilha de vídeo H.264, 300 quadros em 10 s.
+func testMP4(w, h uint16) []byte {
+	matrix := make([]byte, 36)
+	copy(matrix[0:], mb32(1<<16))
+	copy(matrix[16:], mb32(1<<16))
+	copy(matrix[32:], mb32(1<<30))
+
+	tk := append([]byte{0, 0, 0, 0}, make([]byte, 36)...)
+	tk = append(tk, matrix...)
+	tk = append(tk, mb32(uint32(w)<<16)...)
+	tk = append(tk, mb32(uint32(h)<<16)...)
+
+	md := append([]byte{0, 0, 0, 0}, make([]byte, 8)...)
+	md = append(md, mb32(600)...)
+	md = append(md, mb32(6000)...)
+	md = append(md, 0, 0, 0, 0)
+
+	hd := append([]byte{0, 0, 0, 0}, 0, 0, 0, 0)
+	hd = append(hd, "vide"...)
+	hd = append(hd, make([]byte, 12)...)
+
+	entry := mb32(86)
+	entry = append(entry, "avc1"...)
+	entry = append(entry, make([]byte, 24)...)
+	entry = append(entry, mb16(w)...)
+	entry = append(entry, mb16(h)...)
+	entry = append(entry, make([]byte, 50)...)
+	sd := append([]byte{0, 0, 0, 0}, mb32(1)...)
+	sd = append(sd, entry...)
+
+	sz := append([]byte{0, 0, 0, 0}, mb32(0)...)
+	sz = append(sz, mb32(300)...)
+
+	mv := append([]byte{0, 0, 0, 0}, make([]byte, 8)...)
+	mv = append(mv, mb32(600)...)
+	mv = append(mv, mb32(6000)...)
+	mv = append(mv, make([]byte, 80)...)
+
+	stbl := mbox("stbl", mbox("stsd", sd), mbox("stsz", sz))
+	moov := mbox("moov", mbox("mvhd", mv), mbox("trak", mbox("tkhd", tk),
+		mbox("mdia", mbox("mdhd", md), mbox("hdlr", hd), mbox("minf", stbl))))
+	ftyp := mbox("ftyp", []byte("isom"), mb32(512), []byte("isomavc1"))
+	return append(append(ftyp, moov...), mbox("mdat", make([]byte, 64))...)
+}
+
+func statsOf(t *testing.T, out map[string]any) map[string]any {
+	t.Helper()
+	st, ok := out["stats"].(map[string]any)
+	if !ok {
+		t.Fatalf("resposta sem stats: %v", out)
+	}
+	return st
+}
+
+func num(t *testing.T, m map[string]any, key string) float64 {
+	t.Helper()
+	v, ok := m[key].(float64)
+	if !ok {
+		t.Fatalf("campo %q ausente em %v", key, m)
+	}
+	return v
+}
+
+// bucket procura uma faixa pelo identificador estável que o servidor devolve.
+func bucket(t *testing.T, st map[string]any, list, key string) map[string]any {
+	t.Helper()
+	arr, _ := st[list].([]any)
+	for _, it := range arr {
+		b, _ := it.(map[string]any)
+		if b != nil && b["key"] == key {
+			return b
+		}
+	}
+	return nil
+}
+
+func TestMediaStats(t *testing.T) {
+	admin, s, root := newEnv(t)
+	admin.login("admin", "admin")
+	admin.expect("POST", "/api/auth/password", map[string]string{"current": "admin", "new": "correct horse battery"}, 200)
+
+	dir := filepath.Join(root, "teamA", "midia")
+	if err := os.MkdirAll(filepath.Join(dir, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write := func(name string, b []byte) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, name), b, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("deitada.png", pngBytes(t, 1920, 1080))
+	write("empe.png", pngBytes(t, 1080, 1920))
+	write("quadrada.png", pngBytes(t, 400, 400))
+	write("nota.txt", []byte("não é mídia"))
+	write("quebrado.mp4", bytes.Repeat([]byte{7}, 512))
+	write("clipe.mp4", testMP4(1920, 1080))
+	write(filepath.Join("sub", "4k.mp4"), testMP4(3840, 2160))
+
+	out := admin.expect("POST", "/api/files/media/stats", map[string]any{"paths": []string{"teamA/midia"}}, 200)
+	st := statsOf(t, out)
+	if n := num(t, st, "files"); n != 7 {
+		t.Fatalf("arquivos: %v", n)
+	}
+	if num(t, st, "dirs") != 1 {
+		t.Fatalf("pastas: %v", st["dirs"])
+	}
+	if num(t, st, "images") != 3 || num(t, st, "videos") != 2 {
+		t.Fatalf("contagens: %v", st)
+	}
+	// nota.txt não é mídia; quebrado.mp4 prometia e não abriu — são coisas diferentes.
+	if num(t, st, "others") != 1 || num(t, st, "unreadable") != 1 {
+		t.Fatalf("outros/ilegíveis: %v %v", st["others"], st["unreadable"])
+	}
+	if num(t, st, "videoDuration") != 20000 {
+		t.Fatalf("duração somada: %v", st["videoDuration"])
+	}
+	if b := bucket(t, st, "videoRes", "4k"); b == nil || num(t, b, "count") != 1 {
+		t.Fatalf("faixa 4k: %v", st["videoRes"])
+	}
+	if b := bucket(t, st, "videoRes", "1080p"); b == nil || num(t, b, "count") != 1 {
+		t.Fatalf("faixa 1080p: %v", st["videoRes"])
+	}
+	for _, shape := range []string{"landscape", "portrait", "square"} {
+		if b := bucket(t, st, "imageShape", shape); b == nil || num(t, b, "count") != 1 {
+			t.Fatalf("orientação %s: %v", shape, st["imageShape"])
+		}
+	}
+	if b := bucket(t, st, "codecs", "H.264"); b == nil || num(t, b, "count") != 2 {
+		t.Fatalf("codecs: %v", st["codecs"])
+	}
+	if files, ok := out["files"].([]any); !ok || len(files) != 7 {
+		t.Fatalf("lista por arquivo: %v", out["files"])
+	}
+
+	// A leitura fica em cache, chaveada pelo caminho base-relativo.
+	n, err := s.db.CountMediaMeta(context.Background())
+	if err != nil || n != 6 { // três imagens, dois vídeos e o quebrado, este em cache negativo
+		t.Fatalf("cache: %d %v", n, err)
+	}
+
+	// Uma seleção mistura arquivo e pasta sem contar nada duas vezes.
+	out = admin.expect("POST", "/api/files/media/stats", map[string]any{
+		"paths": []string{"teamA/midia/clipe.mp4", "teamA/midia", "teamA/midia/sub"}}, 200)
+	if num(t, statsOf(t, out), "files") != 7 {
+		t.Fatalf("seleção sobreposta contou repetido: %v", statsOf(t, out)["files"])
+	}
+
+	// Um arquivo só traz os detalhes junto das propriedades.
+	info := admin.expect("GET", "/api/files/info?path=teamA/midia/clipe.mp4", nil, 200)
+	m, ok := info["media"].(map[string]any)
+	if !ok {
+		t.Fatalf("propriedades sem mídia: %v", info)
+	}
+	if m["width"].(float64) != 1920 || m["durationMs"].(float64) != 10000 || m["codec"] != "H.264" {
+		t.Fatalf("detalhes do vídeo: %v", m)
+	}
+	if info2 := admin.expect("GET", "/api/files/info?path=teamA/midia/nota.txt", nil, 200); info2["media"] != nil {
+		t.Fatalf("arquivo comum não tem mídia: %v", info2["media"])
+	}
+
+	// Exportação para planilha.
+	resp, _ := admin.do("GET", "/api/files/media/csv?path=teamA/midia", nil, nil)
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != 200 || !strings.HasPrefix(resp.Header.Get("Content-Type"), "text/csv") {
+		t.Fatalf("csv: %d %s", resp.StatusCode, resp.Header.Get("Content-Type"))
+	}
+	if !strings.Contains(string(body), "caminho,nome,bytes") || !strings.Contains(string(body), "clipe.mp4") {
+		t.Fatalf("csv sem conteúdo: %q", string(body)[:min(200, len(body))])
+	}
+	if strings.Contains(resp.Header.Get("Content-Disposition"), "inline") {
+		t.Fatal("o csv tem de ser anexo, nunca exibido no navegador")
+	}
+
+	// O teto de varredura marca o resultado como parcial em vez de fingir que acabou.
+	muitos := filepath.Join(root, "teamA", "muitos")
+	if err := os.MkdirAll(muitos, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 150; i++ {
+		if err := os.WriteFile(filepath.Join(muitos, strconv.Itoa(i)+".txt"), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	admin.expect("PATCH", "/api/admin/settings", map[string]any{"mediaMaxScan": 100}, 200)
+	out = admin.expect("POST", "/api/files/media/stats", map[string]any{"paths": []string{"teamA/muitos"}}, 200)
+	if statsOf(t, out)["partial"] != true {
+		t.Fatalf("parcial: %v", statsOf(t, out))
+	}
+	admin.expect("PATCH", "/api/admin/settings", map[string]any{"mediaMaxScan": 200000}, 200)
+	out = admin.expect("POST", "/api/files/media/stats", map[string]any{"paths": []string{"teamA/muitos"}}, 200)
+	if statsOf(t, out)["partial"] == true {
+		t.Fatalf("sem o teto não devia ser parcial: %v", statsOf(t, out))
+	}
+
+	// Desligado pelo administrador, o recurso para para todo mundo, inclusive para ele.
+	admin.expect("PATCH", "/api/admin/settings", map[string]any{"mediaEnabled": false}, 200)
+	if o := admin.expect("POST", "/api/files/media/stats", map[string]any{"paths": []string{"teamA/midia"}}, 403); code(o) != "feature_disabled" {
+		t.Fatalf("switch: %v", o)
+	}
+	if o := admin.expect("GET", "/api/files/media/csv?path=teamA/midia", nil, 403); code(o) != "feature_disabled" {
+		t.Fatalf("switch no csv: %v", o)
+	}
+	if info := admin.expect("GET", "/api/files/info?path=teamA/midia/clipe.mp4", nil, 200); info["media"] != nil {
+		t.Fatal("desligado, as propriedades não trazem mídia")
+	}
+	admin.expect("PATCH", "/api/admin/settings", map[string]any{"mediaEnabled": true}, 200)
+
+	// Escopo: quem só enxerga teamA não analisa teamB, nem por caminho relativo.
+	admin.expect("POST", "/api/admin/users", map[string]any{"username": "ana", "password": "anapassword12", "scope": "teamA"}, 201)
+	jar, _ := cookiejar.New(nil)
+	ana := &client{t: t, srv: admin.srv, c: &http.Client{Jar: jar}}
+	ana.login("ana", "anapassword12")
+	ana.expect("POST", "/api/files/media/stats", map[string]any{"paths": []string{"../teamB"}}, 400)
+	ana.expect("POST", "/api/files/media/stats", map[string]any{"paths": []string{"midia"}}, 200)
+
+	// Caminho reservado não é endereçável nem para leitura.
+	admin.expect("POST", "/api/files/media/stats", map[string]any{"paths": []string{"teamA/.filezam-trash"}}, 400)
+
+	// Sem caminhos, ou com caminhos demais, é pedido malformado.
+	if o := admin.expect("POST", "/api/files/media/stats", map[string]any{"paths": []string{}}, 400); code(o) != "bad_paths" {
+		t.Fatalf("sem caminhos: %v", o)
+	}
+	many := make([]string, mediaPathsMax+1)
+	for i := range many {
+		many[i] = "teamA"
+	}
+	if o := admin.expect("POST", "/api/files/media/stats", map[string]any{"paths": many}, 400); code(o) != "bad_paths" {
+		t.Fatalf("caminhos demais: %v", o)
+	}
+}
+
+// TestMediaCacheFollowsTheFile: a linha do cache só vale enquanto o arquivo for o mesmo, e
+// sai de vez quando ele é apagado.
+func TestMediaCacheFollowsTheFile(t *testing.T) {
+	admin, s, root := newEnv(t)
+	admin.login("admin", "admin")
+	admin.expect("POST", "/api/auth/password", map[string]string{"current": "admin", "new": "correct horse battery"}, 200)
+
+	p := filepath.Join(root, "teamA", "foto.png")
+	if err := os.WriteFile(p, pngBytes(t, 800, 600), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	body := map[string]any{"paths": []string{"teamA/foto.png"}}
+	st := statsOf(t, admin.expect("POST", "/api/files/media/stats", body, 200))
+	if b := bucket(t, st, "imageRes", "800×600"); b == nil {
+		t.Fatalf("tamanho exato: %v", st["imageRes"])
+	}
+
+	// Mesmo caminho, outro conteúdo: tamanho e mtime mudam, a linha antiga não é servida.
+	time.Sleep(10 * time.Millisecond)
+	if err := os.WriteFile(p, pngBytes(t, 300, 300), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	st = statsOf(t, admin.expect("POST", "/api/files/media/stats", body, 200))
+	if b := bucket(t, st, "imageRes", "300×300"); b == nil {
+		t.Fatalf("o cache serviu uma leitura velha: %v", st["imageRes"])
+	}
+
+	// Apagar o arquivo tira a linha do cache (melhor esforço, em segundo plano).
+	admin.expect("POST", "/api/files/delete", map[string]any{"paths": []string{"teamA/foto.png"}}, 200)
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		n, err := s.db.CountMediaMeta(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n == 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("cache não foi limpo: %d linhas", n)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// TestMediaStatsFallsBackToJob: muita leitura nova não pode segurar a requisição. O servidor
+// devolve um job, e a mesma análise pedida depois sai do cache, completa.
+func TestMediaStatsFallsBackToJob(t *testing.T) {
+	admin, _, root := newEnv(t)
+	admin.login("admin", "admin")
+	admin.expect("POST", "/api/auth/password", map[string]string{"current": "admin", "new": "correct horse battery"}, 200)
+
+	dir := filepath.Join(root, "teamA", "acervo")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const n = mediaSyncMax + 10
+	small := pngBytes(t, 8, 8)
+	for i := 0; i < n; i++ {
+		if err := os.WriteFile(filepath.Join(dir, strconv.Itoa(i)+".png"), small, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	body := map[string]any{"paths": []string{"teamA/acervo"}}
+	resp, out := admin.do("POST", "/api/files/media/stats", body, nil)
+	if resp.StatusCode != 202 {
+		t.Fatalf("esperava job: %d %v", resp.StatusCode, out)
+	}
+	if out["pending"].(float64) != n {
+		t.Fatalf("pendentes: %v", out["pending"])
+	}
+	job := out["job"].(map[string]any)
+	id := job["id"].(string)
+
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		j := admin.expect("GET", "/api/jobs/"+id, nil, 200)
+		state, _ := j["job"].(map[string]any)["state"].(string)
+		if state == "done" {
+			break
+		}
+		if state == "failed" || state == "cancelled" {
+			t.Fatalf("job terminou em %s: %v", state, j)
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("job não terminou: %v", j)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	st := statsOf(t, admin.expect("POST", "/api/files/media/stats", body, 200))
+	if num(t, st, "images") != n {
+		t.Fatalf("depois do job a análise tem de sair inteira do cache: %v", st["images"])
+	}
+	if b := bucket(t, st, "imageRes", "8×8"); b == nil || num(t, b, "count") != n {
+		t.Fatalf("tamanhos: %v", st["imageRes"])
 	}
 }

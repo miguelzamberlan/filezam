@@ -51,6 +51,7 @@ jobs(id, user_id → users CASCADE, type, label, state, done, total, bytes_done,
 job_cleanup(job_id → jobs CASCADE, path /*base-relativo*/, mode /*'temps'|'tree'*/)   -- PK (job_id, path)   (012)
 notifications(id, user_id → users CASCADE, kind, group_key, data /*JSON; caminhos base-relativos*/, created_at, updated_at, read_at)
               -- índices: (user_id, updated_at); UNIQUE parcial (user_id, group_key) WHERE read_at IS NULL AND group_key <> ''   (015)
+media_meta(path PK /*base-relativo*/, size, mtime /*ms*/, readable /*0 = cabeçalho não abriu*/, meta /*JSON de media.Meta*/, read_at)   (017)
 schema_migrations(version, applied_at)
 ```
 
@@ -73,8 +74,9 @@ Migrações aplicadas depois de `001_init.sql`:
 | 014 | `014_share_broken.sql` | `shares.broken_since`: quando a manutenção deixou de achar o item do link; limpo se ele voltar, e o link é revogado depois de 24 h |
 | 015 | `015_notifications.sql` | Tabela `notifications`: avisos por usuário (`kind` + `data` JSON, texto montado na interface); `group_key` junta eventos em série numa notificação só enquanto ela não é lida. Apagadas 30 dias depois da última atualização |
 | 016 | `016_index_fold.sql` | `file_index.name_lc` vira `name_fold` (nome dobrado por `vfs.Fold`: sem maiúsculas, acentos e cedilha) e `index_state.fold` guarda a versão da dobra. Depois das migrações, o `Open` compara `fold` com `vfs.FoldVersion` e, se estiver atrás, redobra as linhas em lotes de 2 000 por `rowid` — a pesquisa continua saindo do índice sem esperar a próxima varredura. Mudar o resultado de `Fold` para algum nome exige subir `FoldVersion` |
+| 017 | `017_media_meta.sql` | Tabela `media_meta`: cache dos dados técnicos lidos do cabeçalho de foto e vídeo. A validade da linha é o par `size` + `mtime` — o arquivo mudou, a linha não é usada e o cabeçalho é lido de novo. `readable = 0` é cache negativo (prometia mídia pela extensão e não abriu), para o arquivo quebrado não ser reaberto em toda análise. Limpa junto com o item em exclusões e movimentos, e podada depois de cada varredura completa do índice (`PruneMediaMeta`, linhas sem par em `file_index`) |
 
-Todos os timestamps são segundos Unix, exceto `uploads.mtime` (ms, vindo do cliente).
+Todos os timestamps são segundos Unix, exceto `uploads.mtime` e `media_meta.mtime` (ms: o primeiro vem do cliente, o segundo é o `mtime` do disco em ms, como na listagem).
 
 ## Convenções
 

@@ -14,6 +14,7 @@ import { formatBytes, formatDate, formatRelative } from '../lib/format'
 import { shareLink } from '../lib/share'
 import { S } from '../strings'
 import { Modal } from './dialogs'
+import { mediaRows } from './MediaStats'
 import { iconFor, ICopy, ISpinner } from './Icons'
 
 export default function InfoDialog({ path, onClose }: { path: string; onClose: () => void }) {
@@ -52,6 +53,7 @@ export default function InfoDialog({ path, onClose }: { path: string; onClose: (
               {d.totals.partial && <span className="ml-1 text-xs text-amber-600">({S.partialCount})</span>}
             </Row>
           )}
+          {d.media && mediaRows(d.media).map(([label, value]) => <Row key={label} label={label}>{value}</Row>)}
           {d.favorite && <Row label={S.favorites}>★ {S.inFavorites}</Row>}
           {d.shares && (
             <div className="py-2 text-sm">

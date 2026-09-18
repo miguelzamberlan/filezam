@@ -42,6 +42,12 @@
 
 Filezam started from a concrete need: an external drive attached to a home Linux server, shared on the LAN over Samba, that had to be reachable from the internet by family and clients, each seeing only their own folder. Existing options were heavy, needed an external database, or treated filesystem safety as an afterthought.
 
+Two other needs showed up soon after, and shaped much of what Filezam is today.
+
+The first was **handing material to clients and receiving material from them**. Sending the link to a finished folder solves half the problem; the other half is the client who has to send back the raw photos, the signed contract or the approved artwork — and who is not going to create an account for that. Hence the two kinds of public link: the **read-only** one, to deliver, and the **drop** one, an inbox where someone without an account only writes and never sees what is already there.
+
+The second was **knowing what the team produced**, without opening file after file. A working folder with hundreds of videos and photos does not tell you by itself how many hours of material are in there, how many videos came out in 4K, how many photos are portrait, or which camera shot them. Hence the media analysis, which reads all of that straight from the file headers.
+
 Three priorities drive every decision, in this order:
 
 1. **Security.** Reading or writing outside the exposed folder is impossible: every disk access goes through Go's `os.Root`, which validates each path component in the kernel, symlinks included. No file uploaded by one user can run script in another user's browser. Passwords, sessions and 2FA secrets are never stored in clear text.
@@ -59,6 +65,7 @@ It is a personal, free and open-source project. It fits home servers, small offi
 - **Previews** for images, video, audio, PDF, text and rendered Markdown, without leaving the page.
 - **Serious uploads**: multi-GB files in parallel resumable chunks, whole folders by drag and drop, thousands of small files batched, all with a progress panel, pause and retry.
 - **Thumbnails**: photo folders show a preview of each image, generated on demand and cached. Can be turned off per installation and per person.
+- **Photo and video technical data**: resolution, duration, codec, frame and bit rate, camera, lens, ISO and capture date in the file properties — plus the analysis of a selection or a whole folder: how many videos, total duration, how many in 4K, 2K and 1080p, how many photos in each megapixel range, how many portrait and landscape, formats, codecs and cameras, with spreadsheet export. Read straight from the file headers, without `ffmpeg`.
 - **Extract and compress**: unpack a `.zip` into a new folder from the context menu, or zip the current selection. Extraction never overwrites what is already there and refuses entries that try to write outside the folder.
 - **Built-in editor**: edit text, markdown and config files in the browser, with a rendered preview for `.md` and protection against two people overwriting each other.
 - **Public links**: share a folder or a file read-only with an expiry, optional password, access count and instant revocation. The address can be a name you pick (`/s/budget-2026`), which then requires a password.

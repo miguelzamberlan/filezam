@@ -46,6 +46,11 @@ const (
 	defThumbsMaxFile   = int64(64) << 20
 	defThumbsCacheMax  = int64(2) << 30
 
+	// Análise de mídia. Ler o cabeçalho é barato por arquivo e caro por pasta: o teto de
+	// varredura é o que decide quando uma análise volta completa e quando volta parcial.
+	defMediaEnabled = true
+	defMediaMaxScan = int64(200_000)
+
 	// dropTTLHardMax é requisito de produto, não configuração: um link de envio nunca pode
 	// valer mais de 30 dias, e o administrador só consegue encurtar esse prazo.
 	dropTTLHardMax = 30 * 24 * time.Hour
@@ -67,6 +72,8 @@ const (
 	// settingUnset marca, na memória, uma chave que o administrador nunca gravou.
 	settingUnset = int64(-1)
 
+	mediaScanHardMax = int64(5_000_000)
+
 	thumbsPixelsHardMax = int64(500_000_000)
 	thumbsFileHardMax   = int64(1) << 30
 	thumbsCacheHardMax  = int64(100) << 30
@@ -87,6 +94,11 @@ type settings struct {
 	ExtractMaxBytes   int64 `json:"extractMaxBytes"`   // total escrito por extração
 	ExtractMaxEntries int64 `json:"extractMaxEntries"` // entradas por arquivo
 	ExtractMaxArchive int64 `json:"extractMaxArchive"` // tamanho do arquivo de origem
+
+	// MediaEnabled liga a análise técnica de foto e vídeo; MediaMaxScan é quantas entradas
+	// uma análise de pasta visita antes de devolver um resultado parcial.
+	MediaEnabled bool  `json:"mediaEnabled"`
+	MediaMaxScan int64 `json:"mediaMaxScan"`
 
 	ThumbsEnabled   bool  `json:"thumbsEnabled"`
 	ThumbsMaxPixels int64 `json:"thumbsMaxPixels"`
@@ -114,6 +126,9 @@ func defaultSettings() settings {
 		ExtractMaxBytes:   defExtractMaxBytes,
 		ExtractMaxEntries: defExtractMaxEntries,
 		ExtractMaxArchive: defExtractMaxArchive,
+
+		MediaEnabled: defMediaEnabled,
+		MediaMaxScan: defMediaMaxScan,
 
 		ThumbsEnabled:   defThumbsEnabled,
 		ThumbsMaxPixels: defThumbsMaxPixels,
@@ -190,6 +205,10 @@ func (s *Server) loadSettings(ctx context.Context) error {
 			v.ExtractMaxEntries = parseInt(row.Value, v.ExtractMaxEntries)
 		case "extract_max_archive":
 			v.ExtractMaxArchive = parseInt(row.Value, v.ExtractMaxArchive)
+		case "media_enabled":
+			v.MediaEnabled = row.Value == "1"
+		case "media_max_scan":
+			v.MediaMaxScan = parseInt(row.Value, v.MediaMaxScan)
 		case "thumbs_enabled":
 			v.ThumbsEnabled = row.Value == "1"
 		case "thumbs_max_pixels":
@@ -230,6 +249,7 @@ func clampSettings(v settings) settings {
 	v.ExtractMaxBytes = clamp64(v.ExtractMaxBytes, 1<<20, extractBytesHardMax)
 	v.ExtractMaxEntries = clamp64(v.ExtractMaxEntries, 1, extractEntriesHardMax)
 	v.ExtractMaxArchive = clamp64(v.ExtractMaxArchive, 1<<20, extractArchiveHardMax)
+	v.MediaMaxScan = clamp64(v.MediaMaxScan, 100, mediaScanHardMax)
 	v.ThumbsMaxPixels = clamp64(v.ThumbsMaxPixels, 1<<16, thumbsPixelsHardMax)
 	v.ThumbsMaxFile = clamp64(v.ThumbsMaxFile, 1<<16, thumbsFileHardMax)
 	v.ThumbsCacheMax = clamp64(v.ThumbsCacheMax, 1<<20, thumbsCacheHardMax)
@@ -280,6 +300,9 @@ func (s *Server) handleAdminSettingsUpdate(w http.ResponseWriter, r *http.Reques
 		ExtractMaxBytes   *int64 `json:"extractMaxBytes"`
 		ExtractMaxEntries *int64 `json:"extractMaxEntries"`
 		ExtractMaxArchive *int64 `json:"extractMaxArchive"`
+
+		MediaEnabled *bool  `json:"mediaEnabled"`
+		MediaMaxScan *int64 `json:"mediaMaxScan"`
 
 		ThumbsEnabled   *bool  `json:"thumbsEnabled"`
 		ThumbsMaxPixels *int64 `json:"thumbsMaxPixels"`
@@ -337,6 +360,10 @@ func (s *Server) handleAdminSettingsUpdate(w http.ResponseWriter, r *http.Reques
 		return err
 	}
 	if err := putInt("extract_max_archive", in.ExtractMaxArchive, 1<<20, extractArchiveHardMax); err != nil {
+		return err
+	}
+	putBool("media_enabled", in.MediaEnabled)
+	if err := putInt("media_max_scan", in.MediaMaxScan, 100, mediaScanHardMax); err != nil {
 		return err
 	}
 	putBool("thumbs_enabled", in.ThumbsEnabled)

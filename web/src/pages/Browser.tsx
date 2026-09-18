@@ -30,12 +30,13 @@ import Editor, { canEdit } from '../components/Editor'
 import ShareDialog from '../components/ShareDialog'
 import MoveDialog from '../components/MoveDialog'
 import InfoDialog from '../components/InfoDialog'
+import MediaStats from '../components/MediaStats'
 import { dialogs, toast, type ConfirmWarning } from '../components/dialogs'
 import { downloadZip } from '../components/ZipParts'
 import { useUploads } from '../components/UploadPanel'
 import { MenuButton } from '../components/Shell'
 import {
-  IArrowUp, IArchive, ICopy, IDownload, IEdit, IText, IFolderPlus, IGrid, IList, IMove, IPaste, IRefresh, IScissors, IShare, IStar, ITrash, IUpload, ISpinner, IEye, IInfo, ISearch, IZoomIn, IZoomOut, IMore, IClose,
+  IArrowUp, IArchive, ICopy, IDownload, IEdit, IText, IFolderPlus, IGrid, IList, IMove, IPaste, IRefresh, IScissors, IShare, IStar, ITrash, IUpload, ISpinner, IEye, IInfo, ISearch, IZoomIn, IZoomOut, IMore, IClose, IImage,
 } from '../components/Icons'
 
 function triggerDownload(url: string) {
@@ -66,10 +67,14 @@ export default function Browser() {
   const [preview, setPreview] = useState<number | null>(null)
   const [share, setShare] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
+  // Análise de mídia: `folder` só é preenchido quando o alvo é uma pasta única, que é o caso
+  // em que a exportação para planilha faz sentido.
+  const [mediaTarget, setMediaTarget] = useState<{ paths: string[]; title: string; folder?: string } | null>(null)
   const [editing, setEditing] = useState<Entry | null>(null)
   const [moving, setMoving] = useState<Entry[] | null>(null) // seleção esperando o destino no seletor de pastas
   const maxText = cfg?.previewMaxText ?? 1 << 20
   const archiveOn = cfg?.extractEnabled !== false
+  const mediaOn = cfg?.mediaEnabled !== false
   const thumbsOn = cfg?.thumbsEnabled !== false && ui.prefs.thumbs !== false
   const [dragOver, setDragOver] = useState(false)
   const [dragOverName, setDragOverName] = useState<string | null>(null)
@@ -514,6 +519,9 @@ export default function Browser() {
       return [
         header,
         { label: S.properties, icon: <IInfo size={16} />, onClick: () => setInfo(path) },
+        ...(mediaOn
+          ? [{ label: S.mediaAnalyze, icon: <IImage size={16} />, onClick: () => setMediaTarget({ paths: [path], title: basename(path) || S.home, folder: path }) } as MenuItem]
+          : []),
         { separator: true, label: '' },
         { label: S.newFolder, icon: <IFolderPlus size={16} />, onClick: newFolder, shortcut: 'Ctrl+Shift+N' },
         { label: S.uploadFiles, icon: <IUpload size={16} />, onClick: () => fileInput.current?.click() },
@@ -555,6 +563,18 @@ export default function Browser() {
       ...(trashOn ? [{ label: S.deleteForever, icon: <ITrash size={16} />, onClick: () => remove(sel, true), danger: true, shortcut: 'Shift+Del' } as MenuItem] : []),
       { separator: true, label: '' },
       { label: S.properties, icon: <IInfo size={16} />, onClick: () => one && setInfo(join(path, one.name)), disabled: !one },
+      ...(mediaOn
+        ? [{
+            label: S.mediaAnalyze,
+            icon: <IImage size={16} />,
+            onClick: () =>
+              setMediaTarget({
+                paths: sel.map((e) => join(path, e.name)),
+                title: sel.length === 1 ? sel[0].name : S.selected(sel.length),
+                folder: sel.length === 1 && sel[0].type === 'dir' ? join(path, sel[0].name) : undefined,
+              }),
+          } as MenuItem]
+        : []),
     )
     if (one?.type === 'dir') {
       const p = join(path, one.name)
@@ -723,6 +743,7 @@ export default function Browser() {
         />
       )}
       {info !== null && <InfoDialog path={info} onClose={() => setInfo(null)} />}
+      {mediaTarget && <MediaStats paths={mediaTarget.paths} title={mediaTarget.title} folder={mediaTarget.folder} onClose={() => setMediaTarget(null)} />}
       {share !== null && <ShareDialog path={share} name={shareName} kind={share !== path && byName.get(basename(share))?.type === 'file' ? 'file' : 'dir'} maxTtl={cfg?.shareMaxTtl ?? 30 * 86400} onClose={() => setShare(null)} onCreated={() => qc.invalidateQueries({ queryKey: ['shares'] })} />}
       {user === null && null}
     </div>

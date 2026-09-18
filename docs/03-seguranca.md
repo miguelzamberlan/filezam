@@ -162,6 +162,36 @@ produto manda o navegador guardar. As duas coisas têm tratamento próprio:
   consumo de CPU sem sessão por trás.
 - Desligável pelo administrador, e cada usuário ainda pode desligar nas próprias preferências.
 
+## Análise de mídia
+
+Ler o cabeçalho de um vídeo ou de uma foto é interpretar estrutura escrita por terceiros — a mesma
+classe de problema do extrator de `.zip`, com as mesmas regras:
+
+- **Nenhum tamanho declarado dentro do arquivo vira alocação.** Toda leitura passa por
+  `media.section.at`, que confere o pedido contra o tamanho real do arquivo e contra um teto fixo de
+  1 MiB. Uma caixa MP4 que se anuncia com 2 GiB para de ser seguida; não é lida.
+- **Toda travessia tem orçamento**: 8192 caixas e 12 níveis no ISO base media, 4096 elementos e
+  8 níveis no EBML (com a varredura parando no primeiro *Cluster* ou em 32 MiB), 2048 pedaços no
+  RIFF, 24 IFDs e 512 entradas por IFD no EXIF. O EXIF ainda guarda os deslocamentos já visitados,
+  porque um IFD pode apontar para si mesmo e sem isso a cadeia circular não terminaria.
+- **Nenhum quadro é decodificado.** O pacote não chama decodificador de vídeo nenhum; para imagem
+  usa `image.DecodeConfig`, que lê só o cabeçalho, o mesmo caminho das miniaturas.
+- **Texto vindo do arquivo é higienizado antes de virar tela ou chave de agrupamento**: nome de
+  câmera e de lente passam por `printable` (sem caracteres de controle, tamanho limitado) e as
+  cadeias EXIF são cortadas no primeiro zero, e não no comprimento declarado — uma contagem
+  esticada arrastaria o valor vizinho junto.
+- **Cardinalidade limitada na agregação**: cada detalhamento guarda no máximo 4096 chaves distintas
+  e devolve as 24 maiores. Sem isso, uma pasta com um nome de câmera diferente por arquivo viraria
+  um mapa do tamanho da pasta.
+- **O disco é sempre o do `vfs`**: o leitor recebe um `*os.File` já aberto por `Root.OpenFile`, e
+  o pacote `media` não conhece caminho de host nem abre arquivo por conta própria.
+- **Custo por pasta**, não por arquivo: uma análise percorre no máximo `media_max_scan` entradas
+  (200 000) e lê no máximo 250 cabeçalhos dentro da requisição; acima disso a leitura vira job, que
+  entra no teto de 4 jobs por usuário. O cache (`media_meta`) é chaveado por caminho + tamanho +
+  `mtime`, então uma linha órfã nunca é servida por engano.
+- Desligável pelo administrador, e o interruptor é conferido **a cada requisição**, inclusive na
+  aba de propriedades de um arquivo.
+
 ## Cabeçalhos HTTP
 
 Em todas as respostas: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: same-origin`, `Permissions-Policy` restritiva, `Cross-Origin-Opener-Policy: same-origin`, `X-Filezam-Version` (ver [04](04-api.md#versão-e-atualização)) e `Strict-Transport-Security` quando a conexão é HTTPS (direta ou por proxy confiável).

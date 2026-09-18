@@ -332,6 +332,8 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.Handle("GET /api/files/search", user(s.handleSearch))
 	mux.Handle("GET /api/files/content", user(s.handleContent))
 	mux.Handle("GET /api/files/thumb", user(s.handleThumb))
+	mux.Handle("POST /api/files/media/stats", user(s.handleMediaStats))
+	mux.Handle("GET /api/files/media/csv", user(s.handleMediaCSV))
 	mux.Handle("PUT /api/files/content", user(s.handlePutContent))
 	mux.Handle("POST /api/files/batch", user(s.handleBatch))
 	mux.Handle("GET /api/files/zip", user(s.handleZip))
@@ -441,6 +443,7 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) error {
 		"dropMaxFiles":   s.settings().DropMaxFiles,
 		"extractEnabled": s.settings().ExtractEnabled,
 		"thumbsEnabled":  s.settings().ThumbsEnabled && s.thumbs != nil,
+		"mediaEnabled":   s.settings().MediaEnabled,
 		"previewMaxText": 1 << 20,
 		"version":        s.version,
 	})

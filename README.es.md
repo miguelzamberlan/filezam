@@ -42,6 +42,12 @@
 
 Filezam nació de una necesidad concreta: un disco externo conectado a un servidor Linux doméstico, compartido en la red local por Samba, que debía ser accesible desde internet para la familia y para clientes, cada uno viendo solo su propia carpeta. Las alternativas existentes eran pesadas, exigían una base de datos externa o trataban la seguridad del sistema de archivos como un detalle.
 
+Otras dos necesidades aparecieron poco después, y moldearon buena parte de lo que Filezam es hoy.
+
+La primera fue **entregar material a los clientes y recibir material de ellos**. Enviar el enlace de una carpeta terminada resuelve la mitad del problema; la otra mitad es el cliente que tiene que devolver las fotos en bruto, el contrato firmado o el arte aprobado — y que no va a crearse una cuenta para eso. De ahí los dos tipos de enlace público: el de **solo lectura**, para entregar, y el de **recepción**, un buzón donde quien no tiene cuenta solo escribe y nunca ve lo que ya está ahí.
+
+La segunda fue **saber qué produjo el equipo**, sin abrir archivo por archivo. Una carpeta de trabajo con cientos de vídeos y fotos no responde por sí sola cuántas horas de material hay ahí, cuántos vídeos salieron en 4K, cuántas fotos son verticales o con qué cámara se hicieron. De ahí el análisis de medios, que lee todo eso directamente de la cabecera de los archivos.
+
 Tres prioridades guían cada decisión, en este orden:
 
 1. **Seguridad.** Es imposible leer o escribir fuera de la carpeta expuesta: todo acceso al disco pasa por `os.Root` de Go, que valida cada componente de la ruta en el kernel, symlinks incluidos. Ningún archivo subido por un usuario puede ejecutar scripts en el navegador de otro. Las contraseñas, las sesiones y los secretos de 2FA nunca se guardan en texto plano en la base de datos.
@@ -59,6 +65,7 @@ Es un proyecto personal, gratuito y de código abierto. Sirve bien para servidor
 - **Vista previa** de imágenes, video, audio, PDF, texto y Markdown con formato sin salir de la página.
 - **Subidas serias**: archivos de varios GB en bloques paralelos reanudables, carpetas enteras arrastrando y soltando, miles de archivos pequeños por lotes, todo con panel de progreso, pausa y reintento de fallos.
 - **Miniaturas**: las carpetas de fotos muestran una vista previa de cada imagen, generada bajo demanda y guardada en caché. Se puede desactivar por instalación y por persona.
+- **Datos técnicos de foto y vídeo**: resolución, duración, códec, cuadros por segundo y tasa de bits, cámara, objetivo, ISO y fecha de captura en las propiedades del archivo — y el análisis de una selección o de una carpeta entera: cuántos vídeos, duración sumada, cuántos en 4K, 2K y 1080p, cuántas fotos en cada rango de megapíxeles, cuántas en vertical y en horizontal, formatos, códecs y cámaras, con exportación a hoja de cálculo. Leído directamente de la cabecera de los archivos, sin `ffmpeg`.
 - **Extraer y comprimir**: descomprime un `.zip` en una carpeta nueva desde el menú contextual, o genera un `.zip` con lo que esté seleccionado. La extracción nunca sobrescribe lo que ya existe y rechaza archivos que intenten escribir fuera de la carpeta.
 - **Editor integrado**: edita archivos de texto, markdown y configuración desde el navegador, con vista previa con formato para `.md` y protección contra dos personas guardando una encima de la otra.
 - **Enlaces públicos**: comparte una carpeta o un archivo mediante un enlace de solo lectura con fecha de caducidad, contraseña opcional, recuento de accesos y revocación inmediata. La dirección puede ser un nombre que tú eliges (`/s/presupuesto-2026`), con contraseña obligatoria.

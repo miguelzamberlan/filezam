@@ -21,6 +21,7 @@ Um único processo: servidor HTTP, workers de jobs e tarefas de manutenção. Se
 | `internal/vfs` | **Núcleo de segurança**: normalização de caminhos, `Root`, listagem, pesquisa (`Find`, comparação por `Fold`), cópia, movimento, remoção, zip, arquivos `.part` | `os.Root`, `x/sys/unix`, `x/text/unicode/norm` |
 | `internal/uploads` | Sessões chunked: bitset, escrita por offset, finalização, limpeza | store, vfs |
 | `internal/thumbs` | Geração e cache em disco de miniaturas (`DataDir/thumbs`) | vfs |
+| `internal/media` | Leitura de metadados técnicos de foto e vídeo direto do cabeçalho do contêiner (ISO base media, Matroska, RIFF, TIFF/EXIF) e agregação em estatísticas | — |
 | `internal/index` | Índice de nomes em SQLite: varredura completa periódica (`WalkEntries`) e ajustes pontuais chamados pelos handlers | store, vfs |
 | `internal/metrics` | Contadores em memória e renderização no formato Prometheus (sem dependências) | — |
 | `internal/jobs` | Registro em memória de jobs com progresso e cancelamento | — |
@@ -28,7 +29,9 @@ Um único processo: servidor HTTP, workers de jobs e tarefas de manutenção. Se
 | `internal/store` | Acesso ao SQLite, migrações embutidas, repositórios por tabela | `modernc.org/sqlite` |
 | `internal/server/webdist` | `//go:embed all:dist` com o build do Vite | — |
 
-Regra de dependência: `vfs`, `auth`, `jobs` e `store` não conhecem HTTP. `uploads` conhece `store` e `vfs`. Só `server` conhece todos.
+`internal/media` não conhece nem HTTP nem o disco: recebe um `io.ReaderAt` já aberto pelo `vfs` e devolve o que leu.
+
+Regra de dependência: `vfs`, `auth`, `jobs`, `media` e `store` não conhecem HTTP. `uploads` conhece `store` e `vfs`. Só `server` conhece todos.
 
 ## Fluxo de uma requisição autenticada
 
@@ -108,6 +111,10 @@ scripts/license-header.sh            # aplica/confere o cabeçalho de licença d
 | Gerações de miniatura por usuário | 4; o excedente espera até 20 s antes de cair no ícone | `thumbSem` |
 | Pixels de uma imagem para miniatura | `thumbs_max_pixels` (50 MP) | lido do cabeçalho, antes de decodificar |
 | Cache de miniaturas em disco | `thumbs_cache_max` (2 GiB) | varredura horária recolhe as mais antigas |
+| Entradas percorridas por uma análise de mídia | `media_max_scan` (200 000) | acima disso a resposta vem com `partial: true` |
+| Cabeçalhos lidos dentro da requisição de análise | 250 (`mediaSyncMax`) e 25 s | acima disso a leitura vira job e a resposta é 202 |
+| Caminhos numa análise | 1000 (`mediaPathsMax`); detalhamento por arquivo até 2000 (`mediaListMax`) | `handleMediaStats` |
+| Uma leitura de cabeçalho | 1 MiB por leitura (`media.maxRead`), 8192 caixas e 12 níveis (ISO), 4096 elementos e 32 MiB (EBML), 24 IFDs (EXIF) | nenhum tamanho declarado no arquivo vira alocação |
 | Corpo JSON | 1 MiB | `readJSON` |
 | Corpo de chunk / PUT | `ChunkSize` | `MaxBytesReader` |
 | Corpo de lote | `BatchMaxBytes` + 1 MiB | idem |

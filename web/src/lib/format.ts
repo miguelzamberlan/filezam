@@ -80,3 +80,56 @@ export function typeLabel(name: string, type: EntryType): string {
   const ext = extOf(name)
   return ext ? ext.toUpperCase() : S.file
 }
+
+/**
+ * Duração de mídia como relógio: 1:23:45 com horas, 2:05 sem. Diferente de formatDuration,
+ * que descreve um tempo decorrido ("2min 5s"); aqui o formato é o que um reprodutor mostra.
+ */
+export function formatClock(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return '—'
+  const total = Math.round(ms / 1000)
+  const h = Math.floor(total / 3600)
+  const m = Math.floor((total % 3600) / 60)
+  const s = total % 60
+  const pad = (n: number) => n.toString().padStart(2, '0')
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`
+}
+
+/** Duração somada de uma pasta: "12 h 34 min" lê melhor que 12:34:56 quando passa de horas. */
+export function formatSpan(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return '—'
+  const total = Math.round(ms / 1000)
+  const h = Math.floor(total / 3600)
+  const m = Math.floor((total % 3600) / 60)
+  if (h === 0 && m === 0) return `${total} s`
+  if (h === 0) return `${m} min`
+  return `${h} h ${m} min`
+}
+
+/** Taxa de bits em múltiplos decimais, como os fabricantes anunciam (8,9 Mb/s). */
+export function formatBitrate(bps: number): string {
+  if (!Number.isFinite(bps) || bps <= 0) return '—'
+  if (bps >= 1e9) return (bps / 1e9).toFixed(1) + ' Gb/s'
+  if (bps >= 1e6) return (bps / 1e6).toFixed(1) + ' Mb/s'
+  if (bps >= 1e3) return Math.round(bps / 1e3) + ' kb/s'
+  return bps + ' b/s'
+}
+
+/** Megapixels de um par de dimensões, com uma casa quando o número é pequeno. */
+export function formatMegapixels(pixels: number): string {
+  if (!Number.isFinite(pixels) || pixels <= 0) return '—'
+  const mp = pixels / 1e6
+  return mp >= 100 ? Math.round(mp).toString() : mp.toFixed(1)
+}
+
+const utcDtf = new Intl.DateTimeFormat(undefined, { dateStyle: 'short', timeStyle: 'short', timeZone: 'UTC' })
+
+/**
+ * Data de captura. O EXIF e o cabeçalho de vídeo gravam a hora sem fuso nenhum, e o servidor
+ * a converte lendo-a como UTC: mostrar em UTC devolve o relógio que estava no equipamento,
+ * em vez de deslocá-lo pelo fuso de quem está olhando.
+ */
+export function formatCaptureDate(ms: number): string {
+  if (!ms) return '—'
+  return utcDtf.format(new Date(ms))
+}

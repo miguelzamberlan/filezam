@@ -136,6 +136,29 @@ resposta é a única do produto que o navegador guarda, e isso só é seguro por
 `mtime`. O recurso é desligável pelo administrador e por cada usuário, porque velocidade é a
 prioridade declarada do projeto e nem toda instalação quer pagar essa CPU.
 
+### ADR-19 · Metadados de mídia lidos do contêiner, sem ffmpeg
+
+Saber a duração de um vídeo, a resolução de uma foto ou quantos arquivos em 4K há numa pasta é
+pergunta de quem trabalha com imagem, e a resposta óbvia seria chamar o `ffprobe`. Isso quebraria as
+duas premissas do produto: o binário único sem CGO e a imagem distroless, que não tem shell nem
+gerenciador de pacotes para hospedar um executável de 70 MB e a superfície dele.
+
+A alternativa adotada é ler o **cabeçalho do contêiner** em Go puro (`internal/media`): ISO base
+media (MP4, MOV, M4A, 3GP, HEIC, AVIF), Matroska/WebM, RIFF (AVI, WAV) e TIFF/EXIF (JPEG e os RAW
+que são TIFF por baixo). Nenhum quadro é decodificado e nenhum pixel é reconstruído — só se
+percorrem as caixas, os elementos e os IFDs que declaram resolução, duração, codec, taxa de quadros
+e dados da câmera. Os números foram conferidos contra `ffprobe` e `exiftool` num acervo real.
+
+O preço é o que esse caminho não alcança e fica declarado: **qualidade percebida** (VMAF, PSNR) não
+sai de cabeçalho nenhum, e formatos cujo metadado só existe no fluxo — MTS/M2TS, MXF, R3D, BRAW —
+ficam de fora, contados como "não foi possível ler" em vez de sumirem da conta. A resolução
+informada é a **codificada**, com a rotação declarada já aplicada: é o número que um reprodutor
+mostra, e não a dimensão de exibição anamórfica do `tkhd`.
+
+Ler o cabeçalho é barato por arquivo e caro por pasta (uma abertura e alguns saltos de disco por
+item). Por isso cada leitura fica numa tabela de cache chaveada por caminho + tamanho + `mtime`, e
+uma análise com muita leitura nova vira job em segundo plano em vez de segurar a requisição.
+
 ### ADR: licença AGPL-3.0-only com opção comercial
 
 Até a 1.2.0 o Filezam foi MIT. A partir da versão seguinte é **AGPL-3.0-only**, em licença dual com uma licença comercial negociada pelo autor. A AGPL fecha a brecha que a GPL deixa para software usado pela rede: quem modifica o Filezam e o oferece como serviço precisa abrir o código das modificações a quem o usa, então ninguém fecha uma versão melhorada do projeto para vender como SaaS. A variante *only* deixa com o titular a decisão de adotar uma AGPL futura. A licença dual depende de o autor poder distribuir todo o código nos dois regimes, por isso o `CONTRIBUTING.md` pede, a cada PR, uma licença para relicenciar a contribuição.

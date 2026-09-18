@@ -131,6 +131,13 @@ func (ix *Indexer) FullScan(ctx context.Context) (bool, error) {
 	if err := ix.db.SetIndexState(ctx, time.Now().Unix(), n, gen); err != nil {
 		return true, err
 	}
+	// O índice acabou de virar o retrato do disco: o que sobrou no cache de mídia sem linha
+	// correspondente é de arquivo que não existe mais.
+	if dropped, err := ix.db.PruneMediaMeta(ctx); err != nil {
+		ix.log.Warn("media cache prune", "err", err)
+	} else if dropped > 0 {
+		ix.log.Info("media cache prune", "rows", dropped)
+	}
 	ix.ready.Store(true)
 	ix.lastMs.Store(max(1, time.Since(start).Milliseconds()))
 	ix.lastEnd.Store(time.Now().UnixNano())

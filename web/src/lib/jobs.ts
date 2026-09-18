@@ -18,6 +18,7 @@ export function jobLabel(type: JobType | string): string {
     delete: S.jobDelete,
     extract: S.jobExtract,
     archive: S.jobArchive,
+    media: S.jobMedia,
   }
   return labels[type] ?? type
 }

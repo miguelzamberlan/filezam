@@ -79,6 +79,7 @@ export interface AppConfig {
   dropMaxFiles: number
   extractEnabled: boolean
   thumbsEnabled: boolean
+  mediaEnabled: boolean
 }
 
 export interface Settings {
@@ -98,11 +99,13 @@ export interface Settings {
   thumbsMaxPixels: number
   thumbsMaxFile: number
   thumbsCacheMax: number
+  mediaEnabled: boolean
+  mediaMaxScan: number
   trashRetention: number
   indexInterval: number
 }
 
-export type JobType = 'copy' | 'move' | 'delete' | 'extract' | 'archive'
+export type JobType = 'copy' | 'move' | 'delete' | 'extract' | 'archive' | 'media'
 
 export interface Job {
   id: string
@@ -273,6 +276,105 @@ export interface EntryInfo {
   totals?: { files: number; dirs: number; bytes: number; partial: boolean }
   shares?: Share[]
   favorite?: boolean
+  /** Dados técnicos do arquivo, quando ele é foto ou vídeo que o servidor saiba ler. */
+  media?: MediaMeta
+}
+
+/**
+ * Dados técnicos lidos do cabeçalho do arquivo. `width`/`height` já vêm com a rotação
+ * aplicada: é o tamanho como a mídia aparece na tela.
+ */
+export interface MediaMeta {
+  kind: 'image' | 'video' | 'audio'
+  format: string
+  width?: number
+  height?: number
+  rotation?: number
+  durationMs?: number
+  codec?: string
+  audioCodec?: string
+  fpsMilli?: number
+  bitrate?: number
+  channels?: number
+  sampleRate?: number
+  bitDepth?: number
+  /** Unix ms lido como UTC: o EXIF não diz o fuso, então a interface mostra em UTC. */
+  takenAt?: number
+  camera?: string
+  lens?: string
+  iso?: number
+  exposure?: string
+  fNumber?: number
+  focalLength?: number
+}
+
+/** Uma linha de um detalhamento. `key` é estável e a interface é quem traduz. */
+export interface MediaBucket {
+  key: string
+  count: number
+  bytes?: number
+  durationMs?: number
+}
+
+/** Um arquivo em destaque (o mais longo, o maior, o de mais pixels). */
+export interface MediaItem {
+  path: string
+  name: string
+  bytes?: number
+  width?: number
+  height?: number
+  durationMs?: number
+}
+
+export interface MediaStats {
+  files: number
+  dirs: number
+  bytes: number
+  images: number
+  videos: number
+  audios: number
+  others: number
+  unreadable: number
+  imageBytes: number
+  videoBytes: number
+  audioBytes: number
+  otherBytes: number
+  videoDuration: number
+  audioDuration: number
+  pixels: number
+  videoRes: MediaBucket[]
+  imageRes: MediaBucket[]
+  imageMp: MediaBucket[]
+  imageShape: MediaBucket[]
+  videoShape: MediaBucket[]
+  formats: MediaBucket[]
+  codecs: MediaBucket[]
+  fps: MediaBucket[]
+  cameras: MediaBucket[]
+  longest?: MediaItem
+  largest?: MediaItem
+  sharpest?: MediaItem
+  oldest?: number
+  newest?: number
+  partial: boolean
+}
+
+export interface MediaFileRow {
+  path: string
+  name: string
+  size: number
+  meta?: MediaMeta
+}
+
+/**
+ * Resposta da análise. Com muita leitura nova o servidor devolve `job` em vez de `stats`:
+ * a leitura corre em segundo plano e a mesma análise, pedida de novo, sai do cache.
+ */
+export interface MediaStatsResult {
+  stats?: MediaStats
+  files?: MediaFileRow[]
+  job?: Job
+  pending?: number
 }
 
 /** Uma parte de um download em zip dividido: entradas com nome em [from, to) ('' = aberto). */

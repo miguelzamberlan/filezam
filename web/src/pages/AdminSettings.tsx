@@ -54,7 +54,7 @@ function Num({ label, value, options, format, onPick, hint }: { label: string; v
   )
 }
 
-// Quatro interruptores, todos valendo para a instalação inteira e conferidos a cada requisição
+// Cinco interruptores, todos valendo para a instalação inteira e conferidos a cada requisição
 // (não só na criação), para que desligar um pare na hora o que já existe. O recebimento anônimo
 // sai de fábrica **desligado**: ele inverte o modelo de ameaça do produto ao deixar alguém de
 // fora escrever no disco, e isso precisa ser uma decisão de alguém, não um padrão.
@@ -91,7 +91,7 @@ export default function AdminSettings() {
   if (q.isLoading || !form) return <div className="flex h-full items-center justify-center"><ISpinner /></div>
 
   const set = (patch: Partial<Settings>) => setForm({ ...form, ...patch })
-  const toggle = (key: 'slugsEnabled' | 'dropEnabled' | 'extractEnabled' | 'thumbsEnabled') => {
+  const toggle = (key: 'slugsEnabled' | 'dropEnabled' | 'extractEnabled' | 'thumbsEnabled' | 'mediaEnabled') => {
     set({ [key]: !form[key] } as Partial<Settings>)
     save.mutate({ [key]: !form[key] } as Partial<Settings>)
   }
@@ -105,8 +105,17 @@ export default function AdminSettings() {
         <Switch on={form.dropEnabled} onClick={() => toggle('dropEnabled')} label={S.settingsDrop} hint={S.settingsDropHint} />
         <Switch on={form.extractEnabled} onClick={() => toggle('extractEnabled')} label={S.settingsExtract} hint={S.settingsExtractHint} />
         <Switch on={form.thumbsEnabled} onClick={() => toggle('thumbsEnabled')} label={S.settingsThumbs} hint={S.settingsThumbsHint} />
+        <Switch on={form.mediaEnabled} onClick={() => toggle('mediaEnabled')} label={S.settingsMedia} hint={S.settingsMediaHint} />
         <div className="space-y-3 px-4 py-4">
           <h2 className="text-sm font-semibold">{S.settingsMaintenance}</h2>
+          <Num
+            label={S.settingsMediaScan}
+            value={form.mediaMaxScan}
+            options={[1000, 10000, 50000, 200000, 500000, 1000000, 5000000]}
+            format={(n) => n.toLocaleString()}
+            onPick={(n) => { set({ mediaMaxScan: n }); save.mutate({ mediaMaxScan: n }) }}
+            hint={S.settingsMediaScanHint}
+          />
           <Num
             label={S.settingsTrashRetention}
             value={form.trashRetention}

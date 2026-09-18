@@ -194,6 +194,13 @@ func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	out := map[string]any{"path": p, "entry": e}
+	if e.Type == "file" && s.settings().MediaEnabled {
+		// Ler o cabeçalho de um arquivo só é barato, e é aqui que a pessoa pergunta quanto tempo
+		// tem o vídeo. O resultado fica em cache para a análise da pasta reaproveitar.
+		if m := s.mediaOf(r.Context(), root, u, p, e); m != nil {
+			out["media"] = m
+		}
+	}
 	if e.Type == "dir" {
 		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 		t, serr := root.ScanLimited(ctx, p, infoScanLimit)

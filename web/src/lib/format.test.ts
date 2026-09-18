@@ -7,7 +7,7 @@
 // alterar este cabeçalho viola a licença e os direitos autorais do autor.
 
 import { describe, it, expect } from 'vitest'
-import { formatBytes, formatSpeed, formatRelative, typeLabel } from './format'
+import { formatBitrate, formatBytes, formatCaptureDate, formatClock, formatMegapixels, formatSpan, formatSpeed, formatRelative, typeLabel } from './format'
 
 describe('formatSpeed', () => {
   it('sempre usa duas casas decimais, só a unidade muda', () => {
@@ -48,5 +48,50 @@ describe('typeLabel', () => {
     expect(typeLabel('LEIAME', 'file')).toBe('Arquivo')
     expect(typeLabel('.bashrc', 'file')).toBe('Arquivo') // ponto inicial não é extensão
     expect(typeLabel('link', 'other')).toBe('—')
+  })
+})
+
+describe('duração de mídia', () => {
+  it('formatClock mostra o relógio que um reprodutor mostraria', () => {
+    expect(formatClock(0)).toBe('—')
+    expect(formatClock(5_000)).toBe('0:05')
+    expect(formatClock(125_000)).toBe('2:05')
+    expect(formatClock(3_600_000)).toBe('1:00:00')
+    expect(formatClock(5_757_408)).toBe('1:35:57')
+  })
+
+  it('formatSpan resume a soma de uma pasta', () => {
+    expect(formatSpan(0)).toBe('—')
+    expect(formatSpan(45_000)).toBe('45 s')
+    expect(formatSpan(125_000)).toBe('2 min')
+    expect(formatSpan(3 * 3_600_000 + 25 * 60_000)).toBe('3 h 25 min')
+  })
+})
+
+describe('formatBitrate', () => {
+  it('usa múltiplos decimais, como os fabricantes anunciam', () => {
+    expect(formatBitrate(0)).toBe('—')
+    expect(formatBitrate(800)).toBe('800 b/s')
+    expect(formatBitrate(128_000)).toBe('128 kb/s')
+    expect(formatBitrate(8_922_055)).toBe('8.9 Mb/s')
+    expect(formatBitrate(2_500_000_000)).toBe('2.5 Gb/s')
+  })
+})
+
+describe('formatMegapixels', () => {
+  it('perde a casa decimal quando o número já é grande', () => {
+    expect(formatMegapixels(0)).toBe('—')
+    expect(formatMegapixels(1920 * 1080)).toBe('2.1')
+    expect(formatMegapixels(8160 * 6120)).toBe('49.9')
+    expect(formatMegapixels(1e9)).toBe('1000')
+  })
+})
+
+describe('formatCaptureDate', () => {
+  it('mostra o relógio da câmera, sem deslocar pelo fuso de quem olha', () => {
+    // 2026-03-14 09:41:07 lido como UTC pelo servidor: é isso que tem de aparecer.
+    const ms = Date.UTC(2026, 2, 14, 9, 41, 7)
+    expect(formatCaptureDate(ms)).toContain('09:41')
+    expect(formatCaptureDate(0)).toBe('—')
   })
 })

@@ -48,6 +48,7 @@ func (s *Server) indexTree(paths ...string) {
 }
 
 func (s *Server) indexRemove(paths ...string) {
+	s.mediaForget(paths...)
 	s.indexAsync(func(ctx context.Context) error {
 		for _, p := range paths {
 			if err := s.indexer.RemoveTree(ctx, p); err != nil {
@@ -96,4 +97,25 @@ func (s *Server) handleAdminReindex(w http.ResponseWriter, r *http.Request) erro
 	}()
 	writeJSON(w, r, 200, map[string]any{"started": true})
 	return nil
+}
+
+// mediaForget drops the cached header readings of a subtree. O cache é conferido por tamanho e
+// mtime antes de ser usado, então uma linha órfã nunca seria servida por engano: isto é faxina,
+// e o que escapar sai na poda depois da varredura completa do índice.
+func (s *Server) mediaForget(paths ...string) {
+	if len(paths) == 0 {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(s.bg, time.Minute)
+		defer cancel()
+		for _, p := range paths {
+			if p == "" {
+				continue
+			}
+			if err := s.db.DeleteMediaTree(ctx, p); err != nil {
+				s.log.Warn("media cache cleanup", "err", err)
+			}
+		}
+	}()
 }

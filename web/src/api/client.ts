@@ -8,7 +8,7 @@
 
 import { useUpdate } from '../lib/updates'
 import type {
-  AdminUser, AppConfig, AppNotification, ZipPart, ZipPlan, AuditEntry, Conflict, Dashboard, DiskUsage, Entry, EntryInfo, Favorite, IndexStatus, Job, JobRecord, ListPage, Listing, PublicInfo, SearchResult, Settings, Share, TrashItem, UploadSession, User,
+  AdminUser, AppConfig, AppNotification, ZipPart, ZipPlan, AuditEntry, Conflict, Dashboard, DiskUsage, Entry, EntryInfo, Favorite, IndexStatus, Job, JobRecord, ListPage, Listing, MediaStatsResult, PublicInfo, SearchResult, Settings, Share, TrashItem, UploadSession, User,
 } from './types'
 
 export class ApiError extends Error {
@@ -140,6 +140,11 @@ export const Api = {
     api<{ job: Job }>('POST', '/api/files/copy', { sources, destDir, onConflict }),
   move: (sources: string[], destDir: string, onConflict: Conflict) =>
     api<{ job: Job }>('POST', '/api/files/move', { sources, destDir, onConflict }),
+
+  // Análise de mídia: o servidor devolve os totais, ou um job quando há cabeçalho demais para
+  // ler dentro da requisição. Tudo que ele lê fica em cache, então a segunda chamada é curta.
+  mediaStats: (paths: string[]) => api<MediaStatsResult>('POST', '/api/files/media/stats', { paths }),
+  mediaCsvUrl: (path: string) => '/api/files/media/csv' + q({ path }),
 
   extract: (path: string) => api<{ job: Job }>('POST', '/api/files/extract', { path }),
   archive: (paths: string[], name?: string) => api<{ job: Job }>('POST', '/api/files/archive', { paths, name: name ?? '' }),

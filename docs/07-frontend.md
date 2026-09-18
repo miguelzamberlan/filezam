@@ -26,7 +26,7 @@ web/src/
   upload/xhr.ts       XMLHttpRequest com progresso → Promise
   components/         Shell, FileList, Breadcrumb, Toolbar (dentro de Browser), ContextMenu,
                       Preview, Markdown (lazy), ShareDialog, MoveDialog (seletor de pasta de destino),
-                      InfoDialog (propriedades), Preferences, DiskBar,
+                      InfoDialog (propriedades), MediaStats (análise de foto e vídeo), Preferences, DiskBar,
                       UploadPanel, JobToasts, dialogs (prompt/confirm/conflict/toast), Icons
   pages/              Login, ChangePassword, Browser, Shares, AdminUsers, AdminAudit, AdminSettings, PublicShare, PublicDrop
   components/Editor.tsx   Editor de texto e markdown (fora do Preview, ver abaixo)
@@ -148,6 +148,33 @@ As miniaturas só são ligadas no navegador autenticado (`thumbs` + `path` no `F
 `PublicShare` não as usa. Além do interruptor do administrador, cada pessoa pode desligar em
 **Preferências**, para quem prefere a listagem mais enxuta possível.
 
+## Análise de mídia (`components/MediaStats.tsx`)
+
+**Analisar mídia** aparece no menu de contexto em três situações: sobre a área vazia (analisa a
+pasta atual), sobre um arquivo e sobre uma seleção. O alvo vira uma lista de caminhos; quando é uma
+pasta única, o diálogo também oferece **Exportar planilha** (`/api/files/media/csv`), que só faz
+sentido com um caminho.
+
+O servidor conta e a interface diz: cada faixa vem com um identificador estável (`4k`, `1080p`,
+`portrait`, `mp24`) traduzido por `S.mediaRes`/`S.mediaMp`/`S.mediaShape`, e o que é texto do
+próprio arquivo (codec, formato, câmera, `3840×2160`) aparece como veio. É o mesmo desenho das
+notificações, pela mesma razão: o idioma é de quem lê, não de quem gravou.
+
+Quando a resposta vem `202` com um job, o diálogo acompanha o progresso por `Api.job(id)` e, ao
+terminar, incrementa uma chave da consulta para refazer o pedido — que aí sai inteiro do cache do
+servidor. É o único lugar da interface que trata um job como etapa de uma leitura, e não como uma
+operação que o usuário pediu.
+
+As barras são proporcionais ao **maior item da lista**, não ao total: com uma faixa dominante as
+outras virariam um fio e deixariam de ser comparáveis entre si. A lista de tamanhos exatos mostra
+dez linhas e resume o resto, porque a cauda de "1 · 5%" é ruído.
+
+`mediaRows()` é exportado do mesmo arquivo e monta as linhas técnicas de um arquivo só; o
+`InfoDialog` o usa para mostrar duração, codec e dados da câmera junto das propriedades, sem
+requisição extra (o `info` já traz `media`). A data de captura é formatada em UTC de propósito:
+EXIF e cabeçalho de vídeo gravam o relógio do equipamento sem fuso, e converter para o fuso de quem
+está olhando deslocaria a hora que estava na câmera.
+
 ## Operações de arquivo compactado
 
 **Extrair aqui** e **Compactar em .zip** no menu de contexto — o primeiro condicionado por extensão
@@ -210,7 +237,8 @@ Tabelas largas rolam dentro do próprio cartão, e colunas secundárias somem em
 
 ## AdminSettings (`pages/AdminSettings.tsx`)
 
-Interruptores de endereço personalizado e link de recebimento, mais os tetos deste último. Cada
+Interruptores de endereço personalizado, link de recebimento, extração, miniaturas e análise de
+mídia, mais os tetos de cada um. Cada
 mudança é um `PATCH` imediato que invalida `['settings']` e `['config']` — a segunda porque
 `ShareDialog` esconde o que estiver desligado.
 

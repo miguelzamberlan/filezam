@@ -344,6 +344,14 @@ O cache de miniaturas fica em `<DATA_DIR>/thumbs` e entra no dimensionamento do 
 configuração, não no de dados: o padrão é no máximo 2 GiB, ajustável em **Configurações do
 sistema**. Apagar a pasta é seguro a qualquer momento — o servidor regenera sob demanda.
 
+A **análise de mídia** também não tem variável de ambiente: liga e desliga em **Configurações do
+sistema**, junto com o limite de varredura (quantas entradas uma análise de pasta percorre antes de
+devolver resultado parcial). O que ela guarda é uma linha por arquivo na tabela `media_meta` do
+próprio banco — algumas centenas de bytes cada, então um acervo de cem mil arquivos custa dezenas de
+MB no volume de configuração. A primeira análise de uma pasta grande é a cara: cada arquivo custa
+uma abertura e alguns saltos de disco, o que num HD externo vira um job de minutos; da segunda vez
+em diante só o que mudou é lido de novo.
+
 ### Reiniciar o serviço com operações em andamento
 
 Copiar, mover, excluir, extrair e compactar rodam dentro do próprio processo. Ao receber `SIGTERM`
@@ -456,6 +464,9 @@ Logs em JSON no stdout (`docker compose logs -f filezam` ou `journalctl -u filez
 | Pasta `.filezam-trash` no disco | lixeira do Filezam; invisível na interface | Não apagar à mão: use Esvaziar lixeira |
 | Usuário diz que a senha certa não entra | bloqueio de 15 min+ por (usuário, IP) após 10 erros; a resposta é igual à de senha errada | Esperar, ou entrar de outro endereço; ver `login.locked` na auditoria |
 | Miniaturas não aparecem | formato sem decodificador (HEIC, AVIF, RAW, vídeo), imagem acima de `thumbs_max_pixels`, ou recurso desligado | É o comportamento esperado: o arquivo fica com o ícone por tipo. Conferir o interruptor em **Configurações do sistema** e a preferência pessoal em **Preferências** |
+| "Analisar mídia" não aparece no menu | recurso desligado em **Configurações do sistema** | Ligar lá; o interruptor vale na hora, sem reiniciar |
+| Arquivos contados em "não foi possível ler" | formato cujo metadado só existe no fluxo (MTS/M2TS, MXF, R3D, BRAW), ou arquivo truncado/corrompido | Os quatro formatos são limitação declarada ([10](10-roadmap.md)); para os demais, conferir se o arquivo abre num reprodutor |
+| Análise de pasta grande demora | primeira leitura: uma abertura de arquivo por item | Ela vira job em segundo plano e o resultado aparece sozinho; da segunda vez sai do cache. Se o resultado vier marcado como parcial, subir o limite de varredura em **Configurações do sistema** |
 | 507 `drop_full` no link de recebimento | a cota do link acabou, ou a do dono | Criar um link novo, aumentar a cota do dono, ou esperar as sessões inacabadas caírem (2 h por padrão). A cota do link conta **tudo que já entrou**, mesmo que os arquivos tenham sido apagados depois |
 | 409 `not_empty` ao criar um link de recebimento | a pasta escolhida já tem conteúdo (inclusive parte de upload) | Escolher um nome de pasta que ainda não existe; o link cria a pasta |
 | 409 `slug_taken` com um endereço que você mesmo usava | o link foi revogado, e o apelido continua reservado ao dono de propósito | Liberar em **Compartilhamentos → Liberar endereço** |

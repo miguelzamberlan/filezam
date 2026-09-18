@@ -40,6 +40,12 @@
 
 O Filezam nasceu de uma necessidade concreta: um HD externo ligado a um servidor Linux em casa, compartilhado na rede local por Samba, que precisava ficar acessível pela internet para a família e para clientes, cada um vendo só a sua pasta. As alternativas prontas eram pesadas, exigiam banco de dados externo ou tratavam a segurança do sistema de arquivos como detalhe.
 
+Duas outras necessidades apareceram logo depois, e moldaram boa parte do que o Filezam é hoje.
+
+A primeira foi **entregar material a clientes e receber material deles**. Mandar o link de uma pasta pronta resolve metade do problema; a outra metade é o cliente que precisa devolver as fotos brutas, o contrato assinado ou a arte aprovada — e que não vai criar conta para isso. Daí os dois tipos de link público: o de **leitura**, para entregar, e o de **recebimento**, uma caixa de entrada onde quem não tem conta só escreve e nunca enxerga o que já está lá.
+
+A segunda foi **saber o que a equipe produziu**, sem abrir arquivo por arquivo. Uma pasta de trabalho com centenas de vídeos e fotos não responde sozinha quantas horas de material há ali, quantos vídeos saíram em 4K, quantas fotos vieram em retrato ou com qual câmera foram feitas. Daí a análise de mídia, que lê tudo isso direto do cabeçalho dos arquivos.
+
 Três prioridades guiam cada decisão, nesta ordem:
 
 1. **Segurança.** É impossível ler ou escrever fora da pasta exposta: todo acesso ao disco passa pelo `os.Root` do Go, que valida cada componente do caminho no kernel, inclusive symlinks. Nenhum arquivo enviado por um usuário consegue executar script no navegador de outro. Senhas, sessões e segredos de 2FA nunca ficam em texto puro no banco.
@@ -57,6 +63,7 @@ Três prioridades guiam cada decisão, nesta ordem:
 - **Visualização** de imagens, vídeo, áudio, PDF, texto e Markdown formatado sem sair da página.
 - **Uploads sérios**: arquivos de vários GB em blocos paralelos com retomada, pastas inteiras por arrastar e soltar, milhares de arquivos pequenos em lote, tudo com painel de progresso, pausa e repetição de falhas.
 - **Miniaturas**: pastas de fotos mostram a prévia de cada imagem, geradas sob demanda e guardadas em cache. Desligável por instalação e por pessoa.
+- **Dados técnicos de foto e vídeo**: resolução, duração, codec, taxa de quadros e de bits, câmera, lente, ISO e data de captura nas propriedades do arquivo — e a análise de uma seleção ou de uma pasta inteira: quantos vídeos, duração somada, quantos em 4K, 2K e 1080p, quantas fotos em cada faixa de megapixels, quantas em retrato e em paisagem, formatos, codecs e câmeras, com exportação para planilha. Lido direto do cabeçalho dos arquivos, sem `ffmpeg`.
 - **Extrair e compactar**: descompacte um `.zip` para uma pasta nova pelo menu de contexto, ou gere um `.zip` do que estiver selecionado. A extração nunca sobrescreve o que já existe e recusa arquivos que tentem escrever fora da pasta.
 - **Editor embutido**: edite arquivos de texto, markdown e configuração pelo navegador, com prévia formatada para `.md` e proteção contra duas pessoas salvarem por cima uma da outra.
 - **Links públicos**: compartilhe uma pasta ou um arquivo por link somente leitura com prazo de validade, senha opcional, contagem de acessos e revogação imediata. O endereço pode ser um nome que você escolhe (`/s/orcamento-2026`), com senha obrigatória.
