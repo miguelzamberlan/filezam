@@ -89,9 +89,18 @@ describe('formatMegapixels', () => {
 
 describe('formatCaptureDate', () => {
   it('mostra o relógio da câmera, sem deslocar pelo fuso de quem olha', () => {
-    // 2026-03-14 09:41:07 lido como UTC pelo servidor: é isso que tem de aparecer.
+    // 2026-03-14 09:41:07 lido como UTC pelo servidor: é esse relógio que tem de aparecer.
+    // A comparação é contra a mesma formatação com o fuso fixado, e não contra um texto
+    // escrito à mão: o formato de data e hora muda com o idioma da máquina (pt-BR escreve
+    // "09:41", en-US escreve "9:41 AM"), e o que está sendo testado é o fuso, não o idioma.
     const ms = Date.UTC(2026, 2, 14, 9, 41, 7)
-    expect(formatCaptureDate(ms)).toContain('09:41')
+    const em = (tz: string) =>
+      new Intl.DateTimeFormat(undefined, { dateStyle: 'short', timeStyle: 'short', timeZone: tz }).format(new Date(ms))
+    expect(formatCaptureDate(ms)).toBe(em('UTC'))
+    // E não pode ser o de outro fuso qualquer: numa máquina fora do UTC, deixar de fixar o
+    // fuso faria esta linha passar e a de cima falhar.
+    expect(em('America/Sao_Paulo')).not.toBe(em('UTC'))
+    expect(formatCaptureDate(ms)).not.toBe(em('America/Sao_Paulo'))
     expect(formatCaptureDate(0)).toBe('—')
   })
 })
