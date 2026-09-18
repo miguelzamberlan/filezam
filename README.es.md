@@ -22,6 +22,7 @@
 ## Índice
 
 - [Por qué existe](#por-qué-existe)
+- [Novedades en la 1.6.0](#novedades-en-la-160)
 - [Funcionalidades](#funcionalidades)
 - [Cómo ejecutarlo](#cómo-ejecutarlo)
   - [En tu máquina en un minuto](#en-tu-máquina-en-un-minuto)
@@ -55,6 +56,18 @@ Tres prioridades guían cada decisión, en este orden:
 3. **Simplicidad de operación.** Un contenedor, configurado por variables de entorno, sin base de datos externa, sin shell en la imagen, ejecutándose sin root.
 
 Es un proyecto personal, gratuito y de código abierto. Sirve bien para servidores domésticos, pequeñas oficinas y para quien quiere entregar archivos a clientes sin depender de servicios de terceros. Lo que **no** pretende ser: un Dropbox con sincronización, un editor de documentos ni un servidor WebDAV/S3.
+
+## Novedades en la 1.6.0
+
+**📊 Datos técnicos de foto y vídeo, y análisis de una carpeta entera.** Las propiedades de un archivo ahora muestran resolución, duración, códec, cuadros por segundo y tasa de bits y — cuando el archivo lo trae — cámara, objetivo, ISO, obturador, apertura, distancia focal y fecha de captura. Una foto de móvil tomada en vertical aparece en vertical, como la muestra un visor, y no como están guardados los píxeles.
+
+Y **«Analizar medios»**, en el menú contextual de un archivo, de una selección o de una carpeta entera, responde de una vez: cuántos vídeos y fotos hay, la duración sumada, cuántos vídeos en 4K, 2K, Full HD y HD, cuántas fotos en cada rango de megapíxeles, cuántas verticales y horizontales, los formatos, los códecs, los cuadros por segundo, las cámaras usadas y el periodo de las capturas — con el más largo, el más grande y el de más píxeles destacados, y exportación a hoja de cálculo.
+
+Todo se lee de la **cabecera de los archivos**, sin `ffmpeg` y sin decodificar un solo fotograma: MP4, MOV, MKV, WebM, AVI, JPEG, PNG, TIFF, HEIC, AVIF y los RAW de cámara. El binario sigue siendo único y sin CGO. La primera lectura de cada archivo queda guardada, así que repetir el análisis es instantáneo; en una carpeta con muchos archivos nuevos la lectura corre en segundo plano con barra de progreso.
+
+**📁 Mover a…** La selección ganó un «Mover» que abre un selector de carpetas: navega hasta el destino — subiendo, entrando, o creando una carpeta ahí mismo — y confirma. Es el camino del móvil y de quien no arrastra con el ratón. El listado también ganó la columna **Tipo**, que agrupa los archivos por extensión.
+
+El historial completo está en [`CHANGELOG.md`](CHANGELOG.md) *(en portugués)*.
 
 ## Funcionalidades
 
@@ -331,7 +344,7 @@ Lo que ya se sabe que falta (reanudación de operaciones interrumpidas, passkeys
 
 ## Versiones
 
-La versión actual es la **1.5.0**; el historial está en el [`CHANGELOG.md`](CHANGELOG.md) *(portugués)*. El proyecto usa versionado semántico: las versiones publicadas no cambian, y las correcciones y novedades salen en versiones nuevas. En producción, fija una versión (`ghcr.io/miguelzamberlan/filezam:1.5.0`, o `:1.5` para recibir solo correcciones) en lugar de seguir `main`. Detalles en [`CONTRIBUTING.md`](CONTRIBUTING.md#versões-e-lançamentos) *(portugués)*.
+La versión actual es la **1.6.0**; el historial está en el [`CHANGELOG.md`](CHANGELOG.md) *(portugués)*. El proyecto usa versionado semántico: las versiones publicadas no cambian, y las correcciones y novedades salen en versiones nuevas. En producción, fija una versión (`ghcr.io/miguelzamberlan/filezam:1.6.0`, o `:1.6` para recibir solo correcciones) en lugar de seguir `main`. Detalles en [`CONTRIBUTING.md`](CONTRIBUTING.md#versões-e-lançamentos) *(portugués)*.
 
 ## Autor y licencia
 

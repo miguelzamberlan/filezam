@@ -4,6 +4,8 @@ Todas as mudanças relevantes do Filezam ficam registradas aqui. O formato segue
 
 ## [Não lançado]
 
+## [1.6.0] - 2026-09-18
+
 ### Adicionado
 - **Mover para…**: além de recortar e colar, a seleção (um ou vários arquivos e pastas) agora tem um "Mover" que abre um seletor de pastas: navegue até o destino — subindo, entrando, ou criando uma pasta ali mesmo — e confirme. É o caminho do celular e de quem não usa o arraste com o mouse, e daí em diante vale o mesmo de sempre: pergunta uma vez quando o nome já existe no destino e avisa quais links públicos vão cair.
 - **Coluna "Tipo" na listagem**: a visão em lista mostra a extensão do arquivo (`PDF`, `JPG`, `Pasta`) e o cabeçalho ordena por ela, agrupando os arquivos por tipo com as pastas sempre primeiro. A ordenação por tipo já existia por baixo; faltava a coluna para chegar até ela.
@@ -153,7 +155,8 @@ Primeira versão pública.
 - `docker-compose.yml` de referência com serviço `init` para permissões, sub-rede fixa e contêiner somente leitura sem capabilities.
 - Documentação completa em `docs/`: arquitetura, segurança, API, uploads, banco, frontend, operação (Docker, Easypanel, systemd, proxies), testes e roadmap.
 
-[Não lançado]: https://github.com/miguelzamberlan/filezam/compare/v1.5.0...HEAD
+[Não lançado]: https://github.com/miguelzamberlan/filezam/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/miguelzamberlan/filezam/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/miguelzamberlan/filezam/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/miguelzamberlan/filezam/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/miguelzamberlan/filezam/compare/v1.2.0...v1.3.0

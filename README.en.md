@@ -22,6 +22,7 @@
 ## Table of contents
 
 - [Why it exists](#why-it-exists)
+- [What's new in 1.6.0](#whats-new-in-160)
 - [Features](#features)
 - [How to run](#how-to-run)
   - [On your machine in a minute](#on-your-machine-in-a-minute)
@@ -55,6 +56,18 @@ Three priorities drive every decision, in this order:
 3. **Operational simplicity.** One container, configured by environment variables, no external database, no shell in the image, running without root.
 
 It is a personal, free and open-source project. It fits home servers, small offices and anyone who wants to hand files to clients without relying on third-party services. What it does **not** try to be: a Dropbox with sync, a document editor or a WebDAV/S3 server.
+
+## What's new in 1.6.0
+
+**📊 Photo and video technical data, and the analysis of a whole folder.** A file's properties now show resolution, duration, codec, frame and bit rate and — when the file carries it — camera, lens, ISO, shutter, aperture, focal length and capture date. A phone photo shot upright shows up upright, the way a viewer displays it, not the way the pixels are stored.
+
+And **"Analyse media"**, in the context menu of a file, a selection or an entire folder, answers in one go: how many videos and photos are there, the total duration, how many videos in 4K, 2K, Full HD and HD, how many photos in each megapixel range, how many portrait and landscape, the formats, the codecs, the frame rates, the cameras used and the capture period — with the longest, the largest and the one with the most pixels highlighted, and spreadsheet export.
+
+Everything is read from the **file headers**, without `ffmpeg` and without decoding a single frame: MP4, MOV, MKV, WebM, AVI, JPEG, PNG, TIFF, HEIC, AVIF and camera RAW. The binary stays single and CGO-free. Each file's first reading is cached, so repeating the analysis is instant; in a folder with many new files the reading runs in the background with a progress bar.
+
+**📁 Move to…** The selection got a "Move" that opens a folder picker: browse to the destination — going up, going in, or creating a folder right there — and confirm. It is the path for phones and for anyone who does not drag with a mouse. The listing also got a **Type** column, which groups files by extension.
+
+The full history is in [`CHANGELOG.md`](CHANGELOG.md) *(Portuguese)*.
 
 ## Features
 
@@ -331,7 +344,7 @@ What is known to be missing (resuming interrupted operations, passkeys) and what
 
 ## Versions
 
-The current version is **1.5.0**; the history is in [`CHANGELOG.md`](CHANGELOG.md) *(Portuguese)*. The project uses semantic versioning: published versions never change, and fixes and features ship as new versions. In production, pin a version (`ghcr.io/miguelzamberlan/filezam:1.5.0`, or `:1.5` to receive only fixes) instead of following `main`. Details in [`CONTRIBUTING.md`](CONTRIBUTING.md#versões-e-lançamentos) *(Portuguese)*.
+The current version is **1.6.0**; the history is in [`CHANGELOG.md`](CHANGELOG.md) *(Portuguese)*. The project uses semantic versioning: published versions never change, and fixes and features ship as new versions. In production, pin a version (`ghcr.io/miguelzamberlan/filezam:1.6.0`, or `:1.6` to receive only fixes) instead of following `main`. Details in [`CONTRIBUTING.md`](CONTRIBUTING.md#versões-e-lançamentos) *(Portuguese)*.
 
 ## Author and license
 

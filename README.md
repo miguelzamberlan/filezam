@@ -20,6 +20,7 @@
 ## Sumário
 
 - [Por que existe](#por-que-existe)
+- [Novidades na 1.6.0](#novidades-na-160)
 - [Funcionalidades](#funcionalidades)
 - [Como rodar](#como-rodar)
   - [Na sua máquina em um minuto](#na-sua-máquina-em-um-minuto)
@@ -53,6 +54,18 @@ Três prioridades guiam cada decisão, nesta ordem:
 3. **Simplicidade de operação.** Um container, configurado por variáveis de ambiente, sem banco externo, sem shell na imagem, rodando sem root.
 
 É um projeto pessoal, gratuito e de código aberto. Serve bem para servidores domésticos, pequenos escritórios e quem quer entregar arquivos a clientes sem depender de serviços de terceiros. O que ele **não** pretende ser: um Dropbox com sincronização, um editor de documentos ou um servidor WebDAV/S3.
+
+## Novidades na 1.6.0
+
+**📊 Dados técnicos de foto e vídeo, e análise de uma pasta inteira.** As propriedades de um arquivo agora mostram resolução, duração, codec, taxa de quadros e de bits e — quando o arquivo traz — câmera, lente, ISO, obturador, abertura, distância focal e data da captura. Uma foto de celular gravada em pé aparece na vertical, como um visualizador mostra, e não como os pixels estão guardados.
+
+E **"Analisar mídia"**, no menu de contexto de um arquivo, de uma seleção ou de uma pasta inteira, responde de uma vez: quantos vídeos e fotos há ali, a duração somada, quantos vídeos em 4K, 2K, Full HD e HD, quantas fotos em cada faixa de megapixels, quantas em retrato e em paisagem, os formatos, os codecs, as taxas de quadros, as câmeras usadas e o período das capturas — com o mais longo, o maior e o de mais pixels em destaque, e exportação para planilha.
+
+Tudo é lido do **cabeçalho dos arquivos**, sem `ffmpeg` e sem decodificar um quadro sequer: MP4, MOV, MKV, WebM, AVI, JPEG, PNG, TIFF, HEIC, AVIF e os RAW de câmera. O binário continua único e sem CGO. A primeira leitura de cada arquivo fica guardada, então repetir a análise é instantâneo; numa pasta com muito arquivo novo a leitura corre em segundo plano com barra de progresso.
+
+**📁 Mover para…** A seleção ganhou um "Mover" que abre um seletor de pastas: navegue até o destino — subindo, entrando, ou criando uma pasta ali mesmo — e confirme. É o caminho do celular e de quem não usa o arraste com o mouse. A listagem também ganhou a coluna **Tipo**, que agrupa os arquivos por extensão.
+
+O histórico completo está no [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Funcionalidades
 
@@ -329,7 +342,7 @@ O que já se sabe que falta (retomada de operações interrompidas, passkeys) e 
 
 ## Versões
 
-A versão atual é a **1.5.0**; o histórico está no [`CHANGELOG.md`](CHANGELOG.md). O projeto usa versionamento semântico: versões publicadas não mudam, e correções e novidades saem em versões novas. Para produção, fixe uma versão (`ghcr.io/miguelzamberlan/filezam:1.5.0`, ou `:1.5` para receber só correções) em vez de acompanhar a `main`. Detalhes em [`CONTRIBUTING.md`](CONTRIBUTING.md#versões-e-lançamentos).
+A versão atual é a **1.6.0**; o histórico está no [`CHANGELOG.md`](CHANGELOG.md). O projeto usa versionamento semântico: versões publicadas não mudam, e correções e novidades saem em versões novas. Para produção, fixe uma versão (`ghcr.io/miguelzamberlan/filezam:1.6.0`, ou `:1.6` para receber só correções) em vez de acompanhar a `main`. Detalhes em [`CONTRIBUTING.md`](CONTRIBUTING.md#versões-e-lançamentos).
 
 ## Autor e licença
 
