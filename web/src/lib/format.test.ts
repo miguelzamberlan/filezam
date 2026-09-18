@@ -7,7 +7,7 @@
 // alterar este cabeçalho viola a licença e os direitos autorais do autor.
 
 import { describe, it, expect } from 'vitest'
-import { formatBytes, formatSpeed, formatRelative } from './format'
+import { formatBytes, formatSpeed, formatRelative, typeLabel } from './format'
 
 describe('formatSpeed', () => {
   it('sempre usa duas casas decimais, só a unidade muda', () => {
@@ -37,5 +37,16 @@ describe('formatRelative', () => {
     expect(formatRelative(now - 20)).toBe('há instantes')
     expect(formatRelative(now + 20)).toBe('em instantes')
     expect(formatRelative(now - 5 * 60)).toBe('há 5 min')
+  })
+})
+
+describe('typeLabel', () => {
+  it('extensão em maiúsculas; pasta e arquivo sem extensão ganham palavra', () => {
+    expect(typeLabel('nota.TXT', 'file')).toBe('TXT')
+    expect(typeLabel('Balanço.xlsx', 'file')).toBe('XLSX')
+    expect(typeLabel('fotos', 'dir')).toBe('Pasta')
+    expect(typeLabel('LEIAME', 'file')).toBe('Arquivo')
+    expect(typeLabel('.bashrc', 'file')).toBe('Arquivo') // ponto inicial não é extensão
+    expect(typeLabel('link', 'other')).toBe('—')
   })
 })

@@ -114,6 +114,34 @@ func (s *Server) handleList(w http.ResponseWriter, r *http.Request) error {
 // listPageMax bounds one page of a paginated listing.
 const listPageMax = 5000
 
+// handleDirs lista só as subpastas de `path`, para o seletor de destino de "Mover para…".
+// A listagem completa traz arquivos que o seletor não usa: numa pasta com dezenas de milhares
+// de entradas seriam megabytes de JSON para desenhar meia dúzia de pastas. Symlinks ficam de
+// fora, como no seletor de escopo do admin — o destino de um link pode nem ser uma pasta.
+func (s *Server) handleDirs(w http.ResponseWriter, r *http.Request) error {
+	root, _, err := s.userRoot(r)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	p, err := queryPath(r, "path")
+	if err != nil {
+		return err
+	}
+	l, err := root.List(p)
+	if err != nil {
+		return err
+	}
+	dirs := make([]string, 0)
+	for _, e := range l.Entries {
+		if e.Type == "dir" && !e.Link && !e.NameInvalid {
+			dirs = append(dirs, e.Name)
+		}
+	}
+	writeJSON(w, r, 200, map[string]any{"path": p, "dirs": dirs})
+	return nil
+}
+
 func (s *Server) handleStat(w http.ResponseWriter, r *http.Request) error {
 	root, _, err := s.userRoot(r)
 	if err != nil {

@@ -107,6 +107,9 @@ export const Api = {
   // files
   list: (path: string, page?: ListPage) =>
     api<Listing>('GET', '/api/files' + q(page ? { path, offset: page.offset, limit: page.limit, sort: page.sort, dir: page.dir, hidden: page.hidden ? 1 : 0 } : { path })),
+  // Só as subpastas: o seletor de destino de "Mover para…" não desenha arquivos, e pedir a
+  // listagem inteira de uma pasta enorme só para achar as pastas seria um JSON de megabytes.
+  dirs: (path: string) => api<{ path: string; dirs: string[] }>('GET', '/api/files/dirs' + q({ path })),
   stat: (path: string) => api<{ path: string; entry: Entry }>('GET', '/api/files/stat' + q({ path })),
   info: (path: string) => api<EntryInfo>('GET', '/api/files/info' + q({ path })),
   disk: () => api<DiskUsage>('GET', '/api/files/disk'),

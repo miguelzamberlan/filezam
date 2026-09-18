@@ -784,6 +784,43 @@ func TestListPaging(t *testing.T) {
 	}
 }
 
+// O seletor de destino de "Mover para…" só enxerga pastas, e só dentro do escopo.
+func TestListDirs(t *testing.T) {
+	admin, _, root := newEnv(t)
+	admin.login("admin", "admin")
+	admin.expect("POST", "/api/auth/password", map[string]string{"current": "admin", "new": "correct horse battery"}, 200)
+	os.MkdirAll(filepath.Join(root, "teamA", "destino", "fundo"), 0o755)
+	os.MkdirAll(filepath.Join(root, "teamA", ".oculta"), 0o755)
+	os.WriteFile(filepath.Join(root, "teamA", "nota.txt"), []byte("x"), 0o644)
+	os.Symlink("/etc", filepath.Join(root, "teamA", "etc"))
+	admin.expect("POST", "/api/admin/users", map[string]any{"username": "bob", "password": "bobpassword1", "scope": "teamA"}, 201)
+	bobJar, _ := cookiejar.New(nil)
+	bob := &client{t: t, srv: admin.srv, c: &http.Client{Jar: bobJar}}
+	bob.login("bob", "bobpassword1")
+
+	o := bob.expect("GET", "/api/files/dirs?path=", nil, 200)
+	got := make([]string, 0)
+	for _, d := range o["dirs"].([]any) {
+		got = append(got, d.(string))
+	}
+	slices.Sort(got) // a ordem de leitura do diretório não é garantida; quem ordena é a interface
+	// arquivo e symlink ficam de fora; a pasta oculta vem e quem filtra é a interface
+	if strings.Join(got, ",") != ".oculta,destino,pub" {
+		t.Fatalf("dirs: %v", got)
+	}
+	o = bob.expect("GET", "/api/files/dirs?path=destino", nil, 200)
+	if ds := o["dirs"].([]any); len(ds) != 1 || ds[0] != "fundo" {
+		t.Fatalf("subpasta: %v", o)
+	}
+	o = bob.expect("GET", "/api/files/dirs?path=destino/fundo", nil, 200)
+	if len(o["dirs"].([]any)) != 0 {
+		t.Fatalf("pasta vazia devolve lista vazia, não null: %v", o)
+	}
+	bob.expect("GET", "/api/files/dirs?path=nota.txt", nil, 409)      // não é pasta
+	bob.expect("GET", "/api/files/dirs?path=../teamB", nil, 400)      // escapar do escopo
+	bob.expect("GET", "/api/files/dirs?path=nao-existe", nil, 404)
+}
+
 func TestFileShareAndPassword(t *testing.T) {
 	admin, _, root := newEnv(t)
 	admin.login("admin", "admin")

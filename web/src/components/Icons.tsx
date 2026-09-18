@@ -30,6 +30,7 @@ export const IDownload = (p: P) => base(p, <><path d="M12 4v12m0 0-4-4m4 4 4-4" 
 export const IFolderPlus = (p: P) => base(p, <><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><path d="M12 11v5m-2.5-2.5h5" /></>)
 export const ICopy = (p: P) => base(p, <><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></>)
 export const IScissors = (p: P) => base(p, <><circle cx="6" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12" /></>)
+export const IMove = (p: P) => base(p, <><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><path d="M9 14h6m0 0-2.5-2.5M15 14l-2.5 2.5" /></>)
 export const IPaste = (p: P) => base(p, <><rect x="8" y="2" width="8" height="4" rx="1" /><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /></>)
 export const IEdit = (p: P) => base(p, <><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></>)
 export const ITrash = (p: P) => base(p, <><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" /></>)

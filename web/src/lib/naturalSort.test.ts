@@ -21,4 +21,10 @@ describe('sortEntries', () => {
     const r = sortEntries([e('a', 'file', 1), e('b', 'file', 5), e('d', 'dir')], { key: 'size', dir: 'desc' })
     expect(r.map((x) => x.name)).toEqual(['d', 'b', 'a'])
   })
+  it('type groups by extension and desempata por nome sem inverter', () => {
+    const r = sortEntries([e('b.txt'), e('a.zip'), e('a.txt'), e('sem-extensao'), e('d', 'dir')], { key: 'type', dir: 'asc' })
+    expect(r.map((x) => x.name)).toEqual(['d', 'sem-extensao', 'a.txt', 'b.txt', 'a.zip'])
+    const desc = sortEntries([e('b.txt'), e('a.zip'), e('a.txt')], { key: 'type', dir: 'desc' })
+    expect(desc.map((x) => x.name)).toEqual(['a.zip', 'a.txt', 'b.txt'])
+  })
 })

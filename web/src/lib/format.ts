@@ -6,6 +6,7 @@
 // Aviso legal protegido pela seção 7(b) da AGPLv3 e pelo NOTICE.md: remover ou
 // alterar este cabeçalho viola a licença e os direitos autorais do autor.
 
+import type { EntryType } from '../api/types'
 import { S } from '../strings'
 
 const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
@@ -66,4 +67,16 @@ export function extOf(name: string): string {
 export function splitExt(name: string): [string, string] {
   const i = name.lastIndexOf('.')
   return i > 0 ? [name.slice(0, i), name.slice(i)] : [name, '']
+}
+
+/**
+ * Rótulo da coluna "Tipo": a extensão em maiúsculas (PDF, JPG), que é o que a ordenação por tipo
+ * agrupa. Pasta e arquivo sem extensão ganham palavra; o que não é nem um nem outro (symlink
+ * quebrado, dispositivo) não tem tipo a mostrar.
+ */
+export function typeLabel(name: string, type: EntryType): string {
+  if (type === 'dir') return S.folder
+  if (type !== 'file') return '—'
+  const ext = extOf(name)
+  return ext ? ext.toUpperCase() : S.file
 }

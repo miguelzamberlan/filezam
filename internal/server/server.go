@@ -325,6 +325,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.Handle("POST /api/auth/totp/recovery", authed(s.handleTOTPRecovery))
 
 	mux.Handle("GET /api/files", user(s.handleList))
+	mux.Handle("GET /api/files/dirs", user(s.handleDirs))
 	mux.Handle("GET /api/files/stat", user(s.handleStat))
 	mux.Handle("GET /api/files/info", user(s.handleInfo))
 	mux.Handle("GET /api/files/disk", user(s.handleDisk))

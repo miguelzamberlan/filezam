@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Entry } from '../api/types'
-import { formatBytes, formatDate } from '../lib/format'
+import { formatBytes, formatDate, typeLabel } from '../lib/format'
 import type { Sort, SortKey } from '../lib/naturalSort'
 import { S } from '../strings'
 import { join } from '../lib/paths'
@@ -244,6 +244,7 @@ export default function FileList(props: FileListProps) {
       <div className="flex border-b border-neutral-200 pr-2 dark:border-neutral-800">
         <div className="w-8" />
         {header('name', S.name, 'flex-1')}
+        {header('type', S.type, 'hidden w-24 sm:flex')}
         {header('size', S.size, 'w-24 justify-end')}
         {header('mtime', S.modified, 'hidden w-40 sm:flex')}
       </div>
@@ -267,6 +268,7 @@ export default function FileList(props: FileListProps) {
                   {e.name}
                   {e.link && <span className="ml-1 text-xs text-neutral-400">↗</span>}
                 </div>
+                <div className="hidden w-24 shrink-0 truncate px-2 text-xs text-neutral-500 sm:block" title={typeLabel(e.name, e.type)}>{typeLabel(e.name, e.type)}</div>
                 <div className="w-24 shrink-0 px-2 text-right text-xs tabular-nums text-neutral-500">{e.type === 'dir' ? '—' : formatBytes(e.size)}</div>
                 <div className="hidden w-40 shrink-0 px-2 text-xs tabular-nums text-neutral-500 sm:block">{formatDate(e.mtime)}</div>
               </div>

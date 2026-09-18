@@ -28,13 +28,14 @@ import Preview, { previewKind } from '../components/Preview'
 import { canThumb, thumbUrl } from '../components/Thumb'
 import Editor, { canEdit } from '../components/Editor'
 import ShareDialog from '../components/ShareDialog'
+import MoveDialog from '../components/MoveDialog'
 import InfoDialog from '../components/InfoDialog'
 import { dialogs, toast, type ConfirmWarning } from '../components/dialogs'
 import { downloadZip } from '../components/ZipParts'
 import { useUploads } from '../components/UploadPanel'
 import { MenuButton } from '../components/Shell'
 import {
-  IArrowUp, IArchive, ICopy, IDownload, IEdit, IText, IFolderPlus, IGrid, IList, IPaste, IRefresh, IScissors, IShare, IStar, ITrash, IUpload, ISpinner, IEye, IInfo, ISearch, IZoomIn, IZoomOut, IMore, IClose,
+  IArrowUp, IArchive, ICopy, IDownload, IEdit, IText, IFolderPlus, IGrid, IList, IMove, IPaste, IRefresh, IScissors, IShare, IStar, ITrash, IUpload, ISpinner, IEye, IInfo, ISearch, IZoomIn, IZoomOut, IMore, IClose,
 } from '../components/Icons'
 
 function triggerDownload(url: string) {
@@ -66,6 +67,7 @@ export default function Browser() {
   const [share, setShare] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [editing, setEditing] = useState<Entry | null>(null)
+  const [moving, setMoving] = useState<Entry[] | null>(null) // seleção esperando o destino no seletor de pastas
   const maxText = cfg?.previewMaxText ?? 1 << 20
   const archiveOn = cfg?.extractEnabled !== false
   const thumbsOn = cfg?.thumbsEnabled !== false && ui.prefs.thumbs !== false
@@ -245,6 +247,13 @@ export default function Browser() {
     ui.setClipboard({ op, dir: path, names: list.map((e) => e.name) })
   }
 
+  // "Mover para…" reaproveita o mesmo caminho do arrastar e soltar (moveInto): conflito de nome
+  // no destino, aviso de link que cai e o job de move. Só a escolha do destino é outra.
+  const moveDialog = (list = selectedEntries) => {
+    if (list.length === 0) return
+    setMoving(list)
+  }
+
   const paste = async (destDir = path) => {
     const c = ui.clipboard
     if (!c) return
@@ -393,7 +402,7 @@ export default function Browser() {
   }
 
   // ---- keyboard ----
-  const overlayOpen = !!menu || preview !== null || !!share || info !== null || !!editing
+  const overlayOpen = !!menu || preview !== null || !!share || info !== null || !!editing || !!moving
   const onKeyDown = (ev: React.KeyboardEvent | KeyboardEvent) => {
     if (overlayOpen) return
     const tag = (ev.target as HTMLElement).tagName
@@ -540,6 +549,7 @@ export default function Browser() {
       { separator: true, label: '' },
       { label: S.copy, icon: <ICopy size={16} />, onClick: () => clip('copy', sel), shortcut: 'Ctrl+C' },
       { label: S.cut, icon: <IScissors size={16} />, onClick: () => clip('cut', sel), shortcut: 'Ctrl+X' },
+      { label: S.moveTo, icon: <IMove size={16} />, onClick: () => moveDialog(sel) },
       { label: S.rename, icon: <IEdit size={16} />, onClick: () => rename(one!), disabled: !one, shortcut: 'F2' },
       { label: S.delete, icon: <ITrash size={16} />, onClick: () => remove(sel), danger: true, shortcut: 'Del' },
       ...(trashOn ? [{ label: S.deleteForever, icon: <ITrash size={16} />, onClick: () => remove(sel, true), danger: true, shortcut: 'Shift+Del' } as MenuItem] : []),
@@ -614,6 +624,7 @@ export default function Browser() {
         <button className="btn-ghost" onClick={() => download()} title={S.download}><IDownload size={16} /> {S.download}</button>
         <button className="btn-ghost" onClick={() => clip('copy')} disabled={selectedEntries.length === 0}><ICopy size={16} /> {S.copy}</button>
         <button className="btn-ghost" onClick={() => clip('cut')} disabled={selectedEntries.length === 0}><IScissors size={16} /> {S.cut}</button>
+        <button className="btn-ghost" onClick={() => moveDialog()} disabled={selectedEntries.length === 0}><IMove size={16} /> {S.move}</button>
         <button className="btn-ghost" onClick={() => paste()} disabled={!ui.clipboard}><IPaste size={16} /> {S.paste}{ui.clipboard && ` (${ui.clipboard.names.length})`}</button>
         <button className="btn-ghost" onClick={() => rename()} disabled={!one}><IEdit size={16} /> {S.rename}</button>
         <button className="btn-ghost text-red-600" onClick={() => remove()} disabled={selectedEntries.length === 0}><ITrash size={16} /> {S.delete}</button>
@@ -697,6 +708,19 @@ export default function Browser() {
       )}
       {preview !== null && entries[preview] && (
         <Preview entries={entries} index={preview} urlFor={(e, inline) => Api.contentUrl(join(path, e.name), inline)} maxText={maxText} assetUrl={(p) => Api.contentUrl(join(path, p), true)} thumbFor={(e) => (thumbsOn && canThumb(e) ? thumbUrl(join(path, e.name), e) : null)} onClose={() => setPreview(null)} onIndex={setPreview} onEdit={(e) => (setPreview(null), setEditing(e))} />
+      )}
+      {moving && (
+        <MoveDialog
+          names={moving.map((e) => e.name)}
+          from={path}
+          showHidden={ui.prefs.showHidden}
+          onClose={() => setMoving(null)}
+          onPick={(dest) => {
+            const names = moving.map((e) => e.name)
+            setMoving(null)
+            void moveInto(dest, names)
+          }}
+        />
       )}
       {info !== null && <InfoDialog path={info} onClose={() => setInfo(null)} />}
       {share !== null && <ShareDialog path={share} name={shareName} kind={share !== path && byName.get(basename(share))?.type === 'file' ? 'file' : 'dir'} maxTtl={cfg?.shareMaxTtl ?? 30 * 86400} onClose={() => setShare(null)} onCreated={() => qc.invalidateQueries({ queryKey: ['shares'] })} />}
