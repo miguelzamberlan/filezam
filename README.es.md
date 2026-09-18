@@ -22,7 +22,7 @@
 ## Índice
 
 - [Por qué existe](#por-qué-existe)
-- [Novedades en la 1.6.0](#novedades-en-la-160)
+- [Novedades en la 1.6](#novedades-en-la-16)
 - [Funcionalidades](#funcionalidades)
 - [Cómo ejecutarlo](#cómo-ejecutarlo)
   - [En tu máquina en un minuto](#en-tu-máquina-en-un-minuto)
@@ -57,7 +57,7 @@ Tres prioridades guían cada decisión, en este orden:
 
 Es un proyecto personal, gratuito y de código abierto. Sirve bien para servidores domésticos, pequeñas oficinas y para quien quiere entregar archivos a clientes sin depender de servicios de terceros. Lo que **no** pretende ser: un Dropbox con sincronización, un editor de documentos ni un servidor WebDAV/S3.
 
-## Novedades en la 1.6.0
+## Novedades en la 1.6
 
 **📊 Datos técnicos de foto y vídeo, y análisis de una carpeta entera.** Las propiedades de un archivo ahora muestran resolución, duración, códec, cuadros por segundo y tasa de bits y — cuando el archivo lo trae — cámara, objetivo, ISO, obturador, apertura, distancia focal y fecha de captura. Una foto de móvil tomada en vertical aparece en vertical, como la muestra un visor, y no como están guardados los píxeles.
 
@@ -344,7 +344,7 @@ Lo que ya se sabe que falta (reanudación de operaciones interrumpidas, passkeys
 
 ## Versiones
 
-La versión actual es la **1.6.0**; el historial está en el [`CHANGELOG.md`](CHANGELOG.md) *(portugués)*. El proyecto usa versionado semántico: las versiones publicadas no cambian, y las correcciones y novedades salen en versiones nuevas. En producción, fija una versión (`ghcr.io/miguelzamberlan/filezam:1.6.0`, o `:1.6` para recibir solo correcciones) en lugar de seguir `main`. Detalles en [`CONTRIBUTING.md`](CONTRIBUTING.md#versões-e-lançamentos) *(portugués)*.
+La versión actual es la **1.6.1**; el historial está en el [`CHANGELOG.md`](CHANGELOG.md) *(portugués)*. El proyecto usa versionado semántico: las versiones publicadas no cambian, y las correcciones y novedades salen en versiones nuevas. En producción, fija una versión (`ghcr.io/miguelzamberlan/filezam:1.6.1`, o `:1.6` para recibir solo correcciones) en lugar de seguir `main`. Detalles en [`CONTRIBUTING.md`](CONTRIBUTING.md#versões-e-lançamentos) *(portugués)*.
 
 ## Autor y licencia
 

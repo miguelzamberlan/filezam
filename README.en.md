@@ -22,7 +22,7 @@
 ## Table of contents
 
 - [Why it exists](#why-it-exists)
-- [What's new in 1.6.0](#whats-new-in-160)
+- [What's new in 1.6](#whats-new-in-16)
 - [Features](#features)
 - [How to run](#how-to-run)
   - [On your machine in a minute](#on-your-machine-in-a-minute)
@@ -57,7 +57,7 @@ Three priorities drive every decision, in this order:
 
 It is a personal, free and open-source project. It fits home servers, small offices and anyone who wants to hand files to clients without relying on third-party services. What it does **not** try to be: a Dropbox with sync, a document editor or a WebDAV/S3 server.
 
-## What's new in 1.6.0
+## What's new in 1.6
 
 **📊 Photo and video technical data, and the analysis of a whole folder.** A file's properties now show resolution, duration, codec, frame and bit rate and — when the file carries it — camera, lens, ISO, shutter, aperture, focal length and capture date. A phone photo shot upright shows up upright, the way a viewer displays it, not the way the pixels are stored.
 
@@ -344,7 +344,7 @@ What is known to be missing (resuming interrupted operations, passkeys) and what
 
 ## Versions
 
-The current version is **1.6.0**; the history is in [`CHANGELOG.md`](CHANGELOG.md) *(Portuguese)*. The project uses semantic versioning: published versions never change, and fixes and features ship as new versions. In production, pin a version (`ghcr.io/miguelzamberlan/filezam:1.6.0`, or `:1.6` to receive only fixes) instead of following `main`. Details in [`CONTRIBUTING.md`](CONTRIBUTING.md#versões-e-lançamentos) *(Portuguese)*.
+The current version is **1.6.1**; the history is in [`CHANGELOG.md`](CHANGELOG.md) *(Portuguese)*. The project uses semantic versioning: published versions never change, and fixes and features ship as new versions. In production, pin a version (`ghcr.io/miguelzamberlan/filezam:1.6.1`, or `:1.6` to receive only fixes) instead of following `main`. Details in [`CONTRIBUTING.md`](CONTRIBUTING.md#versões-e-lançamentos) *(Portuguese)*.
 
 ## Author and license
 

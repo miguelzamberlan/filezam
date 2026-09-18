@@ -4,6 +4,11 @@ Todas as mudanças relevantes do Filezam ficam registradas aqui. O formato segue
 
 ## [Não lançado]
 
+## [1.6.1] - 2026-09-18
+
+### Corrigido
+- **Publicação da 1.6.0**: a verificação automatizada da data de captura comparava o texto formatado com um horário escrito à mão, e o formato de data e hora muda com o idioma do ambiente. O teste passava na máquina de quem escreveu e falhava na esteira, que roda em inglês, e com isso a 1.6.0 não chegou a gerar imagem nem *release* — todo o conteúdo dela está aqui. Nenhuma mudança de comportamento do produto.
+
 ## [1.6.0] - 2026-09-18
 
 ### Adicionado
@@ -155,7 +160,8 @@ Primeira versão pública.
 - `docker-compose.yml` de referência com serviço `init` para permissões, sub-rede fixa e contêiner somente leitura sem capabilities.
 - Documentação completa em `docs/`: arquitetura, segurança, API, uploads, banco, frontend, operação (Docker, Easypanel, systemd, proxies), testes e roadmap.
 
-[Não lançado]: https://github.com/miguelzamberlan/filezam/compare/v1.6.0...HEAD
+[Não lançado]: https://github.com/miguelzamberlan/filezam/compare/v1.6.1...HEAD
+[1.6.1]: https://github.com/miguelzamberlan/filezam/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/miguelzamberlan/filezam/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/miguelzamberlan/filezam/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/miguelzamberlan/filezam/compare/v1.3.0...v1.4.0

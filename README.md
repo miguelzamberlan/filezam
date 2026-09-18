@@ -20,7 +20,7 @@
 ## Sumário
 
 - [Por que existe](#por-que-existe)
-- [Novidades na 1.6.0](#novidades-na-160)
+- [Novidades na 1.6](#novidades-na-16)
 - [Funcionalidades](#funcionalidades)
 - [Como rodar](#como-rodar)
   - [Na sua máquina em um minuto](#na-sua-máquina-em-um-minuto)
@@ -55,7 +55,7 @@ Três prioridades guiam cada decisão, nesta ordem:
 
 É um projeto pessoal, gratuito e de código aberto. Serve bem para servidores domésticos, pequenos escritórios e quem quer entregar arquivos a clientes sem depender de serviços de terceiros. O que ele **não** pretende ser: um Dropbox com sincronização, um editor de documentos ou um servidor WebDAV/S3.
 
-## Novidades na 1.6.0
+## Novidades na 1.6
 
 **📊 Dados técnicos de foto e vídeo, e análise de uma pasta inteira.** As propriedades de um arquivo agora mostram resolução, duração, codec, taxa de quadros e de bits e — quando o arquivo traz — câmera, lente, ISO, obturador, abertura, distância focal e data da captura. Uma foto de celular gravada em pé aparece na vertical, como um visualizador mostra, e não como os pixels estão guardados.
 
@@ -342,7 +342,7 @@ O que já se sabe que falta (retomada de operações interrompidas, passkeys) e 
 
 ## Versões
 
-A versão atual é a **1.6.0**; o histórico está no [`CHANGELOG.md`](CHANGELOG.md). O projeto usa versionamento semântico: versões publicadas não mudam, e correções e novidades saem em versões novas. Para produção, fixe uma versão (`ghcr.io/miguelzamberlan/filezam:1.6.0`, ou `:1.6` para receber só correções) em vez de acompanhar a `main`. Detalhes em [`CONTRIBUTING.md`](CONTRIBUTING.md#versões-e-lançamentos).
+A versão atual é a **1.6.1**; o histórico está no [`CHANGELOG.md`](CHANGELOG.md). O projeto usa versionamento semântico: versões publicadas não mudam, e correções e novidades saem em versões novas. Para produção, fixe uma versão (`ghcr.io/miguelzamberlan/filezam:1.6.1`, ou `:1.6` para receber só correções) em vez de acompanhar a `main`. Detalhes em [`CONTRIBUTING.md`](CONTRIBUTING.md#versões-e-lançamentos).
 
 ## Autor e licença
 
