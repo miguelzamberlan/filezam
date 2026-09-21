@@ -35,12 +35,18 @@ export function formatSpeed(bytesPerSec: number): string {
   return v.toFixed(2) + ' ' + units[i] + '/s'
 }
 
+/**
+ * Duração legível. Acima de um dia o tempo vira "3d 4h", e o que passa de cem dias não é
+ * informação nenhuma — é conta com um divisor perto de zero, que sem o teto imprimia o
+ * número em notação científica no meio da frase ("2.16e+68h 37min restante").
+ */
 export function formatDuration(sec: number): string {
   if (!Number.isFinite(sec) || sec < 0) return '—'
   if (sec < 60) return Math.round(sec) + 's'
   if (sec < 3600) return Math.floor(sec / 60) + 'min ' + Math.round(sec % 60) + 's'
-  const h = Math.floor(sec / 3600)
-  return h + 'h ' + Math.floor((sec % 3600) / 60) + 'min'
+  if (sec < 86400) return Math.floor(sec / 3600) + 'h ' + Math.floor((sec % 3600) / 60) + 'min'
+  if (sec >= 100 * 86400) return '—'
+  return Math.floor(sec / 86400) + 'd ' + Math.floor((sec % 86400) / 3600) + 'h'
 }
 
 const dtf = new Intl.DateTimeFormat(undefined, { dateStyle: 'short', timeStyle: 'short' })

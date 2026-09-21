@@ -133,6 +133,7 @@ export const es: Strings = {
   uploadPanelTitle: 'Subidas',
   uploadSpeed: 'velocidad',
   uploadRemaining: 'restante',
+  uploadWaiting: 'esperando…',
   pause: 'Pausar',
   resume: 'Reanudar',
   cancelAll: 'Cancelar todo',

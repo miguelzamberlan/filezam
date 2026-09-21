@@ -133,6 +133,7 @@ export const ptBR = {
   uploadPanelTitle: 'Uploads',
   uploadSpeed: 'velocidade',
   uploadRemaining: 'restante',
+  uploadWaiting: 'aguardando…',
   pause: 'Pausar',
   resume: 'Retomar',
   cancelAll: 'Cancelar tudo',

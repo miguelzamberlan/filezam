@@ -7,7 +7,7 @@
 // alterar este cabeçalho viola a licença e os direitos autorais do autor.
 
 import { describe, it, expect } from 'vitest'
-import { formatBitrate, formatBytes, formatCaptureDate, formatClock, formatMegapixels, formatSpan, formatSpeed, formatRelative, typeLabel } from './format'
+import { formatBitrate, formatBytes, formatCaptureDate, formatClock, formatDuration, formatMegapixels, formatSpan, formatSpeed, formatRelative, typeLabel } from './format'
 
 describe('formatSpeed', () => {
   it('sempre usa duas casas decimais, só a unidade muda', () => {
@@ -102,5 +102,21 @@ describe('formatCaptureDate', () => {
     expect(em('America/Sao_Paulo')).not.toBe(em('UTC'))
     expect(formatCaptureDate(ms)).not.toBe(em('America/Sao_Paulo'))
     expect(formatCaptureDate(0)).toBe('—')
+  })
+})
+
+describe('formatDuration', () => {
+  it('escolhe a unidade pela ordem de grandeza', () => {
+    expect(formatDuration(45)).toBe('45s')
+    expect(formatDuration(125)).toBe('2min 5s')
+    expect(formatDuration(3 * 3600 + 25 * 60)).toBe('3h 25min')
+    expect(formatDuration(3 * 86400 + 4 * 3600)).toBe('3d 4h')
+  })
+
+  it('não imprime notação científica quando a conta explode', () => {
+    // Previsão de término com uma velocidade perto de zero: antes saía "2.16e+68h 37min".
+    expect(formatDuration(7.79e71)).toBe('—')
+    expect(formatDuration(Infinity)).toBe('—')
+    expect(formatDuration(NaN)).toBe('—')
   })
 })

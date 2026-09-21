@@ -93,7 +93,13 @@ export default function UploadPanel() {
         </div>
         <div className="mt-1 flex justify-between text-xs text-neutral-500">
           <span className="tabular-nums">{formatBytes(snap.bytesDone)} / {formatBytes(snap.bytesTotal)}</span>
-          {busy && !snap.paused && <span className="tabular-nums">{formatSpeed(snap.speed)} · {formatDuration(remaining)} {S.uploadRemaining}</span>}
+          {/* Sem velocidade não há previsão: com a fila parada (ou nos primeiros segundos) a
+              conta dividiria por quase zero, e o painel dizia "0,00 B/s" ao lado de um prazo absurdo. */}
+          {busy && !snap.paused && (
+            snap.speed > 0
+              ? <span className="tabular-nums">{formatSpeed(snap.speed)} · {formatDuration(remaining)} {S.uploadRemaining}</span>
+              : <span>{S.uploadWaiting}</span>
+          )}
           {snap.paused && <span>{S.pause}</span>}
         </div>
       </div>

@@ -10,6 +10,7 @@ import { Api, ApiError, isRetryable } from '../api/client'
 import type { AppConfig, Conflict, UploadSession } from '../api/types'
 import { basename, dirChain, dirname, join, uniqueName } from '../lib/paths'
 import { backoffMs, chunkRange, classify, pickBatch, type Mode } from './scheduler'
+import { SpeedMeter } from './speed'
 import { xhrSend, type XhrHandle } from './xhr'
 import type { PickedFile } from './walk'
 
@@ -75,9 +76,7 @@ export class UploadManager {
   private conflictDefault: Conflict | null = null
   private dirTimers = new Map<string, number>()
   private touched = new Set<string>() // pastas que mudaram nesta rodada de envios
-  private lastTick = performance.now()
-  private lastSent = 0
-  private speed = 0
+  private meter = new SpeedMeter(performance.now())
   private pending: UploadSession[] = []
 
   onConflict: ConflictHandler = async () => ({ choice: 'skip', all: false })
@@ -220,20 +219,10 @@ export class UploadManager {
       } else if (it.state === 'failed') failed++
       else bytesDone += Math.min(it.sent, it.size)
     }
-    const now = performance.now()
-    const dt = (now - this.lastTick) / 1000
-    if (dt >= 1) {
-      // Janela de 1s e EMA bem amortecida: o número exibido varia devagar o
-      // bastante para dar para ler.
-      const inst = Math.max(0, (bytesDone - this.lastSent) / dt)
-      this.speed = this.speed === 0 ? inst : this.speed * 0.75 + inst * 0.25
-      this.lastTick = now
-      this.lastSent = bytesDone
-      if (this.active === 0) this.speed = 0
-    }
+    const speed = this.meter.sample(bytesDone, performance.now(), this.active > 0)
     this.snap = {
       version: this.snap.version + 1, items: [...this.items], active: this.active, paused: this.paused,
-      bytesTotal, bytesDone, filesTotal, filesDone, failed, speed: this.speed, pending: this.pending,
+      bytesTotal, bytesDone, filesTotal, filesDone, failed, speed, pending: this.pending,
     }
     for (const fn of this.listeners) fn()
     if (this.active > 0) this.markDirty() // keep the speed sampler ticking while busy
