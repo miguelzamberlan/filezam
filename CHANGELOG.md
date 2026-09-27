@@ -4,6 +4,11 @@ Todas as mudanças relevantes do Filezam ficam registradas aqui. O formato segue
 
 ## [Não lançado]
 
+## [1.6.2] - 2026-09-27
+
+### Corrigido
+- **Velocidade e tempo restante do envio**: depois de uma pausa longa, o painel de envios mostrava "0,00 B/s" ao lado de uma previsão absurda, em notação científica. E cancelar um item, limpar os concluídos ou ter um pedaço reenviado do zero deixava a velocidade presa em zero até o envio recuperar os bytes perdidos. Agora a medição se ajusta na hora e, enquanto não há velocidade, o painel mostra "aguardando…" em vez de um prazo. A partir de um dia, o tempo restante aparece em dias.
+
 ### Alterado
 - **Dependências atualizadas**: o servidor passa a ser compilado com Go 1.27.1, e o SQLite embutido (`modernc.org/sqlite`) sobe para a 1.59.0. A imagem Docker agora usa como base a `distroless/static-debian13`, e as imagens usadas no build (Node 24, Go 1.27.1) e o `alpine` do serviço `init` (3.24, no lugar do 3.20, que já estava sem suporte) foram atualizados, todos fixados por digest. No frontend, a interface passa a ser montada com Vite 8, react-router 8 e TypeScript 7, e os testes rodam com vitest 5. Nada muda para quem usa o sistema. Para compilar a partir do código-fonte, agora é preciso Node 24 ou 22.22+.
 - **Esteira de integração**: as GitHub Actions foram atualizadas para as versões que rodam em Node 24, já que as versões baseadas em Node 20 estavam sendo descontinuadas pelo GitHub.
@@ -164,7 +169,8 @@ Primeira versão pública.
 - `docker-compose.yml` de referência com serviço `init` para permissões, sub-rede fixa e contêiner somente leitura sem capabilities.
 - Documentação completa em `docs/`: arquitetura, segurança, API, uploads, banco, frontend, operação (Docker, Easypanel, systemd, proxies), testes e roadmap.
 
-[Não lançado]: https://github.com/miguelzamberlan/filezam/compare/v1.6.1...HEAD
+[Não lançado]: https://github.com/miguelzamberlan/filezam/compare/v1.6.2...HEAD
+[1.6.2]: https://github.com/miguelzamberlan/filezam/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/miguelzamberlan/filezam/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/miguelzamberlan/filezam/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/miguelzamberlan/filezam/compare/v1.4.0...v1.5.0
