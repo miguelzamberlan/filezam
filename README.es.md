@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/miguelzamberlan/filezam/actions/workflows/ci.yml/badge.svg)](https://github.com/miguelzamberlan/filezam/actions/workflows/ci.yml)
 [![Versión](https://img.shields.io/github/v/release/miguelzamberlan/filezam?label=versi%C3%B3n)](https://github.com/miguelzamberlan/filezam/releases)
-![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)
+![Go](https://img.shields.io/badge/Go-1.27-00ADD8?logo=go&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![SQLite](https://img.shields.io/badge/SQLite-sin%20CGO-003B57?logo=sqlite&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-distroless-2496ED?logo=docker&logoColor=white)
@@ -116,7 +116,7 @@ Para usarlo de verdad (carpeta del host, tu usuario, proxy), copia `.env.example
 
 ### Sin Docker
 
-Requisitos: Go (versión en `go.mod`) y Node 22+.
+Requisitos: Go (versión en `go.mod`) y Node 24 (o 22.22+).
 
 ```bash
 make web && make build     # frontend + binario ./filezam con la UI integrada
@@ -317,7 +317,7 @@ La carpeta [`docs/`](docs/README.md) es la fuente de verdad del proyecto y se ac
 
 ## Desarrollo
 
-Requisitos: Go (la versión de `go.mod` la descarga automáticamente `go`), Node 22+.
+Requisitos: Go (la versión de `go.mod` la descarga automáticamente `go`), Node 24 (o 22.22+).
 
 ```bash
 make run     # API en :8080 sirviendo ./data (cookies sin Secure)

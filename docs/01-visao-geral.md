@@ -33,11 +33,11 @@ Não funcionais (prioridades declaradas pelo dono do projeto):
 
 | Camada | Escolha | Versão usada |
 |---|---|---|
-| Backend | Go, `net/http` puro, `log/slog` | Go 1.26 |
+| Backend | Go, `net/http` puro, `log/slog` | Go 1.27 |
 | Sandbox de disco | `os.Root` (kernel `openat` + `O_NOFOLLOW` em cada componente) | stdlib |
 | Banco | SQLite via `modernc.org/sqlite` (puro Go, sem CGO) | 1.58 |
 | Senhas | Argon2id (`golang.org/x/crypto`) | — |
-| Frontend | React 19, TypeScript, Vite 7, Tailwind CSS 4, react-router 7, TanStack Query 5, TanStack Virtual 3, zustand 5, react-markdown 10 + remark-gfm 4 (preview de Markdown, carregado sob demanda) | — |
+| Frontend | React 19, TypeScript, Vite 8, Tailwind CSS 4, react-router 8, TanStack Query 5, TanStack Virtual 3, zustand 5, react-markdown 10 + remark-gfm 4 (preview de Markdown, carregado sob demanda) | — |
 | Empacotamento | Binário estático com UI embutida (`embed`); imagem `distroless/static` | — |
 
 ## Registro de decisões (ADR)

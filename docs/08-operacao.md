@@ -84,7 +84,7 @@ Abra `http://127.0.0.1:8080` e entre como `admin` com a senha que apareceu no lo
 
 ### Sem Docker (binário)
 
-Precisa de Go (a versão de `go.mod`) e Node 22+:
+Precisa de Go (a versão de `go.mod`) e Node 24 (ou 22.22+):
 
 ```bash
 git clone https://github.com/miguelzamberlan/filezam.git && cd filezam

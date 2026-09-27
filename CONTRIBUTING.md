@@ -11,7 +11,7 @@ Obrigado pelo interesse. Issues e pull requests são bem-vindos, em português o
 
 ## Ambiente de desenvolvimento
 
-Requisitos: Go (a versão em `go.mod`; o `go` baixa a toolchain sozinho), Node 22+ e, opcionalmente, Docker.
+Requisitos: Go (a versão em `go.mod`; o `go` baixa a toolchain sozinho), Node 24 (ou 22.22+) e, opcionalmente, Docker.
 
 ```bash
 git clone https://github.com/miguelzamberlan/filezam.git && cd filezam
@@ -24,7 +24,7 @@ make test         # go test ./... + tsc --noEmit + vitest; precisa passar antes 
 Se a porta 8080 estiver ocupada: `FILEZAM_LISTEN=127.0.0.1:8765 make run` (e ajuste o `proxy` em `web/vite.config.ts`). Sem o Go instalado, a suíte Go roda em Docker:
 
 ```bash
-docker run --rm -v "$PWD":/src -w /src -e GOFLAGS=-buildvcs=false golang:1.26-alpine go test ./...
+docker run --rm -v "$PWD":/src -w /src -e GOFLAGS=-buildvcs=false golang:1.27-alpine go test ./...
 ```
 
 Login inicial em desenvolvimento: `admin` / `admin1234` (troca obrigatória) — a senha fixa vem do `FILEZAM_ADMIN_PASSWORD` do alvo `run`; fora dele, sem essa variável, o Filezam sorteia uma e a mostra no log. Chamadas à API por `curl` precisam do header `X-Filezam: 1`.

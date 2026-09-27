@@ -4,6 +4,10 @@ Todas as mudanças relevantes do Filezam ficam registradas aqui. O formato segue
 
 ## [Não lançado]
 
+### Alterado
+- **Dependências atualizadas**: o servidor passa a ser compilado com Go 1.27.1, e o SQLite embutido (`modernc.org/sqlite`) sobe para a 1.59.0. A imagem Docker agora usa como base a `distroless/static-debian13`, e as imagens usadas no build (Node 24, Go 1.27.1) e o `alpine` do serviço `init` (3.24, no lugar do 3.20, que já estava sem suporte) foram atualizados, todos fixados por digest. No frontend, a interface passa a ser montada com Vite 8, react-router 8 e TypeScript 7, e os testes rodam com vitest 5. Nada muda para quem usa o sistema. Para compilar a partir do código-fonte, agora é preciso Node 24 ou 22.22+.
+- **Esteira de integração**: as GitHub Actions foram atualizadas para as versões que rodam em Node 24, já que as versões baseadas em Node 20 estavam sendo descontinuadas pelo GitHub.
+
 ## [1.6.1] - 2026-09-18
 
 ### Corrigido

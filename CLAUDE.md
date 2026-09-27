@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Filezam is a self-hosted web file manager: a Go 1.26 backend (single static binary, SQLite via `modernc.org/sqlite`, no CGO) that embeds a React 19 + TypeScript + Vite + Tailwind v4 frontend. It exposes one host folder (`FILEZAM_ROOT`) to authenticated users with per-user folder scopes, chunked/resumable uploads, background jobs (copy/move/delete/extract/archive), an in-browser text and markdown editor, on-demand image thumbnails, photo/video technical metadata read from container headers (`internal/media`, no ffmpeg/CGO) with per-folder statistics, and public links that are either read-only or **write-only drop boxes for people without an account**. UI strings live in `web/src/i18n/pt-BR.ts` (reference), `web/src/i18n/en.ts` and `web/src/i18n/es.ts` (both must mirror every key; `S` in `strings.ts` is the active locale); docs and README are pt-BR (with `README.en.md` and `README.es.md`). License: AGPL-3.0-only with a commercial dual-license option (`LICENSE`, `NOTICE.md`); releases up to 1.2.0 were MIT.
+Filezam is a self-hosted web file manager: a Go 1.27 backend (single static binary, SQLite via `modernc.org/sqlite`, no CGO) that embeds a React 19 + TypeScript + Vite + Tailwind v4 frontend. It exposes one host folder (`FILEZAM_ROOT`) to authenticated users with per-user folder scopes, chunked/resumable uploads, background jobs (copy/move/delete/extract/archive), an in-browser text and markdown editor, on-demand image thumbnails, photo/video technical metadata read from container headers (`internal/media`, no ffmpeg/CGO) with per-folder statistics, and public links that are either read-only or **write-only drop boxes for people without an account**. UI strings live in `web/src/i18n/pt-BR.ts` (reference), `web/src/i18n/en.ts` and `web/src/i18n/es.ts` (both must mirror every key; `S` in `strings.ts` is the active locale); docs and README are pt-BR (with `README.en.md` and `README.es.md`). License: AGPL-3.0-only with a commercial dual-license option (`LICENSE`, `NOTICE.md`); releases up to 1.2.0 were MIT.
 
 Five feature switches live in the database, not in env vars, and are edited by an admin under **Configurações do sistema** (`internal/server/settings.go`, table `settings`): custom link addresses, drop links, extract/compress, thumbnails and media analysis. Drop links ship **off** — anonymous write inverts the product's threat model and must be a deliberate choice. Every switch is checked **per request**, not only at creation, so turning one off stops links and menu items that already exist.
 
@@ -37,7 +37,7 @@ make build               # CGO_ENABLED=0 go build -> ./filezam
 make test                # go test ./... + tsc --noEmit + vitest
 go test ./internal/vfs/ -run TestEscapeAttemptsAreRefused   # single Go test
 # no Go toolchain on this machine? run the Go suite in Docker (tmpfs: TestShareBoundToInode needs non-reused inodes):
-docker run --rm -v "$PWD":/src -w /src --tmpfs /tmp:exec -e GOFLAGS=-buildvcs=false golang:1.26-alpine go test ./...
+docker run --rm -v "$PWD":/src -w /src --tmpfs /tmp:exec -e GOFLAGS=-buildvcs=false golang:1.27-alpine go test ./...
 cd web && npx vitest run src/lib/paths.test.ts               # single frontend test
 docker compose build && docker compose up -d
 ```

@@ -18,7 +18,7 @@
 | Tipos | — | `tsc --noEmit` (inclui as chaves de `en.ts` e `es.ts` contra `pt-BR.ts`) | `cd web && npm run typecheck` |
 | Cabeçalhos de licença | `scripts/license-header.sh` | todo `.go`, `.ts`, `.tsx`, `.css` e `.sh` do código tem o bloco `SPDX-License-Identifier: AGPL-3.0-only` nas primeiras linhas (migrações SQL ficam de fora) | `make headers` (`make headers-apply` corrige) |
 
-`make test` roda tudo. Um único teste Go: `go test ./internal/vfs/ -run TestEscapeAttemptsAreRefused -v`. Sem Go instalado: `docker run --rm -v "$PWD":/src -w /src -e GOFLAGS=-buildvcs=false golang:1.26-alpine go test ./...`.
+`make test` roda tudo. Um único teste Go: `go test ./internal/vfs/ -run TestEscapeAttemptsAreRefused -v`. Sem Go instalado: `docker run --rm -v "$PWD":/src -w /src -e GOFLAGS=-buildvcs=false golang:1.27-alpine go test ./...`.
 
 A CI do GitHub (`.github/workflows/ci.yml`) roda em cada push e PR: cabeçalhos de licença, `tsc`, vitest, build do Vite, `npm audit --omit=dev`, `go vet`, `go test ./...`, build do binário, `govulncheck` e o build da imagem Docker. `TestShareBoundToInode` depende de o sistema de arquivos temporário **não** reutilizar o número de inode de uma pasta recém-apagada: passa em ext4 e tmpfs, falha em overlayfs (Docker sem `--tmpfs /tmp:exec`).
 

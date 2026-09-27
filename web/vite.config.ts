@@ -14,7 +14,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { bundleBanner } from './src/lib/about'
+import { bundleBanner } from './src/lib/about.ts'
 
 const here = fileURLToPath(new URL('.', import.meta.url))
 const outDir = resolve(here, '../internal/server/webdist/dist')
