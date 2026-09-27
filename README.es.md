@@ -344,7 +344,7 @@ Lo que ya se sabe que falta (reanudación de operaciones interrumpidas, passkeys
 
 ## Versiones
 
-La versión actual es la **1.6.2**; el historial está en el [`CHANGELOG.md`](CHANGELOG.md) *(portugués)*. El proyecto usa versionado semántico: las versiones publicadas no cambian, y las correcciones y novedades salen en versiones nuevas. En producción, fija una versión (`ghcr.io/miguelzamberlan/filezam:1.6.2`, o `:1.6` para recibir solo correcciones) en lugar de seguir `main`. Detalles en [`CONTRIBUTING.md`](CONTRIBUTING.md#versões-e-lançamentos) *(portugués)*.
+La versión actual es la **1.6.3**; el historial está en el [`CHANGELOG.md`](CHANGELOG.md) *(portugués)*. El proyecto usa versionado semántico: las versiones publicadas no cambian, y las correcciones y novedades salen en versiones nuevas. En producción, fija una versión (`ghcr.io/miguelzamberlan/filezam:1.6.3`, o `:1.6` para recibir solo correcciones) en lugar de seguir `main`. Detalles en [`CONTRIBUTING.md`](CONTRIBUTING.md#versões-e-lançamentos) *(portugués)*.
 
 ## Autor y licencia
 

@@ -4,6 +4,11 @@ Todas as mudanças relevantes do Filezam ficam registradas aqui. O formato segue
 
 ## [Não lançado]
 
+## [1.6.3] - 2026-09-27
+
+### Corrigido
+- **Aviso "Solte arquivos aqui" preso na tela**: ao arrastar um arquivo para a listagem e sair da área sem soltar (passando pela barra lateral, soltando em cima do painel de envios ou cancelando com Esc), a borda tracejada e o aviso ficavam por cima de tudo e a tela parecia travada. Agora o aviso some assim que o arraste deixa a área. Um arquivo solto fora de onde é possível enviar é recusado, em vez de ser aberto pelo navegador no lugar do Filezam.
+
 ## [1.6.2] - 2026-09-27
 
 ### Corrigido
@@ -169,7 +174,8 @@ Primeira versão pública.
 - `docker-compose.yml` de referência com serviço `init` para permissões, sub-rede fixa e contêiner somente leitura sem capabilities.
 - Documentação completa em `docs/`: arquitetura, segurança, API, uploads, banco, frontend, operação (Docker, Easypanel, systemd, proxies), testes e roadmap.
 
-[Não lançado]: https://github.com/miguelzamberlan/filezam/compare/v1.6.2...HEAD
+[Não lançado]: https://github.com/miguelzamberlan/filezam/compare/v1.6.3...HEAD
+[1.6.3]: https://github.com/miguelzamberlan/filezam/compare/v1.6.2...v1.6.3
 [1.6.2]: https://github.com/miguelzamberlan/filezam/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/miguelzamberlan/filezam/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/miguelzamberlan/filezam/compare/v1.5.0...v1.6.0

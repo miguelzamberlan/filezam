@@ -342,7 +342,7 @@ O que já se sabe que falta (retomada de operações interrompidas, passkeys) e 
 
 ## Versões
 
-A versão atual é a **1.6.2**; o histórico está no [`CHANGELOG.md`](CHANGELOG.md). O projeto usa versionamento semântico: versões publicadas não mudam, e correções e novidades saem em versões novas. Para produção, fixe uma versão (`ghcr.io/miguelzamberlan/filezam:1.6.2`, ou `:1.6` para receber só correções) em vez de acompanhar a `main`. Detalhes em [`CONTRIBUTING.md`](CONTRIBUTING.md#versões-e-lançamentos).
+A versão atual é a **1.6.3**; o histórico está no [`CHANGELOG.md`](CHANGELOG.md). O projeto usa versionamento semântico: versões publicadas não mudam, e correções e novidades saem em versões novas. Para produção, fixe uma versão (`ghcr.io/miguelzamberlan/filezam:1.6.3`, ou `:1.6` para receber só correções) em vez de acompanhar a `main`. Detalhes em [`CONTRIBUTING.md`](CONTRIBUTING.md#versões-e-lançamentos).
 
 ## Autor e licença
 
