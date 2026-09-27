@@ -78,6 +78,37 @@ export default function Browser() {
   const thumbsOn = cfg?.thumbsEnabled !== false && ui.prefs.thumbs !== false
   const [dragOver, setDragOver] = useState(false)
   const [dragOverName, setDragOverName] = useState<string | null>(null)
+  // O overlay some quando os dragover param de chegar (o navegador os repete enquanto o arraste
+  // está sobre a área, mesmo parado). dragleave sozinho não basta: sair por um elemento filho,
+  // soltar fora da área (painel de uploads, barra lateral) ou cancelar com Esc deixava o overlay
+  // preso na tela.
+  const dragTimer = useRef(0)
+  const armDragOver = () => {
+    setDragOver(true)
+    clearTimeout(dragTimer.current)
+    dragTimer.current = window.setTimeout(() => {
+      setDragOver(false)
+      setDragOverName(null)
+    }, 250)
+  }
+  useEffect(() => {
+    // arquivo solto fora de uma área de envio não deve ser aberto pelo navegador no lugar da app
+    const over = (ev: globalThis.DragEvent) => {
+      if (ev.defaultPrevented || !ev.dataTransfer?.types.includes('Files')) return
+      ev.preventDefault()
+      ev.dataTransfer.dropEffect = 'none'
+    }
+    const drop = (ev: globalThis.DragEvent) => {
+      if (ev.dataTransfer?.types.includes('Files')) ev.preventDefault()
+    }
+    window.addEventListener('dragover', over)
+    window.addEventListener('drop', drop)
+    return () => {
+      window.removeEventListener('dragover', over)
+      window.removeEventListener('drop', drop)
+      clearTimeout(dragTimer.current)
+    }
+  }, [])
   const listRef = useRef<HTMLDivElement>(null)
   const fileInput = useRef<HTMLInputElement>(null)
   const dirInput = useRef<HTMLInputElement>(null)
@@ -353,6 +384,7 @@ export default function Browser() {
 
   const onDrop = async (ev: DragEvent, dest = path) => {
     ev.preventDefault()
+    clearTimeout(dragTimer.current)
     setDragOver(false)
     setDragOverName(null)
     if (!ev.dataTransfer.types.includes('Files')) return
@@ -598,12 +630,9 @@ export default function Browser() {
   return (
     <div
       className="relative flex h-full min-h-0 flex-col"
-      onDragOver={(ev) => {
-        if (!ev.dataTransfer.types.includes('Files')) return
-        ev.preventDefault()
-        setDragOver(true)
-      }}
-      onDragLeave={(ev) => ev.currentTarget === ev.target && setDragOver(false)}
+      // captura: as linhas de pasta param a propagação do dragover e o overlay não pode sumir sobre elas
+      onDragOverCapture={(ev) => ev.dataTransfer.types.includes('Files') && armDragOver()}
+      onDragOver={(ev) => ev.dataTransfer.types.includes('Files') && ev.preventDefault()}
       onDrop={(ev) => onDrop(ev)}
     >
       {/* toolbar: linha 1 = navegação; linha 2 = ações (completa em telas ≥ sm, compacta com "mais" no celular) */}
