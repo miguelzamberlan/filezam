@@ -4,6 +4,9 @@ Todas as mudanças relevantes do Filezam ficam registradas aqui. O formato segue
 
 ## [Não lançado]
 
+### Alterado
+- **SQLite embutido atualizado**: o `modernc.org/sqlite` sobe para a 1.60.0. Uma falha de leitura no arquivo `-shm` do banco (disco com defeito, arquivo truncado por fora) deixa de derrubar o servidor: a consulta falha com erro de E/S e a conexão continua utilizável. Nada muda para quem usa o sistema.
+
 ## [1.6.3] - 2026-09-27
 
 ### Corrigido
