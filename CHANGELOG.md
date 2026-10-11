@@ -6,6 +6,7 @@ Todas as mudanças relevantes do Filezam ficam registradas aqui. O formato segue
 
 ### Alterado
 - **SQLite embutido atualizado**: o `modernc.org/sqlite` sobe para a 1.60.0. Uma falha de leitura no arquivo `-shm` do banco (disco com defeito, arquivo truncado por fora) deixa de derrubar o servidor: a consulta falha com erro de E/S e a conexão continua utilizável. Nada muda para quem usa o sistema.
+- **Ferramentas de build**: o `source-map-js`, usado só para montar a interface, sobe para a 1.2.2, que corrige uma negação de serviço com *source maps* maliciosos. O `package-lock.json` também deixa de listar o `esbuild`, que o Vite 8 não usa mais. Nada disso vai para a imagem publicada.
 
 ## [1.6.3] - 2026-09-27
 
