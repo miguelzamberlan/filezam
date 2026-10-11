@@ -9,6 +9,10 @@ updates:
     groups:
       dev-dependencies:
         dependency-type: development
+    ignore:
+      # os tipos acompanham a major do Node do CI e do Dockerfile (24)
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: docker
     directory: /
     schedule: { interval: monthly }
