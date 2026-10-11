@@ -16,6 +16,10 @@ updates:
   - package-ecosystem: docker
     directory: /
     schedule: { interval: monthly }
+    ignore:
+      # o build usa só Node LTS; a 25 é versão ímpar, de vida curta
+      - dependency-name: "node"
+        versions: ["25.x"]
   - package-ecosystem: docker-compose
     directory: /
     schedule: { interval: monthly }
