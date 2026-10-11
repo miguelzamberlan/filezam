@@ -4,6 +4,8 @@ Todas as mudanças relevantes do Filezam ficam registradas aqui. O formato segue
 
 ## [Não lançado]
 
+## [1.6.4] - 2026-10-11
+
 ### Alterado
 - **SQLite embutido atualizado**: o `modernc.org/sqlite` sobe para a 1.60.1. Uma falha de leitura no arquivo `-shm` do banco (disco com defeito, arquivo truncado por fora) deixa de derrubar o servidor: a consulta falha com erro de E/S e a conexão continua utilizável. Nada muda para quem usa o sistema.
 - **Ferramentas de build**: o `source-map-js`, usado só para montar a interface, sobe para a 1.2.2, que corrige uma negação de serviço com *source maps* maliciosos. O `package-lock.json` também deixa de listar o `esbuild`, que o Vite 8 não usa mais. Nada disso vai para a imagem publicada.
@@ -179,7 +181,8 @@ Primeira versão pública.
 - `docker-compose.yml` de referência com serviço `init` para permissões, sub-rede fixa e contêiner somente leitura sem capabilities.
 - Documentação completa em `docs/`: arquitetura, segurança, API, uploads, banco, frontend, operação (Docker, Easypanel, systemd, proxies), testes e roadmap.
 
-[Não lançado]: https://github.com/miguelzamberlan/filezam/compare/v1.6.3...HEAD
+[Não lançado]: https://github.com/miguelzamberlan/filezam/compare/v1.6.4...HEAD
+[1.6.4]: https://github.com/miguelzamberlan/filezam/compare/v1.6.3...v1.6.4
 [1.6.3]: https://github.com/miguelzamberlan/filezam/compare/v1.6.2...v1.6.3
 [1.6.2]: https://github.com/miguelzamberlan/filezam/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/miguelzamberlan/filezam/compare/v1.6.0...v1.6.1
